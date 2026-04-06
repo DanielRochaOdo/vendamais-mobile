@@ -8,12 +8,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -26,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.data.models.CadastroDetalhe
 import br.com.vendamais.mobile.data.models.CadastroResumo
@@ -43,8 +47,16 @@ import br.com.vendamais.mobile.ui.theme.Emerald
 import br.com.vendamais.mobile.ui.theme.EmeraldSoft
 import br.com.vendamais.mobile.ui.theme.Slate100
 import br.com.vendamais.mobile.ui.theme.Slate500
+import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
+
+private enum class CadastrosSearchType {
+    NOME,
+    CPF,
+    CODIGO,
+    EMPRESA,
+}
 
 @Composable
 fun CadastrosScreen(
@@ -73,11 +85,56 @@ fun CadastrosScreen(
     onOpenWebApp: (() -> Unit)? = null,
 ) {
     var showInclusaoDialog by rememberSaveable { mutableStateOf(false) }
-    val filteredCadastros = state.cadastros.filter {
+    var showFilters by rememberSaveable { mutableStateOf(false) }
+    var searchType by rememberSaveable { mutableStateOf(CadastrosSearchType.NOME) }
+    var searchValue by rememberSaveable { mutableStateOf("") }
+    var tipoCadastroFiltro by rememberSaveable { mutableStateOf("todos") }
+    var vendedorFiltro by rememberSaveable { mutableStateOf("") }
+    var dataInicioFiltro by rememberSaveable { mutableStateOf("") }
+    var dataFimFiltro by rememberSaveable { mutableStateOf("") }
+
+    val baseCadastros = state.cadastros.filter {
         when (state.cadastroFiltro) {
             CadastroFiltro.PENDENTES -> it.status == "incompleto"
             CadastroFiltro.ENVIADOS -> it.status == "enviado"
         }
+    }
+    val searchValueTrim = searchValue.trim()
+    val vendedorFiltroTrim = vendedorFiltro.trim()
+    val dataInicio = parseFilterDate(dataInicioFiltro)
+    val dataFim = parseFilterDate(dataFimFiltro)
+    val filteredCadastros = baseCadastros.filter { cadastro ->
+        val matchesBusca = when {
+            searchValueTrim.isBlank() -> true
+            searchType == CadastrosSearchType.CPF -> {
+                val query = searchValueTrim.filter(Char::isDigit)
+                if (query.isBlank()) true else cadastro.cpf.filter(Char::isDigit).contains(query)
+            }
+            searchType == CadastrosSearchType.CODIGO -> cadastro.id.contains(searchValueTrim, ignoreCase = true)
+            searchType == CadastrosSearchType.EMPRESA -> cadastro.empresaNome.orEmpty().contains(searchValueTrim, ignoreCase = true)
+            else -> {
+                cadastro.nome.orEmpty().contains(searchValueTrim, ignoreCase = true) ||
+                    cadastro.empresaNome.orEmpty().contains(searchValueTrim, ignoreCase = true)
+            }
+        }
+
+        val matchesTipo = when (tipoCadastroFiltro) {
+            "cadastro" -> cadastro.tipoCadastro == "cadastro"
+            "inclusao_dependente" -> cadastro.tipoCadastro == "inclusao_dependente"
+            else -> true
+        }
+
+        val matchesVendedor = if (vendedorFiltroTrim.isBlank()) {
+            true
+        } else {
+            cadastro.vendedorNome.orEmpty().contains(vendedorFiltroTrim, ignoreCase = true)
+        }
+
+        val cadastroData = parseCadastroDate(cadastro.updatedAt) ?: parseCadastroDate(cadastro.createdAt)
+        val matchesDataInicio = dataInicio?.let { start -> cadastroData?.let { !it.isBefore(start) } ?: false } ?: true
+        val matchesDataFim = dataFim?.let { end -> cadastroData?.let { !it.isAfter(end) } ?: false } ?: true
+
+        matchesBusca && matchesTipo && matchesVendedor && matchesDataInicio && matchesDataFim
     }
     val pendentesCount = state.cadastroStats.cadastro_incompletos + state.cadastroStats.inclusao_incompletos
     val completosCount = state.cadastroStats.cadastro_enviados + state.cadastroStats.inclusao_enviados
@@ -171,6 +228,35 @@ fun CadastrosScreen(
             CadastroAreaTab.INCOMPLETOS,
             CadastroAreaTab.COMPLETOS,
             -> {
+                item {
+                    CadastrosFilterPanel(
+                        expanded = showFilters,
+                        onToggleExpanded = { showFilters = !showFilters },
+                        searchType = searchType,
+                        searchValue = searchValue,
+                        onSearchTypeChange = { searchType = it },
+                        onSearchValueChange = { searchValue = it },
+                        tipoCadastroFiltro = tipoCadastroFiltro,
+                        onTipoCadastroFiltroChange = { tipoCadastroFiltro = it },
+                        vendedorFiltro = vendedorFiltro,
+                        onVendedorFiltroChange = { vendedorFiltro = it },
+                        dataInicioFiltro = dataInicioFiltro,
+                        onDataInicioFiltroChange = { dataInicioFiltro = it },
+                        dataFimFiltro = dataFimFiltro,
+                        onDataFimFiltroChange = { dataFimFiltro = it },
+                        filteredCount = filteredCadastros.size,
+                        totalCount = baseCadastros.size,
+                        onClearFilters = {
+                            searchType = CadastrosSearchType.NOME
+                            searchValue = ""
+                            tipoCadastroFiltro = "todos"
+                            vendedorFiltro = ""
+                            dataInicioFiltro = ""
+                            dataFimFiltro = ""
+                        },
+                    )
+                }
+
                 if (state.cadastrosLoading && !state.cadastrosLoaded) {
                     item {
                         WebCard {
@@ -215,6 +301,181 @@ fun CadastrosScreen(
                 onTabChange(CadastroAreaTab.INCOMPLETOS)
                 onFilterChange(CadastroFiltro.PENDENTES)
             },
+        )
+    }
+}
+
+@Composable
+private fun CadastrosFilterPanel(
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    searchType: CadastrosSearchType,
+    searchValue: String,
+    onSearchTypeChange: (CadastrosSearchType) -> Unit,
+    onSearchValueChange: (String) -> Unit,
+    tipoCadastroFiltro: String,
+    onTipoCadastroFiltroChange: (String) -> Unit,
+    vendedorFiltro: String,
+    onVendedorFiltroChange: (String) -> Unit,
+    dataInicioFiltro: String,
+    onDataInicioFiltroChange: (String) -> Unit,
+    dataFimFiltro: String,
+    onDataFimFiltroChange: (String) -> Unit,
+    filteredCount: Int,
+    totalCount: Int,
+    onClearFilters: () -> Unit,
+) {
+    WebCard {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text(
+                        text = "Filtros de busca",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = "$filteredCount de $totalCount cadastros",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Slate500,
+                    )
+                }
+                TextButton(onClick = onToggleExpanded) {
+                    Text(if (expanded) "Ocultar" else "Mostrar")
+                }
+            }
+
+            if (expanded) {
+                Text("Buscar por", style = MaterialTheme.typography.labelMedium, color = Slate500)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilterChipButton(
+                        label = "Nome",
+                        selected = searchType == CadastrosSearchType.NOME,
+                        onClick = { onSearchTypeChange(CadastrosSearchType.NOME) },
+                    )
+                    FilterChipButton(
+                        label = "CPF",
+                        selected = searchType == CadastrosSearchType.CPF,
+                        onClick = { onSearchTypeChange(CadastrosSearchType.CPF) },
+                    )
+                    FilterChipButton(
+                        label = "Codigo",
+                        selected = searchType == CadastrosSearchType.CODIGO,
+                        onClick = { onSearchTypeChange(CadastrosSearchType.CODIGO) },
+                    )
+                    FilterChipButton(
+                        label = "Empresa",
+                        selected = searchType == CadastrosSearchType.EMPRESA,
+                        onClick = { onSearchTypeChange(CadastrosSearchType.EMPRESA) },
+                    )
+                }
+
+                OutlinedTextField(
+                    value = searchValue,
+                    onValueChange = onSearchValueChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = {
+                        Text(
+                            when (searchType) {
+                                CadastrosSearchType.NOME -> "Nome ou razao social"
+                                CadastrosSearchType.CPF -> "CPF"
+                                CadastrosSearchType.CODIGO -> "Codigo do cadastro"
+                                CadastrosSearchType.EMPRESA -> "Nome da empresa"
+                            },
+                        )
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = if (searchType == CadastrosSearchType.CPF) {
+                            KeyboardType.Number
+                        } else {
+                            KeyboardType.Text
+                        },
+                    ),
+                    singleLine = true,
+                )
+
+                Text("Tipo de cadastro", style = MaterialTheme.typography.labelMedium, color = Slate500)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilterChipButton(
+                        label = "Todos",
+                        selected = tipoCadastroFiltro == "todos",
+                        onClick = { onTipoCadastroFiltroChange("todos") },
+                    )
+                    FilterChipButton(
+                        label = "Cadastro",
+                        selected = tipoCadastroFiltro == "cadastro",
+                        onClick = { onTipoCadastroFiltroChange("cadastro") },
+                    )
+                    FilterChipButton(
+                        label = "Incl. dep.",
+                        selected = tipoCadastroFiltro == "inclusao_dependente",
+                        onClick = { onTipoCadastroFiltroChange("inclusao_dependente") },
+                    )
+                }
+
+                OutlinedTextField(
+                    value = vendedorFiltro,
+                    onValueChange = onVendedorFiltroChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Vendedor (nome)") },
+                    singleLine = true,
+                )
+
+                OutlinedTextField(
+                    value = dataInicioFiltro,
+                    onValueChange = onDataInicioFiltroChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Data inicio (AAAA-MM-DD)") },
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    value = dataFimFiltro,
+                    onValueChange = onDataFimFiltroChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Data fim (AAAA-MM-DD)") },
+                    singleLine = true,
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    Button(onClick = onClearFilters) {
+                        Text("Limpar filtros")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilterChipButton(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) EmeraldSoft else Slate100,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            color = if (selected) Emerald else Slate500,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Medium,
         )
     }
 }
@@ -445,5 +706,15 @@ private fun formatCpf(value: String): String {
     val digits = value.filter(Char::isDigit).take(11)
     if (digits.length != 11) return value
     return "${digits.substring(0, 3)}.${digits.substring(3, 6)}.${digits.substring(6, 9)}-${digits.substring(9, 11)}"
+}
+
+private fun parseFilterDate(value: String): LocalDate? {
+    val normalized = value.trim()
+    if (normalized.isBlank()) return null
+    return runCatching { LocalDate.parse(normalized) }.getOrNull()
+}
+
+private fun parseCadastroDate(value: String): LocalDate? {
+    return runCatching { OffsetDateTime.parse(value).toLocalDate() }.getOrNull()
 }
 

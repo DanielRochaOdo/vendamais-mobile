@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -32,14 +33,13 @@ import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.components.OdontoartBadge
 import br.com.vendamais.mobile.ui.components.VendaBrandWordmark
-import br.com.vendamais.mobile.ui.theme.BrandGreen
+import br.com.vendamais.mobile.ui.theme.BrandLime
 import br.com.vendamais.mobile.ui.theme.BrandOrange
 import br.com.vendamais.mobile.ui.theme.Red100
 import br.com.vendamais.mobile.ui.theme.Red500
 import br.com.vendamais.mobile.ui.theme.Slate200
 import br.com.vendamais.mobile.ui.theme.Slate500
 import br.com.vendamais.mobile.ui.theme.White
-import androidx.compose.foundation.text.KeyboardOptions
 
 @Composable
 fun LoginScreen(
@@ -51,7 +51,7 @@ fun LoginScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BrandGreen),
+            .background(BrandLime),
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -183,7 +183,7 @@ fun LoginScreen(
             }
 
             Spacer(modifier = Modifier.height(26.dp))
-            OdontoartBadge()
+            OdontoartBadge(modifier = Modifier.fillMaxWidth())
             Spacer(modifier = Modifier.height(18.dp))
             Text(
                 text = "Acesso restrito a usuários autorizados",

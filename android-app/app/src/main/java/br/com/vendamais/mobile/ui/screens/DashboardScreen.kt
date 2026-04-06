@@ -67,7 +67,7 @@ fun DashboardScreen(
         item {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    text = "EstatÃ­sticas - MÃªs Atual",
+                    text = "Estati­sticas - Mes Atual",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold,
@@ -84,7 +84,7 @@ fun DashboardScreen(
                     onMetricClick = { metricType -> onOpenDrilldown("cadastro", metricType) },
                 )
                 MetricSection(
-                    title = "InclusÃ£o de Dependente",
+                    title = "Inclusao de Dependente",
                     total = state.cadastroStats.inclusao_total,
                     pendentes = state.cadastroStats.inclusao_incompletos,
                     enviados = state.cadastroStats.inclusao_enviados,
@@ -105,7 +105,7 @@ fun DashboardScreen(
 
         item {
             Text(
-                text = "VisÃ£o Geral",
+                text = "Visao Geral",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.SemiBold,
@@ -152,10 +152,10 @@ fun DashboardScreen(
 
         if (canViewSystemOverview) {
             item {
-                WebCard(title = "EstatÃ­sticas do Sistema") {
+                WebCard(title = "Estati­sticas do Sistema") {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        SystemRow("Total de UsuÃ¡rios", state.systemOverview.totalUsers.toString())
-                        SystemRow("UsuÃ¡rios Ativos", state.systemOverview.activeUsers.toString())
+                        SystemRow("Total de Usuarios", state.systemOverview.totalUsers.toString())
+                        SystemRow("Usuarios Ativos", state.systemOverview.activeUsers.toString())
                         SystemRow("Total de Equipes", state.systemOverview.totalTeams.toString())
                     }
                 }
