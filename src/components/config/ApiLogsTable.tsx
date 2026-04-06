@@ -1,0 +1,417 @@
+import { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
+import { AlertCircle, CheckCircle, Clock, User, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Input } from '../Input';
+
+interface ApiLog {
+  id: string;
+  user_email: string | null;
+  endpoint: string;
+  method: string;
+  status_code: number | null;
+  success: boolean;
+  error_message: string | null;
+  duration_ms: number | null;
+  cost: number | null;
+  created_at: string;
+}
+
+interface ApiLogDetail {
+  request_body: any;
+  response_body: any;
+}
+
+export function ApiLogsTable() {
+  const [logs, setLogs] = useState<ApiLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedLog, setSelectedLog] = useState<ApiLog | null>(null);
+  const [selectedLogDetail, setSelectedLogDetail] = useState<ApiLogDetail | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'success' | 'error'>('all');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [dataInicio, setDataInicio] = useState('');
+  const [dataFim, setDataFim] = useState('');
+  const pageSize = 100;
+
+  useEffect(() => {
+    fetchLogs();
+  }, [filter, page, dataInicio, dataFim]);
+
+  const fetchLogs = async () => {
+    try {
+      setLoading(true);
+
+      let countQuery = supabase
+        .from('api_logs')
+        .select('id', { count: 'exact', head: true });
+
+      let query = supabase
+        .from('api_logs')
+        .select('id, user_email, endpoint, method, status_code, success, error_message, duration_ms, cost, created_at')
+        .order('created_at', { ascending: false })
+        .range((page - 1) * pageSize, page * pageSize - 1);
+
+      if (filter === 'success') {
+        query = query.eq('success', true);
+        countQuery = countQuery.eq('success', true);
+      } else if (filter === 'error') {
+        query = query.eq('success', false);
+        countQuery = countQuery.eq('success', false);
+      }
+
+      if (dataInicio) {
+        const startDate = new Date(dataInicio);
+        startDate.setHours(0, 0, 0, 0);
+        query = query.gte('created_at', startDate.toISOString());
+        countQuery = countQuery.gte('created_at', startDate.toISOString());
+      }
+
+      if (dataFim) {
+        const endDate = new Date(dataFim);
+        endDate.setHours(23, 59, 59, 999);
+        query = query.lte('created_at', endDate.toISOString());
+        countQuery = countQuery.lte('created_at', endDate.toISOString());
+      }
+
+      const { data, error } = await query;
+      const { count } = await countQuery;
+
+      if (error) throw error;
+      setLogs(data || []);
+      setTotalPages(Math.ceil((count || 0) / pageSize));
+    } catch (error) {
+      console.error('Error fetching logs:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchLogDetail = async (logId: string) => {
+    try {
+      setLoadingDetail(true);
+
+      const { data, error } = await supabase
+        .from('api_logs')
+        .select('request_body, response_body')
+        .eq('id', logId)
+        .single();
+
+      if (error) throw error;
+      setSelectedLogDetail(data);
+    } catch (error) {
+      console.error('Error fetching log detail:', error);
+      setSelectedLogDetail(null);
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
+
+  const handleViewDetails = async (log: ApiLog) => {
+    setSelectedLog(log);
+    setSelectedLogDetail(null);
+    await fetchLogDetail(log.id);
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleString('pt-BR');
+  };
+
+  const getStatusColor = (success: boolean) => {
+    return success ? 'text-green-600' : 'text-red-600';
+  };
+
+  const filteredLogs = logs;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col gap-4">
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setFilter('all'); setPage(1); }}
+            className={`px-4 py-2 rounded-lg ${
+              filter === 'all'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            Todos
+          </button>
+          <button
+            onClick={() => { setFilter('success'); setPage(1); }}
+            className={`px-4 py-2 rounded-lg ${
+              filter === 'success'
+                ? 'bg-green-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            Sucesso
+          </button>
+          <button
+            onClick={() => { setFilter('error'); setPage(1); }}
+            className={`px-4 py-2 rounded-lg ${
+              filter === 'error'
+                ? 'bg-red-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            Erros
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Input
+            type="date"
+            label="Data Início"
+            value={dataInicio}
+            onChange={(e) => { setDataInicio(e.target.value); setPage(1); }}
+          />
+          <Input
+            type="date"
+            label="Data Fim"
+            value={dataFim}
+            onChange={(e) => { setDataFim(e.target.value); setPage(1); }}
+          />
+          <div className="flex items-end">
+            <button
+              onClick={() => { setDataInicio(''); setDataFim(''); setPage(1); }}
+              className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+            >
+              Limpar Filtros
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-8 text-gray-600">Carregando logs...</div>
+      ) : filteredLogs.length === 0 ? (
+        <div className="text-center py-8 text-gray-600">Nenhum log encontrado</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-gray-100 border-b">
+                <th className="text-left p-3 font-medium text-gray-700">Status</th>
+                <th className="text-left p-3 font-medium text-gray-700">Usuário</th>
+                <th className="text-left p-3 font-medium text-gray-700">Endpoint</th>
+                <th className="text-left p-3 font-medium text-gray-700">Código</th>
+                <th className="text-left p-3 font-medium text-gray-700">Duração</th>
+                <th className="text-left p-3 font-medium text-gray-700">Custo</th>
+                <th className="text-left p-3 font-medium text-gray-700">Data/Hora</th>
+                <th className="text-left p-3 font-medium text-gray-700">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredLogs.map((log) => (
+                <tr key={log.id} className="border-b hover:bg-gray-50">
+                  <td className="p-3">
+                    {log.success ? (
+                      <CheckCircle className={`w-5 h-5 ${getStatusColor(true)}`} />
+                    ) : (
+                      <AlertCircle className={`w-5 h-5 ${getStatusColor(false)}`} />
+                    )}
+                  </td>
+                  <td className="p-3">
+                    <div className="flex items-center gap-2">
+                      <User className="w-4 h-4 text-gray-500" />
+                      <span className="text-sm">{log.user_email || 'Anônimo'}</span>
+                    </div>
+                  </td>
+                  <td className="p-3 text-sm">{log.endpoint}</td>
+                  <td className="p-3">
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-medium ${
+                        log.status_code && log.status_code < 400
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}
+                    >
+                      {log.status_code || '-'}
+                    </span>
+                  </td>
+                  <td className="p-3">
+                    <div className="flex items-center gap-1 text-sm text-gray-600">
+                      <Clock className="w-4 h-4" />
+                      {log.duration_ms ? `${log.duration_ms}ms` : '-'}
+                    </div>
+                  </td>
+                  <td className="p-3">
+                    {log.cost && log.cost > 0 ? (
+                      <span className="text-sm font-medium text-gray-900">
+                        R$ {log.cost.toFixed(2)}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-400">-</span>
+                    )}
+                  </td>
+                  <td className="p-3 text-sm text-gray-600">{formatDate(log.created_at)}</td>
+                  <td className="p-3">
+                    <button
+                      onClick={() => handleViewDetails(log)}
+                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    >
+                      Ver Detalhes
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="flex items-center justify-between mt-4 px-4 py-3 bg-gray-50 rounded-lg">
+            <div className="text-sm text-gray-600">
+              Página {page} de {totalPages} ({logs.length} registros)
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-1 rounded bg-blue-600 text-white disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 flex items-center gap-1"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Anterior
+              </button>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="px-3 py-1 rounded bg-blue-600 text-white disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 flex items-center gap-1"
+              >
+                Próxima
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedLog && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          onClick={() => setSelectedLog(null)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-4">
+                <h3 className="text-xl font-semibold">Detalhes do Log</h3>
+                <button
+                  onClick={() => setSelectedLog(null)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Status
+                  </label>
+                  <div className="flex items-center gap-2">
+                    {selectedLog.success ? (
+                      <>
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                        <span className="text-green-600 font-medium">Sucesso</span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="w-5 h-5 text-red-600" />
+                        <span className="text-red-600 font-medium">Erro</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Usuário
+                  </label>
+                  <p className="text-gray-900">{selectedLog.user_email || 'Anônimo'}</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Endpoint
+                  </label>
+                  <p className="text-gray-900">{selectedLog.endpoint}</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Data/Hora
+                  </label>
+                  <p className="text-gray-900">{formatDate(selectedLog.created_at)}</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Duração
+                  </label>
+                  <p className="text-gray-900">
+                    {selectedLog.duration_ms ? `${selectedLog.duration_ms}ms` : '-'}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Custo
+                  </label>
+                  <p className="text-gray-900">
+                    {selectedLog.cost && selectedLog.cost > 0
+                      ? `R$ ${selectedLog.cost.toFixed(2)}`
+                      : '-'}
+                  </p>
+                </div>
+
+                {selectedLog.error_message && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Mensagem de Erro
+                    </label>
+                    <p className="text-red-600 bg-red-50 p-3 rounded">
+                      {selectedLog.error_message}
+                    </p>
+                  </div>
+                )}
+
+                {loadingDetail ? (
+                  <div className="text-center py-4 text-gray-600">
+                    Carregando detalhes...
+                  </div>
+                ) : selectedLogDetail ? (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Request Body
+                      </label>
+                      <pre className="bg-gray-50 p-3 rounded text-xs overflow-auto max-h-40">
+                        {JSON.stringify(selectedLogDetail.request_body, null, 2)}
+                      </pre>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Response Body
+                      </label>
+                      <pre className="bg-gray-50 p-3 rounded text-xs overflow-auto max-h-40">
+                        {JSON.stringify(selectedLogDetail.response_body, null, 2)}
+                      </pre>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-4 text-red-600">
+                    Erro ao carregar detalhes do log
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
