@@ -1,25 +1,35 @@
 ﻿package br.com.vendamais.mobile.ui.screens
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.webkit.MimeTypeMap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -40,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
@@ -51,6 +62,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.FileProvider
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -83,6 +95,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.text.NumberFormat
+import java.io.File
 import java.time.LocalDate
 import java.time.Period
 import java.util.Locale
@@ -156,9 +169,12 @@ fun CadastroEditorDialog(
 
     var saving by rememberSaveable { mutableStateOf(false) }
     var uploading by rememberSaveable { mutableStateOf(false) }
+    var previewingArquivo by rememberSaveable { mutableStateOf(false) }
     var localMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var showSelectStatusOnClose by rememberSaveable { mutableStateOf(false) }
     var suppressBackgroundPersist by rememberSaveable(cadastro.id) { mutableStateOf(false) }
+    var showArquivoSourceModal by rememberSaveable { mutableStateOf(false) }
+    var cameraCapturePath by rememberSaveable { mutableStateOf("") }
 
     var dataNascimentoField by rememberSaveable(cadastro.id, stateSaver = textFieldValueSaver()) {
         val digits = extractDateDigits(cadastro.dataNascimento.orEmpty())
@@ -221,39 +237,102 @@ fun CadastroEditorDialog(
         "CADASTRO",
     )
 
+    suspend fun uploadSelectedArquivo(
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray,
+    ) {
+        if (arquivoPath.isNotBlank()) {
+            runCatching { viewModel.deleteTempFile(arquivoPath) }
+        }
+        validateUpload(
+            fileName = fileName,
+            mimeType = mimeType,
+            size = bytes.size.toLong(),
+        )
+        val uploaded = viewModel.uploadTempFile(
+            fileName = fileName,
+            mimeType = mimeType,
+            bytes = bytes,
+            prefix = "cadastros/${cadastro.id}",
+        )
+        arquivoPath = uploaded.path
+        arquivoNome = uploaded.nome
+        viewModel.persistCadastroDraftSilently(
+            cadastro.id,
+            buildJsonObject { put("arquivo_path", uploaded.path) },
+        )
+        localMessage = "Arquivo atualizado com sucesso."
+    }
+
+    suspend fun openArquivoPreview() {
+        val path = arquivoPath.trim()
+        if (path.isBlank()) {
+            localMessage = "Nenhum arquivo anexado para visualizacao."
+            return
+        }
+        previewingArquivo = true
+        runCatching {
+            val bytes = viewModel.downloadTempFile(path)
+            val uri = writePreviewFile(
+                context = context,
+                fileName = arquivoNome.ifBlank { path.substringAfterLast('/') },
+                bytes = bytes,
+            )
+            val mime = resolvePreviewMimeType(arquivoNome.ifBlank { path.substringAfterLast('/') })
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mime)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(Intent.createChooser(intent, "Visualizar arquivo"))
+        }.onFailure { throwable ->
+            localMessage = throwable.message ?: "Nao foi possivel abrir o arquivo."
+        }
+        previewingArquivo = false
+    }
+
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         suppressBackgroundPersist = false
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
             uploading = true
             runCatching {
-                if (arquivoPath.isNotBlank()) {
-                    runCatching { viewModel.deleteTempFile(arquivoPath) }
-                }
                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                     ?: error("Nao foi possivel ler o arquivo.")
-                validateUpload(
-                    fileName = resolveFileName(context, uri),
-                    mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream",
-                    size = bytes.size.toLong(),
-                )
-                viewModel.uploadTempFile(
+                uploadSelectedArquivo(
                     fileName = resolveFileName(context, uri),
                     mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream",
                     bytes = bytes,
-                    prefix = "cadastros/${cadastro.id}",
                 )
-            }.onSuccess { uploaded ->
-                arquivoPath = uploaded.path
-                arquivoNome = uploaded.nome
-                viewModel.persistCadastroDraftSilently(
-                    cadastro.id,
-                    buildJsonObject { put("arquivo_path", uploaded.path) },
-                )
-                localMessage = "Arquivo atualizado com sucesso."
+            }.onSuccess {
             }.onFailure { throwable ->
                 localMessage = throwable.message ?: "Falha ao carregar arquivo."
             }
+            uploading = false
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        suppressBackgroundPersist = false
+        val cameraPath = cameraCapturePath
+        cameraCapturePath = ""
+        if (!success || cameraPath.isBlank()) return@rememberLauncherForActivityResult
+
+        scope.launch {
+            uploading = true
+            runCatching {
+                val cameraFile = File(cameraPath)
+                val bytes = cameraFile.readBytes()
+                uploadSelectedArquivo(
+                    fileName = cameraFile.name,
+                    mimeType = "image/jpeg",
+                    bytes = bytes,
+                )
+            }.onFailure { throwable ->
+                localMessage = throwable.message ?: "Falha ao capturar arquivo pela camera."
+            }
+            runCatching { File(cameraPath).delete() }
             uploading = false
         }
     }
@@ -1096,13 +1175,19 @@ fun CadastroEditorDialog(
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text("Documento", fontWeight = FontWeight.SemiBold)
                                 if (arquivoNome.isNotBlank()) {
-                                    Text("Arquivo atual: $arquivoNome")
+                                    TextButton(
+                                        onClick = { scope.launch { openArquivoPreview() } },
+                                        enabled = arquivoPath.isNotBlank() && !previewingArquivo,
+                                    ) {
+                                        Text(
+                                            text = if (previewingArquivo) "Abrindo arquivo..." else "Arquivo atual: $arquivoNome",
+                                        )
+                                    }
                                 }
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Button(
                                         onClick = {
-                                            suppressBackgroundPersist = true
-                                            filePicker.launch("*/*")
+                                            showArquivoSourceModal = true
                                         },
                                         enabled = !uploading,
                                     ) {
@@ -1156,6 +1241,7 @@ fun CadastroEditorDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
                         .navigationBarsPadding(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -1229,7 +1315,10 @@ fun CadastroEditorDialog(
                             },
                             enabled = !saving && !uploading && !state.sendingCadastro,
                         ) {
-                            Text("Seguinte")
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                contentDescription = "Seguinte",
+                            )
                         }
                     } else {
                         TextButton(
@@ -1273,6 +1362,56 @@ fun CadastroEditorDialog(
                 }
             }
         }
+    }
+
+    if (showArquivoSourceModal) {
+        AlertDialog(
+            onDismissRequest = {
+                showArquivoSourceModal = false
+                suppressBackgroundPersist = false
+            },
+            title = { Text("Anexar arquivo") },
+            text = { Text("Escolha a origem do arquivo.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showArquivoSourceModal = false
+                        suppressBackgroundPersist = true
+                        filePicker.launch("*/*")
+                    },
+                ) {
+                    Text("Documentos")
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TextButton(
+                        onClick = {
+                            showArquivoSourceModal = false
+                            runCatching {
+                                val (uri, path) = createCameraCaptureUri(context)
+                                cameraCapturePath = path
+                                suppressBackgroundPersist = true
+                                cameraLauncher.launch(uri)
+                            }.onFailure { throwable ->
+                                suppressBackgroundPersist = false
+                                localMessage = throwable.message ?: "Nao foi possivel iniciar a camera."
+                            }
+                        },
+                    ) {
+                        Text("Camera")
+                    }
+                    TextButton(
+                        onClick = {
+                            showArquivoSourceModal = false
+                            suppressBackgroundPersist = false
+                        },
+                    ) {
+                        Text("Cancelar")
+                    }
+                }
+            },
+        )
     }
 
     if (showSelectStatusOnClose) {
@@ -1686,12 +1825,22 @@ private fun resolveCadastroMessageTone(message: String): CadastroMessageTone {
     }
 }
 
+@Composable
 private fun messageToneColors(tone: CadastroMessageTone): Pair<androidx.compose.ui.graphics.Color, androidx.compose.ui.graphics.Color> {
+    val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
     return when (tone) {
-        CadastroMessageTone.SUCCESS -> EmeraldSoft to EmeraldDark
-        CadastroMessageTone.WARNING -> Amber100 to Amber500
-        CadastroMessageTone.ALERT -> BrandOrange.copy(alpha = 0.18f) to BrandOrange
-        CadastroMessageTone.ERROR -> Red100 to Red500
+        CadastroMessageTone.SUCCESS ->
+            if (darkTheme) MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+            else EmeraldSoft to EmeraldDark
+        CadastroMessageTone.WARNING ->
+            if (darkTheme) androidx.compose.ui.graphics.Color(0xFF4A3A1E) to androidx.compose.ui.graphics.Color(0xFFFFDE9E)
+            else Amber100 to Amber500
+        CadastroMessageTone.ALERT ->
+            if (darkTheme) androidx.compose.ui.graphics.Color(0xFF4B2F1F) to androidx.compose.ui.graphics.Color(0xFFFFC39A)
+            else BrandOrange.copy(alpha = 0.18f) to BrandOrange
+        CadastroMessageTone.ERROR ->
+            if (darkTheme) MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+            else Red100 to Red500
     }
 }
 
@@ -1801,6 +1950,17 @@ private fun validateUpload(fileName: String, mimeType: String, size: Long) {
     if (size > MAX_UPLOAD_BYTES) throw IllegalStateException("Arquivo excede 10MB.")
 }
 
+private fun createCameraCaptureUri(context: Context): Pair<Uri, String> {
+    val directory = File(context.cacheDir, "camera_uploads").apply { mkdirs() }
+    val file = File.createTempFile("cadastro_", ".jpg", directory)
+    val uri = FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        file,
+    )
+    return uri to file.absolutePath
+}
+
 private fun resolveFileName(context: Context, uri: Uri): String {
     context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
         val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
@@ -1809,6 +1969,29 @@ private fun resolveFileName(context: Context, uri: Uri): String {
         }
     }
     return uri.lastPathSegment ?: "arquivo"
+}
+
+private fun writePreviewFile(
+    context: Context,
+    fileName: String,
+    bytes: ByteArray,
+): Uri {
+    val directory = File(context.cacheDir, "shared_qrcodes").apply { mkdirs() }
+    val safeName = fileName
+        .ifBlank { "arquivo" }
+        .replace(Regex("[^a-zA-Z0-9._-]"), "_")
+    val file = File(directory, "preview_${System.currentTimeMillis()}_$safeName")
+    file.writeBytes(bytes)
+    return FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        file,
+    )
+}
+
+private fun resolvePreviewMimeType(fileName: String): String {
+    val extension = fileName.substringAfterLast('.', "").lowercase(Locale.ROOT)
+    return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "*/*"
 }
 
 

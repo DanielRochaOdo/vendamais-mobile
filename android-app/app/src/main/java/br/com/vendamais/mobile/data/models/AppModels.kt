@@ -109,10 +109,19 @@ data class CadastroResumo(
     val cpf: String = "",
     @SerialName("empresa_nome")
     val empresaNome: String? = null,
+    @SerialName("empresa_cnpj")
+    val empresaCnpj: String? = null,
+    @SerialName("empresa_codigo")
+    val empresaCodigo: Int? = null,
+    @SerialName("status_adesao_id")
+    val statusAdesaoId: String? = null,
+    @SerialName("vendedor_id")
+    val vendedorId: String? = null,
     @SerialName("vendedor_nome")
     val vendedorNome: String? = null,
     @SerialName("adesionista_nome")
     val adesionistaNome: String? = null,
+    val dependentes: JsonElement? = null,
     @SerialName("created_at")
     val createdAt: String,
     @SerialName("updated_at")

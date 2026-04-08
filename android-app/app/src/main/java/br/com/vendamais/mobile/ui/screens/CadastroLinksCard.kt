@@ -1,4 +1,4 @@
-package br.com.vendamais.mobile.ui.screens
+﻿package br.com.vendamais.mobile.ui.screens
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -6,24 +6,37 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.Color
+import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.Image
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.FileDownload
+import androidx.compose.material.icons.rounded.QrCode
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -31,15 +44,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import br.com.vendamais.mobile.data.models.CadastroLinkItem
@@ -49,8 +65,6 @@ import br.com.vendamais.mobile.ui.LinkWorkspaceState
 import br.com.vendamais.mobile.ui.components.WebCard
 import br.com.vendamais.mobile.ui.theme.Emerald
 import br.com.vendamais.mobile.ui.theme.EmeraldSoft
-import br.com.vendamais.mobile.ui.theme.Slate100
-import br.com.vendamais.mobile.ui.theme.Slate500
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import java.io.File
@@ -72,6 +86,7 @@ fun CadastroLinksCard(
 ) {
     val context = LocalContext.current
     var qrDialogLink by remember { mutableStateOf<CadastroLinkItem?>(null) }
+    val expandedLinks = remember { mutableStateMapOf<String, Boolean>() }
 
     WebCard {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -81,8 +96,8 @@ fun CadastroLinksCard(
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = "Gere e gerencie links públicos usando a mesma tabela cadastro_links da versão web.",
-                color = Slate500,
+                text = "Gere e gerencie links publicos usando a mesma tabela cadastro_links da versao web.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
             )
 
@@ -99,7 +114,7 @@ fun CadastroLinksCard(
                     label = {
                         Text(
                             when (workspace.empresaSearchType) {
-                                EmpresaSearchType.CODIGO -> "Código da empresa"
+                                EmpresaSearchType.CODIGO -> "Codigo da empresa"
                                 EmpresaSearchType.CNPJ -> "CNPJ"
                                 EmpresaSearchType.NOME -> "Nome da empresa"
                             },
@@ -135,7 +150,10 @@ fun CadastroLinksCard(
                     )
                 }
             } else {
-                Surface(shape = RoundedCornerShape(16.dp), color = Slate100) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -149,12 +167,12 @@ fun CadastroLinksCard(
                         )
                         Text(
                             text = workspace.selectedEmpresa.razaoSocial,
-                            color = Slate500,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Text(
-                            text = "Código ${workspace.selectedEmpresa.id} • ${workspace.selectedEmpresa.cnpj}",
-                            color = Slate500,
+                            text = "Codigo ${workspace.selectedEmpresa.id} • ${workspace.selectedEmpresa.cnpj}",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall,
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -179,7 +197,7 @@ fun CadastroLinksCard(
             if (workspace.links.isEmpty()) {
                 Text(
                     text = "Nenhum link ativo encontrado.",
-                    color = Slate500,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                 )
             } else {
@@ -188,6 +206,10 @@ fun CadastroLinksCard(
                         context = context,
                         link = link,
                         loading = workspace.operationLoading,
+                        expanded = expandedLinks[link.id] == true,
+                        onToggleExpanded = {
+                            expandedLinks[link.id] = !(expandedLinks[link.id] ?: false)
+                        },
                         onShowQrCode = { qrDialogLink = link },
                         onRegenerate = { onRegenerateLink(link.id) },
                         onDelete = { onDeleteLink(link.id) },
@@ -216,7 +238,7 @@ private fun LinkSearchTypeRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         LinkSearchTypePill(
-            label = "Código",
+            label = "Codigo",
             selected = selected == EmpresaSearchType.CODIGO,
             onClick = { onSelected(EmpresaSearchType.CODIGO) },
         )
@@ -242,12 +264,12 @@ private fun LinkSearchTypePill(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
-        color = if (selected) EmeraldSoft else Slate100,
+        color = if (selected) EmeraldSoft else MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Text(
             text = label,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            color = if (selected) Emerald else Slate500,
+            color = if (selected) Emerald else MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.Medium,
         )
     }
@@ -261,7 +283,7 @@ private fun LinkEmpresaResultCard(
     Surface(
         onClick = onSelect,
         shape = RoundedCornerShape(16.dp),
-        color = Slate100,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
     ) {
         Column(
             modifier = Modifier
@@ -276,12 +298,12 @@ private fun LinkEmpresaResultCard(
             )
             Text(
                 text = empresa.razaoSocial,
-                color = Slate500,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
-                text = "Código ${empresa.id} • ${empresa.cnpj}",
-                color = Slate500,
+                text = "Codigo ${empresa.id} • ${empresa.cnpj}",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
         }
@@ -293,68 +315,127 @@ private fun LinkListItem(
     context: Context,
     link: CadastroLinkItem,
     loading: Boolean,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
     onShowQrCode: () -> Unit,
     onRegenerate: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    Surface(shape = RoundedCornerShape(16.dp), color = Slate100) {
+    val linkUrl = link.linkUrl.orEmpty().trim()
+    Surface(
+        onClick = onToggleExpanded,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                text = "${link.empresaCodigo} - ${link.empresaNome}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = "Vendedor: ${link.vendedorNome ?: "-"} • Código ${link.vendedorCodigo ?: "-"}",
-                color = Slate500,
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Text(
-                text = link.linkUrl ?: "-",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Text(
-                text = "Criado em ${formatDateTime(link.createdAt)} • Cliques ${link.clickCount ?: 0}",
-                color = Slate500,
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(
-                    onClick = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("cadastro-link", link.linkUrl.orEmpty()))
-                    },
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "${link.empresaCodigo} - ${link.empresaNome}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Icon(
+                    imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                    contentDescription = if (expanded) "Recolher link" else "Expandir link",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            if (expanded) {
+                Text(
+                    text = "Vendedor: ${link.vendedorNome ?: "-"} • Codigo ${link.vendedorCodigo ?: "-"}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text(
+                    text = linkUrl.ifBlank { "-" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "Criado em ${formatDateTime(link.createdAt)} • Cliques ${link.clickCount ?: 0}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text("Copiar")
-                }
-                TextButton(
-                    onClick = {
-                        link.linkUrl?.let {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it)))
-                        }
-                    },
-                ) {
-                    Text("Abrir")
-                }
-                TextButton(
-                    onClick = onShowQrCode,
-                    enabled = !link.linkUrl.isNullOrBlank(),
-                ) {
-                    Text("QRCode")
-                }
-                TextButton(onClick = onRegenerate, enabled = !loading) {
-                    Text("Regerar")
-                }
-                TextButton(onClick = onDelete, enabled = !loading) {
-                    Text("Excluir", color = MaterialTheme.colorScheme.error)
+                    LinkActionIconButton(
+                        icon = Icons.Rounded.ContentCopy,
+                        contentDescription = "Copiar link",
+                        enabled = linkUrl.isNotBlank(),
+                        onClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("cadastro-link", linkUrl))
+                        },
+                    )
+                    LinkActionIconButton(
+                        icon = Icons.AutoMirrored.Rounded.OpenInNew,
+                        contentDescription = "Abrir link",
+                        enabled = linkUrl.isNotBlank(),
+                        onClick = {
+                            if (linkUrl.isNotBlank()) {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(linkUrl)))
+                            }
+                        },
+                    )
+                    LinkActionIconButton(
+                        icon = Icons.Rounded.QrCode,
+                        contentDescription = "Abrir QRCode",
+                        enabled = linkUrl.isNotBlank(),
+                        onClick = onShowQrCode,
+                    )
+                    LinkActionIconButton(
+                        icon = Icons.Rounded.Refresh,
+                        contentDescription = "Regerar link",
+                        enabled = !loading,
+                        onClick = onRegenerate,
+                    )
+                    LinkActionIconButton(
+                        icon = Icons.Rounded.Delete,
+                        contentDescription = "Excluir link",
+                        enabled = !loading,
+                        danger = true,
+                        onClick = onDelete,
+                    )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun LinkActionIconButton(
+    icon: ImageVector,
+    contentDescription: String,
+    enabled: Boolean = true,
+    danger: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val tint = when {
+        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+        danger -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.primary
+    }
+
+    IconButton(onClick = onClick, enabled = enabled) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+        )
     }
 }
 
@@ -378,6 +459,7 @@ private fun LinkQrCodeDialog(
                     text = link.empresaNome ?: "Link sem empresa",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 if (qrBitmap != null) {
                     Image(
@@ -394,25 +476,31 @@ private fun LinkQrCodeDialog(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                Text(
-                    text = linkUrl.ifBlank { "-" },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Slate500,
-                )
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                ) {
+                    Text(
+                        text = linkUrl.ifBlank { "-" },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                    )
+                }
             }
         },
         confirmButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(
+                IconButton(
                     onClick = {
                         val bitmap = qrBitmap ?: run {
                             Toast.makeText(context, "QRCode indisponivel para compartilhar.", Toast.LENGTH_SHORT).show()
-                            return@TextButton
+                            return@IconButton
                         }
                         val uri = saveQrToCacheForShare(context, bitmap, "qrcode_${link.id}.png")
                         if (uri == null) {
                             Toast.makeText(context, "Falha ao preparar compartilhamento.", Toast.LENGTH_SHORT).show()
-                            return@TextButton
+                            return@IconButton
                         }
                         val shareIntent = Intent(Intent.ACTION_SEND).apply {
                             type = "image/png"
@@ -424,13 +512,17 @@ private fun LinkQrCodeDialog(
                     },
                     enabled = qrBitmap != null && linkUrl.isNotBlank(),
                 ) {
-                    Text("Compartilhar")
+                    Icon(
+                        imageVector = Icons.Rounded.Share,
+                        contentDescription = "Compartilhar QRCode",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
                 }
-                TextButton(
+                IconButton(
                     onClick = {
                         val bitmap = qrBitmap ?: run {
                             Toast.makeText(context, "QRCode indisponivel para download.", Toast.LENGTH_SHORT).show()
-                            return@TextButton
+                            return@IconButton
                         }
                         val uri = saveQrToDownloads(context, bitmap, "qrcode_${link.id}.png")
                         if (uri == null) {
@@ -441,11 +533,21 @@ private fun LinkQrCodeDialog(
                     },
                     enabled = qrBitmap != null,
                 ) {
-                    Text("Download")
+                    Icon(
+                        imageVector = Icons.Rounded.FileDownload,
+                        contentDescription = "Baixar QRCode",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
                 }
-                TextButton(onClick = onDismiss) {
-                    Text("Fechar")
-                }
+            }
+        },
+        dismissButton = {
+            IconButton(onClick = onDismiss) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "Fechar",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         },
     )
@@ -456,7 +558,7 @@ private fun generateQrCodeBitmap(content: String, size: Int): Bitmap {
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     for (x in 0 until size) {
         for (y in 0 until size) {
-            bitmap.setPixel(x, y, if (matrix[x, y]) Color.BLACK else Color.WHITE)
+            bitmap.setPixel(x, y, if (matrix[x, y]) AndroidColor.BLACK else AndroidColor.WHITE)
         }
     }
     return bitmap

@@ -11,12 +11,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Assessment
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material.icons.outlined.Groups
-import androidx.compose.material.icons.outlined.HourglassEmpty
-import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.rounded.Assessment
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.HourglassEmpty
+import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -27,6 +27,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.data.models.VendedorStats
@@ -40,8 +42,6 @@ import br.com.vendamais.mobile.ui.theme.Blue100
 import br.com.vendamais.mobile.ui.theme.Blue500
 import br.com.vendamais.mobile.ui.theme.Emerald
 import br.com.vendamais.mobile.ui.theme.EmeraldSoft
-import br.com.vendamais.mobile.ui.theme.Slate100
-import br.com.vendamais.mobile.ui.theme.Slate500
 
 @Composable
 fun DashboardScreen(
@@ -117,7 +117,7 @@ fun DashboardScreen(
                 OverviewLine(
                     icon = {
                         Icon(
-                            imageVector = Icons.Outlined.Shield,
+                            imageVector = Icons.Rounded.Shield,
                             contentDescription = null,
                             tint = Emerald,
                         )
@@ -136,7 +136,7 @@ fun DashboardScreen(
                     OverviewLine(
                         icon = {
                             Icon(
-                                imageVector = Icons.Outlined.Groups,
+                                imageVector = Icons.Rounded.Groups,
                                 contentDescription = null,
                                 tint = Blue500,
                             )
@@ -199,7 +199,7 @@ private fun MetricSection(
             clickable = clickable,
             background = Blue100,
             textColor = Blue500,
-            icon = Icons.Outlined.Description,
+            icon = Icons.Rounded.Description,
             onClick = { onMetricClick(DashboardMetricType.TOTAL) },
         )
         MetricCard(
@@ -209,7 +209,7 @@ private fun MetricSection(
             clickable = clickable,
             background = Amber100,
             textColor = Amber500,
-            icon = Icons.Outlined.HourglassEmpty,
+            icon = Icons.Rounded.HourglassEmpty,
             onClick = { onMetricClick(DashboardMetricType.PENDENTES) },
         )
         MetricCard(
@@ -219,7 +219,7 @@ private fun MetricSection(
             clickable = clickable,
             background = EmeraldSoft,
             textColor = Emerald,
-            icon = Icons.Outlined.CheckCircle,
+            icon = Icons.Rounded.CheckCircle,
             onClick = { onMetricClick(DashboardMetricType.CADASTRADOS) },
         )
     }
@@ -236,6 +236,7 @@ private fun MetricCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit,
 ) {
+    val readableOnCard = if (background.luminance() > 0.6f) Color(0xFF172235) else MaterialTheme.colorScheme.onSurface
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -260,7 +261,7 @@ private fun MetricCard(
             Text(
                 text = value,
                 style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = readableOnCard,
                 fontWeight = FontWeight.Bold,
             )
             Text(
@@ -294,9 +295,9 @@ private fun OverviewLine(
                 .padding(12.dp),
         ) { icon() }
         Column {
-            Text(title, color = Slate500, style = MaterialTheme.typography.bodySmall)
+            Text(title, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(detail, color = Slate500, style = MaterialTheme.typography.bodySmall)
+            Text(detail, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -307,16 +308,16 @@ private fun SystemRow(label: String, value: String) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Slate100)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
             .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(
-                imageVector = Icons.Outlined.Assessment,
+                imageVector = Icons.Rounded.Assessment,
                 contentDescription = null,
-                tint = Slate500,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -363,7 +364,7 @@ private fun StatsByVendedorDialog(
                                     Text(stat.vendedorNome, fontWeight = FontWeight.SemiBold)
                                     Text(
                                         "Total ${stat.total} â€¢ Pendentes ${stat.incompletos} â€¢ Enviados ${stat.enviados}",
-                                        color = Slate500,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         style = MaterialTheme.typography.bodySmall,
                                     )
                                 }
@@ -390,11 +391,9 @@ private fun roleDescription(role: String): String {
     return when (role) {
         "ADMINISTRADOR", "ADMIN" -> "Acesso total ao sistema"
         "GERENTE", "GESTOR" -> "Gerenciamento de equipes e usuarios"
-        "SUPERVISOR" -> "SupervisÃ£o de equipe"
-        "VENDEDOR" -> "ExecuÃ§Ã£o de vendas"
-        "ADESIONISTA" -> "Processos de adesÃ£o"
+        "SUPERVISOR" -> "Supervisao de equipe"
+        "VENDEDOR" -> "Execucaoo de vendas"
+        "ADESIONISTA" -> "Processos de adesao"
         else -> ""
     }
 }
-
-

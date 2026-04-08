@@ -6,7 +6,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.collectAsState
 import br.com.vendamais.mobile.ui.AppViewModel
 import br.com.vendamais.mobile.ui.VendaMaisApp
 import br.com.vendamais.mobile.ui.theme.VendaMaisTheme
@@ -22,7 +24,8 @@ class MainActivity : ComponentActivity() {
         deepLinkTokenState.value = extractAdesaoToken(intent)
         enableEdgeToEdge()
         setContent {
-            VendaMaisTheme {
+            val uiState by viewModel.uiState.collectAsState()
+            VendaMaisTheme(darkTheme = uiState.darkModeEnabled) {
                 VendaMaisApp(
                     viewModel = viewModel,
                     deepLinkToken = deepLinkTokenState.value,

@@ -53,13 +53,16 @@ import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -140,6 +143,7 @@ data class LinkWorkspaceState(
 data class AppUiState(
     val email: String = "",
     val password: String = "",
+    val darkModeEnabled: Boolean = false,
     val loading: Boolean = true,
     val isAuthenticated: Boolean = false,
     val configurationMissing: Boolean = !AppConfig.isConfigured(),
@@ -195,22 +199,35 @@ class AppViewModel(
     val uiState: StateFlow<AppUiState> = _uiState.asStateFlow()
 
     private var currentSession: SavedSession? = null
+    private var cadastrosSyncJob: Job? = null
+    private val cadastrosSyncIntervalMs = 25_000L
+    @Volatile
+    private var createDraftInFlight: Boolean = false
 
     init {
+        viewModelScope.launch {
+            sessionStore.darkModeFlow.collectLatest { enabled ->
+                _uiState.update { it.copy(darkModeEnabled = enabled) }
+            }
+        }
+
         viewModelScope.launch {
             sessionStore.sessionFlow.collectLatest { session ->
                 currentSession = session
                 if (session == null) {
+                    stopCadastrosAutoSync()
                     _uiState.update {
                         AppUiState(
                             email = it.email,
                             password = "",
+                            darkModeEnabled = it.darkModeEnabled,
                             loading = false,
                             configurationMissing = !AppConfig.isConfigured(),
                         )
                     }
                 } else {
                     bootstrapSession(session)
+                    updateCadastrosSyncState()
                 }
             }
         }
@@ -222,6 +239,13 @@ class AppViewModel(
 
     fun updatePassword(value: String) {
         _uiState.update { it.copy(password = value, errorMessage = null, noticeMessage = null) }
+    }
+
+    fun setDarkModeEnabled(enabled: Boolean) {
+        _uiState.update { it.copy(darkModeEnabled = enabled) }
+        viewModelScope.launch {
+            sessionStore.setDarkMode(enabled)
+        }
     }
 
     fun updateEmpresaSearchType(type: EmpresaSearchType) {
@@ -385,13 +409,14 @@ class AppViewModel(
     }
 
     fun logout() {
+        stopCadastrosAutoSync()
         viewModelScope.launch { sessionStore.clear() }
     }
 
     fun selectTab(tab: MainTab) {
         _uiState.update { it.copy(activeTab = tab, errorMessage = null, noticeMessage = null) }
         when (tab) {
-            MainTab.CADASTROS -> ensureCadastroResourcesLoaded()
+            MainTab.CADASTROS -> ensureCadastroResourcesLoaded(force = true)
             MainTab.USERS,
             MainTab.TEAMS,
             MainTab.SETTINGS,
@@ -401,6 +426,7 @@ class AppViewModel(
             MainTab.ADESOES_EXCLUIDAS -> loadCadastrosExcluidos()
             else -> Unit
         }
+        updateCadastrosSyncState()
     }
 
     fun selectCadastroFiltro(filtro: CadastroFiltro) {
@@ -643,6 +669,9 @@ class AppViewModel(
         val state = _uiState.value
         val profile = state.profile ?: return
         val workspace = state.cadastroWorkspace
+        if (createDraftInFlight || workspace.operationLoading) {
+            return
+        }
         val empresa = workspace.selectedEmpresa
         if (empresa == null) {
             _uiState.update { it.copy(errorMessage = "Selecione uma empresa antes de consultar o CPF.") }
@@ -690,114 +719,118 @@ class AppViewModel(
         }
 
         val adesionistaSelecionado = state.adesionistas.firstOrNull { it.id == workspace.selectedAdesionistaId }
+        createDraftInFlight = true
+        _uiState.update {
+            it.copy(
+                cadastroWorkspace = it.cadastroWorkspace.copy(operationLoading = true),
+                errorMessage = null,
+                pendingCadastroPrompt = null,
+            )
+        }
 
         viewModelScope.launch {
-            _uiState.update {
-                it.copy(
-                    cadastroWorkspace = it.cadastroWorkspace.copy(operationLoading = true),
-                    errorMessage = null,
-                    pendingCadastroPrompt = null,
-                )
-            }
-
-            runCatching {
-                val activeSession = ensureFreshSession(session)
-                withContext(Dispatchers.IO) {
-                    workflowRepository.createDraftFromCpf(
-                        session = activeSession,
-                        profile = profile,
-                        config = state.cadastroWorkspace.config,
-                        input = CpfConsultInput(
-                            cpf = cpf,
-                            empresa = empresa,
-                            vendedorSelecionado = vendedorSelecionado,
-                            adesionistaSelecionado = adesionistaSelecionado,
-                        ),
-                    )
-                }
-            }.onSuccess { result ->
-                val activeSession = ensureFreshSession(session)
-                val currentCadastros = _uiState.value.cadastros
-                val cadastrosRefreshResult = runCatching {
-                    withContext(Dispatchers.IO) { repository.fetchCadastros(activeSession) }
-                }
-                val cadastrosAtualizados = cadastrosRefreshResult.getOrElse {
-                    Log.w(logTag, "Rascunho criado, mas falhou o refresh da lista", it)
-                    currentCadastros
-                }
-                val postSuccessNotice = buildList {
-                    result.warningMessage?.takeIf { it.isNotBlank() }?.let { add(it) }
-                    if (cadastrosRefreshResult.isFailure) {
-                        add("Rascunho criado, mas houve falha ao atualizar a lista de cadastros.")
-                    }
-                }.joinToString("\n\n").ifBlank { null }
-                _uiState.update {
-                    it.copy(
-                        cadastros = cadastrosAtualizados,
-                        selectedCadastro = result.draft,
-                        cadastroWorkspace = it.cadastroWorkspace.copy(
-                            operationLoading = false,
-                            cpfValue = "",
-                            empresaSearchResults = emptyList(),
-                        ),
-                        errorMessage = null,
-                        noticeMessage = postSuccessNotice,
-                        pendingCadastroPrompt = null,
-                    )
-                }
-                if (result.warningMessage?.contains("Limite mensal da Lemmit atingido", ignoreCase = true) == true) {
-                    resolveCadastroOverlay(
-                        CadastroModalSignal(
-                            lemmitLimit = CadastroOverlayIntent.LemmitLimit(),
-                        ),
-                    )
-                }
-            }.onFailure { throwable ->
-                Log.e(logTag, "Falha ao consultar CPF e criar rascunho", throwable)
-                if (throwable is CadastroExistenteException && throwable.canContinue && !throwable.cadastroId.isNullOrBlank()) {
-                    _uiState.update {
-                        it.copy(
-                            cadastroWorkspace = it.cadastroWorkspace.copy(operationLoading = false),
-                            errorMessage = null,
-                            pendingCadastroPrompt = PendingCadastroPrompt(
-                                cadastroId = throwable.cadastroId,
+            try {
+                runCatching {
+                    val activeSession = ensureFreshSession(session)
+                    withContext(Dispatchers.IO) {
+                        workflowRepository.createDraftFromCpf(
+                            session = activeSession,
+                            profile = profile,
+                            config = state.cadastroWorkspace.config,
+                            input = CpfConsultInput(
                                 cpf = cpf,
-                                empresaNome = throwable.empresaNome,
+                                empresa = empresa,
+                                vendedorSelecionado = vendedorSelecionado,
+                                adesionistaSelecionado = adesionistaSelecionado,
                             ),
                         )
                     }
-                } else if (throwable is CadastroExistenteException && !throwable.canContinue) {
-                    resolveCadastroOverlay(
-                        CadastroModalSignal(
-                            alreadyExistsCpf = cpf,
-                            alreadyExistsSummary = throwable.message.orEmpty().ifBlank {
-                                "Ja existe cadastro para este CPF."
-                            },
-                        ),
-                    )
+                }.onSuccess { result ->
+                    val activeSession = ensureFreshSession(session)
+                    val currentCadastros = _uiState.value.cadastros
+                    val cadastrosRefreshResult = runCatching {
+                        withContext(Dispatchers.IO) { repository.fetchCadastros(activeSession) }
+                    }
+                    val cadastrosAtualizados = cadastrosRefreshResult.getOrElse {
+                        Log.w(logTag, "Rascunho criado, mas falhou o refresh da lista", it)
+                        currentCadastros
+                    }
+                    val postSuccessNotice = buildList {
+                        result.warningMessage?.takeIf { it.isNotBlank() }?.let { add(it) }
+                        if (cadastrosRefreshResult.isFailure) {
+                            add("Rascunho criado, mas houve falha ao atualizar a lista de cadastros.")
+                        }
+                    }.joinToString("\n\n").ifBlank { null }
                     _uiState.update {
                         it.copy(
-                            cadastroWorkspace = it.cadastroWorkspace.copy(operationLoading = false),
-                            pendingCadastroPrompt = null,
+                            cadastros = cadastrosAtualizados,
+                            selectedCadastro = result.draft,
+                            cadastroWorkspace = it.cadastroWorkspace.copy(
+                                operationLoading = false,
+                                cpfValue = "",
+                                empresaSearchResults = emptyList(),
+                            ),
                             errorMessage = null,
+                            noticeMessage = postSuccessNotice,
+                            pendingCadastroPrompt = null,
                         )
                     }
-                } else {
-                    val erpError = CadastroApiErrorMapper.mapErpError(throwable.message)
-                    if (erpError != null) {
-                        resolveCadastroOverlay(CadastroModalSignal(erpError = erpError))
-                    }
-                    _uiState.update {
-                        it.copy(
-                            cadastroWorkspace = it.cadastroWorkspace.copy(operationLoading = false),
-                            pendingCadastroPrompt = null,
-                            errorMessage = mapCadastroFlowErrorMessage(
-                                throwable.message,
-                                "Falha ao criar rascunho.",
+                    if (result.warningMessage?.contains("Limite mensal da Lemmit atingido", ignoreCase = true) == true) {
+                        resolveCadastroOverlay(
+                            CadastroModalSignal(
+                                lemmitLimit = CadastroOverlayIntent.LemmitLimit(),
                             ),
                         )
+                    }
+                }.onFailure { throwable ->
+                    Log.e(logTag, "Falha ao consultar CPF e criar rascunho", throwable)
+                    if (throwable is CadastroExistenteException && throwable.canContinue && !throwable.cadastroId.isNullOrBlank()) {
+                        _uiState.update {
+                            it.copy(
+                                cadastroWorkspace = it.cadastroWorkspace.copy(operationLoading = false),
+                                errorMessage = null,
+                                pendingCadastroPrompt = PendingCadastroPrompt(
+                                    cadastroId = throwable.cadastroId,
+                                    cpf = cpf,
+                                    empresaNome = throwable.empresaNome,
+                                ),
+                            )
+                        }
+                    } else if (throwable is CadastroExistenteException && !throwable.canContinue) {
+                        resolveCadastroOverlay(
+                            CadastroModalSignal(
+                                alreadyExistsCpf = cpf,
+                                alreadyExistsSummary = throwable.message.orEmpty().ifBlank {
+                                    "Ja existe cadastro para este CPF."
+                                },
+                            ),
+                        )
+                        _uiState.update {
+                            it.copy(
+                                cadastroWorkspace = it.cadastroWorkspace.copy(operationLoading = false),
+                                pendingCadastroPrompt = null,
+                                errorMessage = null,
+                            )
+                        }
+                    } else {
+                        val erpError = CadastroApiErrorMapper.mapErpError(throwable.message)
+                        if (erpError != null) {
+                            resolveCadastroOverlay(CadastroModalSignal(erpError = erpError))
+                        }
+                        _uiState.update {
+                            it.copy(
+                                cadastroWorkspace = it.cadastroWorkspace.copy(operationLoading = false),
+                                pendingCadastroPrompt = null,
+                                errorMessage = mapCadastroFlowErrorMessage(
+                                    throwable.message,
+                                    "Falha ao criar rascunho.",
+                                ),
+                            )
+                        }
                     }
                 }
+            } finally {
+                createDraftInFlight = false
             }
         }
     }
@@ -1506,8 +1539,13 @@ class AppViewModel(
             cadastroId = id,
             motivoExclusao = motivoExclusao,
         )
-        val cadastrosAtualizados = repository.fetchCadastros(activeSession)
-        val statsAtualizadas = repository.fetchCadastroStats(activeSession)
+        val cadastrosAtualizados = runCatching { repository.fetchCadastros(activeSession) }
+            .getOrElse {
+                Log.w(logTag, "Falha ao atualizar lista apos exclusao, removendo localmente", it)
+                _uiState.value.cadastros.filterNot { cadastro -> cadastro.id == id }
+            }
+        val statsAtualizadas = runCatching { repository.fetchCadastroStats(activeSession) }
+            .getOrDefault(_uiState.value.cadastroStats)
         _uiState.update {
             it.copy(
                 selectedCadastro = null,
@@ -1533,6 +1571,12 @@ class AppViewModel(
         val session = currentSession ?: throw IllegalStateException("SessÃ£o nÃ£o encontrada.")
         val activeSession = ensureFreshSession(session)
         workflowRepository.deleteTempFile(activeSession, path)
+    }
+
+    suspend fun downloadTempFile(path: String): ByteArray {
+        val session = currentSession ?: throw IllegalStateException("SessÃ£o nÃ£o encontrada.")
+        val activeSession = ensureFreshSession(session)
+        return workflowRepository.downloadTempFile(activeSession, path)
     }
 
     suspend fun buscarResponsaveisFinanceiros(
@@ -1760,6 +1804,59 @@ class AppViewModel(
                         }
                     }
             }
+        }
+    }
+
+    private fun updateCadastrosSyncState() {
+        val shouldSync =
+            currentSession != null &&
+                _uiState.value.isAuthenticated &&
+                _uiState.value.activeTab == MainTab.CADASTROS
+        if (shouldSync) {
+            startCadastrosAutoSync()
+        } else {
+            stopCadastrosAutoSync()
+        }
+    }
+
+    private fun startCadastrosAutoSync() {
+        if (cadastrosSyncJob?.isActive == true) return
+        cadastrosSyncJob = viewModelScope.launch {
+            while (isActive) {
+                runCatching { syncCadastrosQuietly() }
+                    .onFailure { throwable ->
+                        Log.w(logTag, "Falha no auto-sync de cadastros", throwable)
+                    }
+                delay(cadastrosSyncIntervalMs)
+            }
+        }
+    }
+
+    private fun stopCadastrosAutoSync() {
+        cadastrosSyncJob?.cancel()
+        cadastrosSyncJob = null
+    }
+
+    private suspend fun syncCadastrosQuietly() {
+        val session = currentSession ?: return
+        val activeSession = ensureFreshSession(session)
+        val cadastrosAtualizados = withContext(Dispatchers.IO) { repository.fetchCadastros(activeSession) }
+        val needsStatsRefresh = cadastrosAtualizados.size != _uiState.value.cadastros.size
+        val statsAtualizadas = if (needsStatsRefresh) {
+            runCatching { repository.fetchCadastroStats(activeSession) }.getOrNull()
+        } else {
+            null
+        }
+
+        _uiState.update { current ->
+            val selected = current.selectedCadastro
+            val selectedStillExists = selected == null || cadastrosAtualizados.any { it.id == selected.id }
+            current.copy(
+                cadastros = cadastrosAtualizados,
+                cadastrosLoaded = true,
+                cadastroStats = statsAtualizadas ?: current.cadastroStats,
+                selectedCadastro = if (selectedStillExists) selected else null,
+            )
         }
     }
 
@@ -2059,6 +2156,11 @@ class AppViewModel(
                 "Selecione uma empresa valida antes de cadastrar."
             else -> message?.takeIf { it.isNotBlank() } ?: fallback
         }
+    }
+
+    override fun onCleared() {
+        stopCadastrosAutoSync()
+        super.onCleared()
     }
 
     companion object {

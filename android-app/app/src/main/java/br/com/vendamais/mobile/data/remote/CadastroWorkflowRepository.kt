@@ -33,6 +33,7 @@ import io.ktor.client.request.header
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -51,12 +52,21 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.put
+import java.util.Locale
 
 class CadastroWorkflowRepository(
     private val client: HttpClient,
     private val json: Json,
 ) {
     private val logTag = "CadastroWorkflowRepository"
+
+    private fun isDuplicateDraftConstraintError(throwable: Throwable): Boolean {
+        val message = throwable.message?.lowercase(Locale.ROOT).orEmpty()
+        return message.contains("duplicate key") ||
+            message.contains("unique constraint") ||
+            message.contains("23505") ||
+            message.contains("cadastros_cadastro_incompleto_cpf_unique_idx")
+    }
     suspend fun fetchCadastroConfig(session: SavedSession): CadastroConfig? {
         return getList<CadastroConfig>(
             path = "cadastro_config",
@@ -260,26 +270,40 @@ class CadastroWorkflowRepository(
         }
 
         val existing = existingDeferred.await()
-        if (existing.exists) {
-            throw CadastroExistenteException(
-                cadastroId = existing.cadastroId,
-                empresaNome = existing.empresaNome,
-                canContinue = existing.canContinue,
-                buildString {
-                    append("Ja existe um cadastro para este CPF")
-                    existing.empresaNome?.let { append(" em $it") }
-                    if (existing.canContinue) {
-                        append(". Abra o rascunho existente para continuar.")
-                    } else {
-                        append(".")
-                    }
-                },
-            )
-        }
-
         val erpCheck = erpCheckDeferred.await()
         if (erpCheck.exists && erpCheck.shouldBlock) {
             throw IllegalStateException(erpCheck.blockReason ?: "Cliente ja cadastrado no ERP.")
+        }
+        if (existing.exists) {
+            val statusNormalizado = existing.status
+                ?.trim()
+                ?.lowercase(Locale.ROOT)
+                .orEmpty()
+            val statusPermiteContinuar = statusNormalizado in setOf("incompleto", "adesoes_pendentes", "pendente")
+            val canContinue = existing.canContinue && statusPermiteContinuar && !existing.cadastroId.isNullOrBlank()
+            throw CadastroExistenteException(
+                cadastroId = existing.cadastroId.takeIf { canContinue },
+                empresaNome = existing.empresaNome,
+                canContinue = canContinue,
+                buildString {
+                    append("Ja existe um cadastro para este CPF")
+                    existing.empresaNome?.let { append(" em $it") }
+                    when {
+                        canContinue -> {
+                            append(". Abra o rascunho existente para continuar.")
+                        }
+                        statusNormalizado == "enviado" -> {
+                            append(". Este cadastro ja foi concluido e enviado.")
+                        }
+                        existing.status != null -> {
+                            append(". Status atual: ${existing.status}.")
+                        }
+                        else -> {
+                            append(".")
+                        }
+                    }
+                },
+            )
         }
 
         var warningMessage: String? = null
@@ -591,21 +615,121 @@ class CadastroWorkflowRepository(
         payload: JsonObject,
     ): CadastroDetalhe {
         val profileId = ensureProfileReadyForCadastroInsert(session, profile)
-        val insertPayload = buildJsonObject {
-            payload.forEach { (key, value) -> put(key, value) }
-            put("created_by", profileId)
-            profile.teamId?.let { put("team_id", it) }
-            put("status", "incompleto")
+        val tipoCadastro = payload["tipo_cadastro"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+        val cpf = payload["cpf"]?.jsonPrimitive?.contentOrNull?.filter(Char::isDigit).orEmpty()
+        val responsavelCpf = payload["responsavel_financeiro_cpf"]?.jsonPrimitive?.contentOrNull?.filter(Char::isDigit).orEmpty()
+        val existing = when {
+            tipoCadastro == "inclusao_dependente" && responsavelCpf.isNotBlank() -> {
+                getList<CadastroIdRow>(
+                    path = "cadastros",
+                    session = session,
+                    query = {
+                        parameter("tipo_cadastro", "eq.inclusao_dependente")
+                        parameter("status", "eq.incompleto")
+                        parameter("responsavel_financeiro_cpf", "eq.$responsavelCpf")
+                        parameter("created_by", "eq.$profileId")
+                        parameter("select", "id")
+                        parameter("order", "updated_at.desc")
+                        parameter("limit", 1)
+                    },
+                ).firstOrNull()
+            }
+            cpf.isNotBlank() -> {
+                getList<CadastroIdRow>(
+                    path = "cadastros",
+                    session = session,
+                    query = {
+                        parameter("tipo_cadastro", "eq.cadastro")
+                        parameter("status", "eq.incompleto")
+                        parameter("cpf", "eq.$cpf")
+                        parameter("created_by", "eq.$profileId")
+                        parameter("select", "id")
+                        parameter("order", "updated_at.desc")
+                        parameter("limit", 1)
+                    },
+                ).firstOrNull()
+            }
+            else -> null
         }
 
-        return client.safePost<List<CadastroDetalhe>>(
-            url = "${AppConfig.supabaseUrl}/rest/v1/cadastros",
-            json = json,
-            body = insertPayload,
-        ) {
-            applyAuthHeaders(session)
-            header("Prefer", "return=representation")
-        }.firstOrNull() ?: throw IllegalStateException("Falha ao criar rascunho.")
+        return if (existing != null) {
+            val updatePayload = buildJsonObject {
+                payload.forEach { (key, value) -> put(key, value) }
+                put("created_by", profileId)
+                profile.teamId?.let { put("team_id", it) }
+            }
+            client.safePost<List<CadastroDetalhe>>(
+                url = "${AppConfig.supabaseUrl}/rest/v1/cadastros?id=eq.${existing.id}",
+                json = json,
+                body = updatePayload,
+            ) {
+                applyAuthHeaders(session)
+                header("Prefer", "return=representation")
+                method = io.ktor.http.HttpMethod.Patch
+                contentType(ContentType.Application.Json)
+            }.firstOrNull() ?: fetchCadastroDetalhe(session, existing.id)
+        } else {
+            val insertPayload = buildJsonObject {
+                payload.forEach { (key, value) -> put(key, value) }
+                put("created_by", profileId)
+                profile.teamId?.let { put("team_id", it) }
+                put("status", "incompleto")
+            }
+
+            val insertedRows = try {
+                client.safePost<List<CadastroDetalhe>>(
+                    url = "${AppConfig.supabaseUrl}/rest/v1/cadastros",
+                    json = json,
+                    body = insertPayload,
+                ) {
+                    applyAuthHeaders(session)
+                    header("Prefer", "return=representation")
+                }
+            } catch (throwable: Throwable) {
+                if (!isDuplicateDraftConstraintError(throwable)) throw throwable
+
+                val existingAfterConflict = when {
+                    tipoCadastro == "inclusao_dependente" && responsavelCpf.isNotBlank() -> {
+                        getList<CadastroIdRow>(
+                            path = "cadastros",
+                            session = session,
+                            query = {
+                                parameter("tipo_cadastro", "eq.inclusao_dependente")
+                                parameter("status", "eq.incompleto")
+                                parameter("responsavel_financeiro_cpf", "eq.$responsavelCpf")
+                                parameter("created_by", "eq.$profileId")
+                                parameter("select", "id")
+                                parameter("order", "updated_at.desc")
+                                parameter("limit", 1)
+                            },
+                        ).firstOrNull()
+                    }
+                    cpf.isNotBlank() -> {
+                        getList<CadastroIdRow>(
+                            path = "cadastros",
+                            session = session,
+                            query = {
+                                parameter("tipo_cadastro", "eq.cadastro")
+                                parameter("status", "eq.incompleto")
+                                parameter("cpf", "eq.$cpf")
+                                parameter("created_by", "eq.$profileId")
+                                parameter("select", "id")
+                                parameter("order", "updated_at.desc")
+                                parameter("limit", 1)
+                            },
+                        ).firstOrNull()
+                    }
+                    else -> null
+                }
+
+                if (existingAfterConflict != null) {
+                    return fetchCadastroDetalhe(session, existingAfterConflict.id)
+                }
+                throw throwable
+            }
+
+            insertedRows.firstOrNull() ?: throw IllegalStateException("Falha ao criar rascunho.")
+        }
     }
 
     suspend fun deleteCadastro(session: SavedSession, id: String) {
@@ -672,6 +796,18 @@ class CadastroWorkflowRepository(
             json = json,
         ) {
             applyAuthHeaders(session)
+        }
+    }
+
+    suspend fun downloadTempFile(session: SavedSession, path: String): ByteArray {
+        val normalizedPath = path.trim().removePrefix("/")
+        if (normalizedPath.isBlank()) throw IllegalStateException("Arquivo nao informado para visualizacao.")
+        return client.safeGet(
+            url = "${AppConfig.supabaseUrl}/storage/v1/object/cadastros-temp-files/$normalizedPath",
+            json = json,
+        ) {
+            applyAuthHeaders(session)
+            header(HttpHeaders.Accept, "*/*")
         }
     }
 
@@ -817,6 +953,7 @@ class CadastroWorkflowRepository(
                 parameter("status", "eq.incompleto")
                 parameter("created_by", "eq.$profileId")
                 parameter("select", "id")
+                parameter("order", "updated_at.desc")
                 parameter("limit", 1)
             },
         ).firstOrNull()
@@ -845,14 +982,38 @@ class CadastroWorkflowRepository(
                 put("status", "incompleto")
             }
 
-            client.safePost<List<CadastroDetalhe>>(
-                url = "${AppConfig.supabaseUrl}/rest/v1/cadastros",
-                json = json,
-                body = insertPayload,
-            ) {
-                applyAuthHeaders(session)
-                header("Prefer", "return=representation")
-            }.firstOrNull() ?: throw IllegalStateException("Falha ao criar rascunho.")
+            val insertedRows = try {
+                client.safePost<List<CadastroDetalhe>>(
+                    url = "${AppConfig.supabaseUrl}/rest/v1/cadastros",
+                    json = json,
+                    body = insertPayload,
+                ) {
+                    applyAuthHeaders(session)
+                    header("Prefer", "return=representation")
+                }
+            } catch (throwable: Throwable) {
+                if (!isDuplicateDraftConstraintError(throwable)) throw throwable
+
+                val existingAfterConflict = getList<CadastroIdRow>(
+                    path = "cadastros",
+                    session = session,
+                    query = {
+                        parameter("cpf", "eq.${payload["cpf"]?.jsonPrimitive?.content}")
+                        parameter("status", "eq.incompleto")
+                        parameter("created_by", "eq.$profileId")
+                        parameter("select", "id")
+                        parameter("order", "updated_at.desc")
+                        parameter("limit", 1)
+                    },
+                ).firstOrNull()
+
+                if (existingAfterConflict != null) {
+                    return fetchCadastroDetalhe(session, existingAfterConflict.id)
+                }
+                throw throwable
+            }
+
+            insertedRows.firstOrNull() ?: throw IllegalStateException("Falha ao criar rascunho.")
         }
     }
 
@@ -1124,9 +1285,19 @@ class CadastroWorkflowRepository(
             },
         ).firstOrNull() ?: return null
 
-        val contatos = runCatching {
+        val contatosDecodificados = runCatching {
             json.decodeFromJsonElement(ListSerializerCache.contatos, cadastro.contatos ?: buildJsonArray {})
         }.getOrDefault(emptyList())
+        val contatos = contatosDecodificados
+            .ifEmpty { parseCadastroContatosFlex(cadastro.contatos) }
+            .ifEmpty { parseContatoFromErpAssociado(cadastro.erpDadosAssociado) }
+            .let { contatosList ->
+                if (contatosList.none { it.principal } && contatosList.isNotEmpty()) {
+                    contatosList.mapIndexed { index, contato -> contato.copy(principal = index == 0) }
+                } else {
+                    contatosList
+                }
+            }
         val endereco = runCatching {
             cadastro.endereco?.let { json.decodeFromJsonElement(CadastroEnderecoSerializerCache.serializer, it) }
         }.getOrNull()
@@ -1307,4 +1478,85 @@ private object ListSerializerCache {
     val contatos = kotlinx.serialization.builtins.ListSerializer(CadastroContato.serializer())
     val dependentes = kotlinx.serialization.builtins.ListSerializer(br.com.vendamais.mobile.data.models.DependenteCadastro.serializer())
     val erpAssociados = kotlinx.serialization.builtins.ListSerializer(ErpAssociadoItem.serializer())
+}
+
+private fun parseCadastroContatosFlex(raw: JsonElement?): List<CadastroContato> {
+    val contatosArray = when (raw) {
+        is kotlinx.serialization.json.JsonArray -> raw
+        is JsonObject -> {
+            raw["contatos"]?.let { runCatching { it.jsonArray }.getOrNull() }
+                ?: raw["telefones"]?.let { runCatching { it.jsonArray }.getOrNull() }
+                ?: raw["items"]?.let { runCatching { it.jsonArray }.getOrNull() }
+        }
+        else -> raw?.let { runCatching { it.jsonArray }.getOrNull() }
+    } ?: return emptyList()
+
+    return contatosArray.mapNotNull { item ->
+        val obj = runCatching { item.jsonObject }.getOrNull() ?: return@mapNotNull null
+        val tipoRaw = obj.readString("tipo", "tipoContato", "tipo_contato", "kind")
+            ?.lowercase(Locale.ROOT)
+            ?.trim()
+            .orEmpty()
+        val valorRaw = obj.readString("valor", "telefone", "numero", "contato", "email", "value")
+            ?.trim()
+            .orEmpty()
+        if (valorRaw.isBlank()) return@mapNotNull null
+
+        val tipo = when (tipoRaw) {
+            "cel", "cell", "celular" -> "celular"
+            "fixo", "telefone", "residencial" -> "fixo"
+            "whatsapp", "zap" -> "whatsapp"
+            "email", "e-mail" -> "email"
+            else -> if (valorRaw.contains('@')) "email" else "celular"
+        }
+        val valor = if (tipo == "email") valorRaw else valorRaw.filter(Char::isDigit)
+        if (valor.isBlank()) return@mapNotNull null
+
+        val principal = obj["principal"]?.jsonPrimitive?.booleanOrNull
+            ?: obj["isPrincipal"]?.jsonPrimitive?.booleanOrNull
+            ?: obj["prioritario"]?.jsonPrimitive?.booleanOrNull
+            ?: obj["principal"]?.jsonPrimitive?.contentOrNull?.equals("true", ignoreCase = true)
+            ?: false
+
+        CadastroContato(tipo = tipo, valor = valor, principal = principal)
+    }.distinctBy { "${it.tipo}:${it.valor}" }
+}
+
+private fun parseContatoFromErpAssociado(raw: JsonElement?): List<CadastroContato> {
+    val dados = raw?.jsonObject?.get("dados")?.jsonArray ?: return emptyList()
+    val contatos = mutableListOf<CadastroContato>()
+
+    dados.forEach { item ->
+        val obj = runCatching { item.jsonObject }.getOrNull() ?: return@forEach
+
+        contatos += parseCadastroContatosFlex(obj["contatos"])
+
+        addContatoIfPresent(contatos, "celular", obj.readString("celular", "numeroCelular", "telefoneCelular", "celular1"))
+        addContatoIfPresent(contatos, "celular", obj.readString("celular2"))
+        addContatoIfPresent(contatos, "whatsapp", obj.readString("whatsapp"))
+        addContatoIfPresent(contatos, "fixo", obj.readString("telefone", "telefone1", "numeroTelefone", "fone"))
+        addContatoIfPresent(contatos, "fixo", obj.readString("telefone2"))
+    }
+
+    return contatos
+        .filter { it.valor.isNotBlank() }
+        .distinctBy { "${it.tipo}:${it.valor}" }
+}
+
+private fun addContatoIfPresent(
+    contatos: MutableList<CadastroContato>,
+    tipo: String,
+    rawValue: String?,
+) {
+    val normalized = rawValue?.filter(Char::isDigit).orEmpty()
+    if (normalized.length < 10) return
+    contatos += CadastroContato(tipo = tipo, valor = normalized, principal = false)
+}
+
+private fun JsonObject.readString(vararg keys: String): String? {
+    keys.forEach { key ->
+        val value = this[key]?.jsonPrimitive?.contentOrNull?.trim()
+        if (!value.isNullOrBlank()) return value
+    }
+    return null
 }

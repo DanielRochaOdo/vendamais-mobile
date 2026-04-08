@@ -1,25 +1,38 @@
 ﻿package br.com.vendamais.mobile.ui.screens
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.webkit.MimeTypeMap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -36,6 +49,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
@@ -46,6 +61,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.FileProvider
 import br.com.vendamais.mobile.data.models.CadastroDetalhe
 import br.com.vendamais.mobile.data.models.TeamMemberOption
 import br.com.vendamais.mobile.data.remote.InclusaoBuscaTipo
@@ -78,6 +94,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.text.NumberFormat
+import java.io.File
 import java.time.LocalDate
 import java.time.Period
 import java.time.format.DateTimeFormatter
@@ -136,6 +153,7 @@ fun InclusaoDependenteDialog(
     var localError by rememberSaveable { mutableStateOf<String?>(null) }
     var localNotice by rememberSaveable { mutableStateOf<String?>(null) }
     var successDialogMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var previewingArquivoIndex by rememberSaveable { mutableStateOf<Int?>(null) }
 
     var selectedVendedorId by rememberSaveable {
         mutableStateOf(
@@ -178,6 +196,58 @@ fun InclusaoDependenteDialog(
     }
 
     var targetUploadIndex by remember { mutableStateOf<Int?>(null) }
+    var showArquivoSourceModal by rememberSaveable { mutableStateOf(false) }
+    var cameraCapturePath by rememberSaveable { mutableStateOf("") }
+
+    suspend fun uploadDependenteArquivo(
+        index: Int,
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray,
+    ) {
+        validateUpload(fileName, mimeType, bytes.size.toLong())
+        dependentes[index].arquivo?.path?.takeIf { it.isNotBlank() }?.let { path ->
+            runCatching { viewModel.deleteTempFile(path) }
+        }
+        val cpf = dependentes[index].cpf.text.ifBlank { "0" }
+        val uploaded = viewModel.uploadTempFile(
+            fileName = fileName,
+            mimeType = mimeType,
+            bytes = bytes,
+            prefix = if (isContinuacao) "dependentes-continuar/$cpf" else "dependentes-temp/$cpf",
+        )
+        updateDependente(dependentes, index) { it.copy(arquivo = uploaded, uploading = false, saved = false) }
+        localNotice = "Arquivo carregado com sucesso."
+    }
+
+    suspend fun openDependenteArquivoPreview(index: Int) {
+        val dependente = dependentes.getOrNull(index)
+        val arquivo = dependente?.arquivo
+        if (arquivo == null || arquivo.path.isBlank()) {
+            localError = "Nenhum arquivo anexado para visualizacao."
+            return
+        }
+        previewingArquivoIndex = index
+        runCatching {
+            val bytes = viewModel.downloadTempFile(arquivo.path)
+            val uri = writePreviewFile(
+                context = context,
+                fileName = arquivo.nome.ifBlank { arquivo.path.substringAfterLast('/') },
+                bytes = bytes,
+            )
+            val mime = resolvePreviewMimeType(arquivo.nome.ifBlank { arquivo.path.substringAfterLast('/') })
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mime)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(Intent.createChooser(intent, "Visualizar arquivo"))
+        }.onFailure { throwable ->
+            localError = throwable.message ?: "Nao foi possivel abrir o arquivo."
+        }
+        previewingArquivoIndex = null
+    }
+
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         val index = targetUploadIndex
         targetUploadIndex = null
@@ -187,26 +257,42 @@ fun InclusaoDependenteDialog(
             runCatching {
                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                     ?: error("Nao foi possivel ler o arquivo.")
-                val fileName = resolveFileName(context, uri)
-                val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
-                validateUpload(fileName, mime, bytes.size.toLong())
-                dependentes[index].arquivo?.path?.takeIf { it.isNotBlank() }?.let { path ->
-                    runCatching { viewModel.deleteTempFile(path) }
-                }
-                val cpf = dependentes[index].cpf.text.ifBlank { "0" }
-                viewModel.uploadTempFile(
-                    fileName = fileName,
-                    mimeType = mime,
+                uploadDependenteArquivo(
+                    index = index,
+                    fileName = resolveFileName(context, uri),
+                    mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream",
                     bytes = bytes,
-                    prefix = if (isContinuacao) "dependentes-continuar/$cpf" else "dependentes-temp/$cpf",
                 )
-            }.onSuccess { uploaded ->
-                updateDependente(dependentes, index) { it.copy(arquivo = uploaded, uploading = false, saved = false) }
-                localNotice = "Arquivo carregado com sucesso."
+            }.onSuccess {
             }.onFailure { throwable ->
                 updateDependente(dependentes, index) { it.copy(uploading = false) }
                 localError = throwable.message ?: "Erro ao carregar arquivo."
             }
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val index = targetUploadIndex
+        val cameraPath = cameraCapturePath
+        targetUploadIndex = null
+        cameraCapturePath = ""
+        if (!success || index == null || index !in dependentes.indices || cameraPath.isBlank()) return@rememberLauncherForActivityResult
+        scope.launch {
+            updateDependente(dependentes, index) { it.copy(uploading = true) }
+            runCatching {
+                val cameraFile = File(cameraPath)
+                val bytes = cameraFile.readBytes()
+                uploadDependenteArquivo(
+                    index = index,
+                    fileName = cameraFile.name,
+                    mimeType = "image/jpeg",
+                    bytes = bytes,
+                )
+            }.onFailure { throwable ->
+                updateDependente(dependentes, index) { it.copy(uploading = false) }
+                localError = throwable.message ?: "Erro ao capturar arquivo pela camera."
+            }
+            runCatching { File(cameraPath).delete() }
         }
     }
 
@@ -740,30 +826,47 @@ fun InclusaoDependenteDialog(
                                     label = { Text("Nome da mae") },
                                 )
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Button(onClick = { targetUploadIndex = index; filePicker.launch("*/*") }, enabled = !dep.uploading && !enviando && !salvando) {
+                                    Button(onClick = { targetUploadIndex = index; showArquivoSourceModal = true }, enabled = !dep.uploading && !enviando && !salvando) {
                                         if (dep.uploading) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp) else Text(if (dep.arquivo == null) "Arquivo" else "Trocar arquivo")
                                     }
                                     if (dep.arquivo != null) {
+                                        TextButton(
+                                            onClick = { scope.launch { openDependenteArquivoPreview(index) } },
+                                            enabled = previewingArquivoIndex != index,
+                                        ) {
+                                            Text(
+                                                if (previewingArquivoIndex == index) {
+                                                    "Abrindo..."
+                                                } else {
+                                                    dep.arquivo.nome
+                                                },
+                                            )
+                                        }
                                         TextButton(onClick = { scope.launch { runCatching { viewModel.deleteTempFile(dep.arquivo.path) }; updateDependente(dependentes, index) { it.copy(arquivo = null, saved = false) } } }) { Text("Remover arquivo") }
                                     }
                                     TextButton(onClick = { dependentes.removeAt(index) }, enabled = !enviando && !salvando) { Text("Remover") }
                                 }
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
                                     if (!isContinuacao) {
                                         Button(
+                                            modifier = Modifier.weight(1f),
                                             onClick = {
                                                 validateDependente(dep, index)?.let { localError = it }
                                                     ?: updateDependente(dependentes, index) {
                                                         it.copy(saved = true, expanded = false)
                                                     }
                                             },
-                                        ) { Text("Salvar dependente") }
+                                        ) { Text("Salvar") }
                                     }
                                     if (index == dependentes.lastIndex) {
                                         TextButton(
+                                            modifier = Modifier.weight(1f),
                                             onClick = { dependentes.add(DependenteFormState()) },
                                             enabled = !salvando && !enviando,
-                                        ) { Text("Adicionar dependente") }
+                                        ) { Text("Adicionar") }
                                     }
                                 }
                             }
@@ -788,13 +891,47 @@ fun InclusaoDependenteDialog(
                     }
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = onDismiss, enabled = !salvando && !enviando) { Text("Cancelar") }
-                    Button(onClick = { scope.launch { salvando = true; runCatching { salvarPendente() }.onFailure { localError = it.message }; salvando = false } }, enabled = !salvando && !enviando && responsavelSelecionado != null) { Text(if (salvando) "Salvando..." else if (isContinuacao) "Salvar rascunho" else "Salvar pendente") }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
+                        .navigationBarsPadding(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(
+                        modifier = Modifier.weight(0.9f),
+                        onClick = onDismiss,
+                        enabled = !salvando && !enviando,
+                    ) {
+                        Text("Cancelar")
+                    }
                     Button(
+                        modifier = Modifier.weight(1f),
                         onClick = {
+                            if (salvando || enviando) return@Button
+                            salvando = true
                             scope.launch {
-                                enviando = true
+                                runCatching { salvarPendente() }.onFailure { localError = it.message }
+                                salvando = false
+                            }
+                        },
+                        enabled = !salvando && !enviando && responsavelSelecionado != null,
+                    ) {
+                        if (salvando) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Rounded.Save, contentDescription = null)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Salvar")
+                        }
+                    }
+                    Button(
+                        modifier = Modifier.weight(1.1f),
+                        onClick = {
+                            if (salvando || enviando) return@Button
+                            enviando = true
+                            scope.launch {
                                 runCatching { enviarDependentes() }
                                     .onFailure { throwable ->
                                         val mapped = CadastroApiErrorMapper.mapErpError(throwable.message)
@@ -809,20 +946,97 @@ fun InclusaoDependenteDialog(
                         },
                         enabled = !salvando && !enviando && responsavelSelecionado != null,
                     ) {
-                        Text(if (enviando) "Enviando..." else "Incluir dependentes")
+                        if (enviando) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = null)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Incluir")
+                        }
                     }
                 }
             }
         }
     }
 
+    if (showArquivoSourceModal) {
+        AlertDialog(
+            onDismissRequest = {
+                showArquivoSourceModal = false
+                targetUploadIndex = null
+            },
+            title = { Text("Anexar arquivo") },
+            text = { Text("Escolha a origem do arquivo.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showArquivoSourceModal = false
+                        filePicker.launch("*/*")
+                    },
+                ) {
+                    Text("Documentos")
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TextButton(
+                        onClick = {
+                            showArquivoSourceModal = false
+                            runCatching {
+                                val (uri, path) = createCameraCaptureUri(context)
+                                cameraCapturePath = path
+                                cameraLauncher.launch(uri)
+                            }.onFailure { throwable ->
+                                targetUploadIndex = null
+                                localError = throwable.message ?: "Nao foi possivel iniciar a camera."
+                            }
+                        },
+                    ) {
+                        Text("Camera")
+                    }
+                    TextButton(
+                        onClick = {
+                            showArquivoSourceModal = false
+                            targetUploadIndex = null
+                        },
+                    ) {
+                        Text("Cancelar")
+                    }
+                }
+            },
+        )
+    }
+
     localError?.let { message ->
         val tone = resolveInclusaoMessageTone(message)
-        val (_, textColor) = inclusaoMessageToneColors(tone)
+        val (container, textColor) = inclusaoMessageToneColors(tone)
+        val title = when (tone) {
+            InclusaoMessageTone.ERROR -> "Erro"
+            InclusaoMessageTone.ALERT -> "Atencao"
+            InclusaoMessageTone.WARNING -> "Aviso"
+            InclusaoMessageTone.SUCCESS -> "Sucesso"
+        }
         AlertDialog(
             onDismissRequest = { localError = null },
-            title = { Text("Erro", color = if (tone == InclusaoMessageTone.ERROR) Red500 else BrandOrange) },
-            text = { Text(message, color = textColor) },
+            title = {
+                Text(
+                    title,
+                    color = if (tone == InclusaoMessageTone.ERROR) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary,
+                )
+            },
+            text = {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = container,
+                    shape = MaterialTheme.shapes.medium,
+                ) {
+                    Text(
+                        text = message,
+                        color = textColor,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    )
+                }
+            },
             confirmButton = { TextButton(onClick = { localError = null }) { Text("OK") } },
         )
     }
@@ -835,7 +1049,7 @@ fun InclusaoDependenteDialog(
                 onSuccess()
                 onDismiss()
             },
-            title = { Text("Sucesso", color = EmeraldDark) },
+            title = { Text("Sucesso", color = textColor) },
             text = {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -1252,12 +1466,22 @@ private fun resolveInclusaoMessageTone(message: String): InclusaoMessageTone {
     }
 }
 
+@Composable
 private fun inclusaoMessageToneColors(tone: InclusaoMessageTone): Pair<androidx.compose.ui.graphics.Color, androidx.compose.ui.graphics.Color> {
+    val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
     return when (tone) {
-        InclusaoMessageTone.SUCCESS -> EmeraldSoft to EmeraldDark
-        InclusaoMessageTone.WARNING -> Amber100 to Amber500
-        InclusaoMessageTone.ALERT -> BrandOrange.copy(alpha = 0.18f) to BrandOrange
-        InclusaoMessageTone.ERROR -> Red100 to Red500
+        InclusaoMessageTone.SUCCESS ->
+            if (darkTheme) MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+            else EmeraldSoft to EmeraldDark
+        InclusaoMessageTone.WARNING ->
+            if (darkTheme) androidx.compose.ui.graphics.Color(0xFF4A3A1E) to androidx.compose.ui.graphics.Color(0xFFFFDE9E)
+            else Amber100 to Amber500
+        InclusaoMessageTone.ALERT ->
+            if (darkTheme) androidx.compose.ui.graphics.Color(0xFF4B2F1F) to androidx.compose.ui.graphics.Color(0xFFFFC39A)
+            else BrandOrange.copy(alpha = 0.18f) to BrandOrange
+        InclusaoMessageTone.ERROR ->
+            if (darkTheme) MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+            else Red100 to Red500
     }
 }
 
@@ -1269,12 +1493,46 @@ private fun validateUpload(fileName: String, mimeType: String, size: Long) {
     if (size > MAX_UPLOAD_BYTES) throw IllegalStateException("Arquivo excede 10MB.")
 }
 
+private fun createCameraCaptureUri(context: Context): Pair<Uri, String> {
+    val directory = File(context.cacheDir, "camera_uploads").apply { mkdirs() }
+    val file = File.createTempFile("dependente_", ".jpg", directory)
+    val uri = FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        file,
+    )
+    return uri to file.absolutePath
+}
+
 private fun resolveFileName(context: Context, uri: Uri): String {
     context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
         val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
         if (cursor.moveToFirst() && index >= 0) return cursor.getString(index)
     }
     return uri.lastPathSegment ?: "arquivo"
+}
+
+private fun writePreviewFile(
+    context: Context,
+    fileName: String,
+    bytes: ByteArray,
+): Uri {
+    val directory = File(context.cacheDir, "shared_qrcodes").apply { mkdirs() }
+    val safeName = fileName
+        .ifBlank { "arquivo" }
+        .replace(Regex("[^a-zA-Z0-9._-]"), "_")
+    val file = File(directory, "preview_${System.currentTimeMillis()}_$safeName")
+    file.writeBytes(bytes)
+    return FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        file,
+    )
+}
+
+private fun resolvePreviewMimeType(fileName: String): String {
+    val extension = fileName.substringAfterLast('.', "").lowercase(Locale.ROOT)
+    return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "*/*"
 }
 
 private class DependenteCpfVisualTransformation : VisualTransformation {

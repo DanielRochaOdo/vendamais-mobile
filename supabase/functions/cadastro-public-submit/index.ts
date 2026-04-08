@@ -136,25 +136,63 @@ const hashToken = async (token: string) => {
     .join("");
 };
 
-const checkCpfAlreadyCompletedOnLink = async (
+type ExistingPublicCadastro = {
+  id: string;
+  status: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+const findPublicCadastrosByLinkAndCpf = async (
   supabase: ReturnType<typeof createClient>,
   linkId: string,
   cpf: string,
 ) => {
   const { data, error } = await supabase
     .from("cadastros")
-    .select("id")
+    .select("id, status, created_at, updated_at")
     .eq("origem_link_id", linkId)
     .eq("cpf", cpf)
-    .eq("status", "enviado")
-    .limit(1)
-    .maybeSingle();
+    .eq("fluxo_publico", true)
+    .order("updated_at", { ascending: false });
 
   if (error) {
     throw error;
   }
 
-  return Boolean(data);
+  return (data || []) as ExistingPublicCadastro[];
+};
+
+const pickCadastroToReuse = (cadastros: ExistingPublicCadastro[]) => {
+  const sorted = [...cadastros].sort((a, b) => {
+    const rank = (status?: string | null) => {
+      if (status === "enviado") return 0;
+      if (status === "incompleto") return 1;
+      if (status === "erro_envio") return 2;
+      return 3;
+    };
+
+    const rankDiff = rank(a.status) - rank(b.status);
+    if (rankDiff !== 0) {
+      return rankDiff;
+    }
+
+    const timeA = Date.parse(a.updated_at || a.created_at || "");
+    const timeB = Date.parse(b.updated_at || b.created_at || "");
+    return Number.isFinite(timeB) && Number.isFinite(timeA) ? timeB - timeA : 0;
+  });
+
+  const alreadySent = sorted.find((item) => item.status === "enviado") || null;
+  if (alreadySent) {
+    return { kind: "enviado" as const, cadastro: alreadySent };
+  }
+
+  const reusable = sorted.find((item) => item.status === "incompleto" || item.status === "erro_envio") || null;
+  if (reusable) {
+    return { kind: "reusable" as const, cadastro: reusable };
+  }
+
+  return null;
 };
 
 const checkLocalBlockedCpf = async (
@@ -494,6 +532,7 @@ const sendCadastroToErp = async (
   supabase: ReturnType<typeof createClient>,
   payload: Record<string, unknown>,
   cadastroId: string,
+  idempotencyKey?: string | null,
 ) => {
   const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
   const ERP_URL = Deno.env.get("ERP_URL") || "https://odontoart.s4e.com.br/api/vendedor/NovoUsuario2";
@@ -528,7 +567,7 @@ const sendCadastroToErp = async (
     await saveApiLog(supabase, {
       endpoint: "erp-novo-usuario2-public",
       method: "POST",
-      request_body: { ...payload, cadastro_id: cadastroId },
+      request_body: { ...payload, cadastro_id: cadastroId, idempotency_key: idempotencyKey || null },
       response_body: responseBody,
       status_code: response.status,
       success: false,
@@ -551,7 +590,7 @@ const sendCadastroToErp = async (
   await saveApiLog(supabase, {
     endpoint: "erp-novo-usuario2-public",
     method: "POST",
-    request_body: { ...payload, cadastro_id: cadastroId },
+    request_body: { ...payload, cadastro_id: cadastroId, idempotency_key: idempotencyKey || null },
     response_body: responseBody,
     status_code: 200,
     success: true,
@@ -673,6 +712,8 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const requestStartedAt = Date.now();
+    const idempotencyKey = req.headers.get("X-Idempotency-Key")?.trim() || null;
     const { token, cadastro } = await req.json() as {
       token?: string;
       cadastro?: PublicCadastroPayload;
@@ -691,6 +732,40 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const tokenHash = await hashToken(token.trim());
+    let logLinkId: string | null = null;
+    let logCpf: string | null = null;
+    let logCadastroId: string | null = null;
+
+    const logAndRespond = async (
+      body: Record<string, unknown>,
+      status: number,
+      success: boolean,
+      errorMessage?: string,
+      cadastroId?: string | null,
+    ) => {
+      if (cadastroId) {
+        logCadastroId = cadastroId;
+      }
+
+      await saveApiLog(supabase, {
+        endpoint: "cadastro-public-submit",
+        method: "POST",
+        request_body: {
+          token_hash: tokenHash,
+          link_id: logLinkId,
+          cpf: logCpf,
+          cadastro_id: logCadastroId,
+          idempotency_key: idempotencyKey,
+        },
+        response_body: body,
+        status_code: status,
+        success,
+        error_message: errorMessage,
+        duration_ms: Date.now() - requestStartedAt,
+      });
+
+      return jsonResponse(body, status);
+    };
 
     const { data: link, error: linkError } = await supabase
       .from("cadastro_links")
@@ -700,42 +775,97 @@ Deno.serve(async (req: Request) => {
 
     if (linkError) {
       console.error("[cadastro-public-submit] link error:", linkError);
-      return jsonResponse({ error: "Erro ao validar link" }, 500);
+      return await logAndRespond({ error: "Erro ao validar link" }, 500, false, "Erro ao validar link");
     }
 
     if (!link) {
-      return jsonResponse({ error: "Link nao encontrado ou invalido" }, 404);
+      return await logAndRespond({ error: "Link nao encontrado ou invalido" }, 404, false, "Link nao encontrado");
     }
+
+    logLinkId = link.id;
 
     if (!link.is_active) {
-      return jsonResponse({ error: "Link inativo" }, 410);
-    }
-
-    const alreadyCompletedOnLink = await checkCpfAlreadyCompletedOnLink(supabase, link.id, normalizeDigits(cadastro!.cpf));
-    if (alreadyCompletedOnLink) {
-      return jsonResponse({
-        error: "Este CPF ja concluiu uma adesao por este link e nao pode reutiliza-lo.",
-      }, 409);
-    }
-
-    if (Number(link.empresa_exige_matricula) === 1 && !cadastro?.numeroMatricula) {
-      return jsonResponse({ error: "Matricula obrigatoria para esta empresa" }, 400);
+      return await logAndRespond({ error: "Link inativo" }, 410, false, "Link inativo");
     }
 
     const normalizedCpf = normalizeDigits(cadastro!.cpf);
+    logCpf = normalizedCpf;
+
+    if (idempotencyKey) {
+      const { data: previousByKey } = await supabase
+        .from("api_logs")
+        .select("response_body")
+        .eq("endpoint", "cadastro-public-submit")
+        .eq("success", true)
+        .contains("request_body", { idempotency_key: idempotencyKey })
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const previousResponse = previousByKey?.response_body as Record<string, unknown> | null;
+      const previousCadastroId =
+        previousResponse && typeof previousResponse.cadastroId === "string"
+          ? previousResponse.cadastroId
+          : null;
+
+      if (previousCadastroId) {
+        return await logAndRespond({
+          ok: true,
+          idempotent: true,
+          cadastroId: previousCadastroId,
+          message: typeof previousResponse.message === "string"
+            ? previousResponse.message
+            : "Cadastro concluido com sucesso",
+        }, 200, true, undefined, previousCadastroId);
+      }
+    }
+
+    const existingPublicCadastros = await findPublicCadastrosByLinkAndCpf(supabase, link.id, normalizedCpf);
+    const existingDecision = pickCadastroToReuse(existingPublicCadastros);
+
+    if (existingDecision?.kind === "enviado") {
+      try {
+        await syncLinkUsage(supabase, link.id, normalizedCpf, existingDecision.cadastro.id);
+      } catch (syncError) {
+        console.warn("[cadastro-public-submit] link sync warning for idempotent success:", syncError);
+      }
+
+      return await logAndRespond({
+        ok: true,
+        idempotent: true,
+        cadastroId: existingDecision.cadastro.id,
+        message: "Cadastro concluido com sucesso",
+      }, 200, true, undefined, existingDecision.cadastro.id);
+    }
+
+    if (Number(link.empresa_exige_matricula) === 1 && !cadastro?.numeroMatricula) {
+      return await logAndRespond(
+        { error: "Matricula obrigatoria para esta empresa" },
+        400,
+        false,
+        "Matricula obrigatoria para esta empresa",
+      );
+    }
+
     const localBlockedCpf = await checkLocalBlockedCpf(supabase, normalizedCpf);
     if (localBlockedCpf?.blocked) {
-      return jsonResponse({
-        error: localBlockedCpf.reason || "Este CPF nao pode utilizar este link.",
-      }, 409);
+      return await logAndRespond(
+        { error: localBlockedCpf.reason || "Este CPF nao pode utilizar este link." },
+        409,
+        false,
+        localBlockedCpf.reason || "CPF bloqueado para este link",
+      );
     }
 
     try {
       const erpCheck = await checkErpAssociado(supabase, normalizedCpf);
       if (erpCheck?.exists && erpCheck?.shouldBlock) {
-        return jsonResponse({
-          error: erpCheck.blockReason || "Cliente ja cadastrado no sistema",
-        }, 409);
+        return await logAndRespond(
+          { error: erpCheck.blockReason || "Cliente ja cadastrado no sistema" },
+          409,
+          false,
+          erpCheck.blockReason || "Cliente ja cadastrado no ERP",
+        );
       }
     } catch (erpValidationError) {
       console.warn("[cadastro-public-submit] ERP validation failed during final submit, continuing with ERP send:", erpValidationError);
@@ -743,9 +873,9 @@ Deno.serve(async (req: Request) => {
 
     const vendedorCodigoResolvido = await resolveVendedorCodigo(supabase, link);
     if (!vendedorCodigoResolvido) {
-      return jsonResponse({
+      return await logAndRespond({
         error: "Link sem codigo de vendedor valido. Gere um novo link com um usuario que possua codigo externo configurado.",
-      }, 400);
+      }, 400, false, "Link sem codigo de vendedor valido");
     }
 
     const ownerContext = await resolveProfileContext(supabase, link.vendedor_id || link.created_by);
@@ -760,46 +890,116 @@ Deno.serve(async (req: Request) => {
       ownerContext?.role === "ADESIONISTA" ? ownerContext?.external_id || null : null,
     );
 
-    const { data: insertedCadastro, error: insertError } = await supabase
-      .from("cadastros")
-      .insert({
-        status: "incompleto",
-        tipo_cadastro: "cadastro",
-        created_by: link.created_by,
-        team_id: link.team_id,
-        cpf: normalizedCpf,
-        nome: cadastro!.nome,
-        data_nascimento: cadastro!.dataNascimento,
-        sexo: cadastro!.sexoCodigo === 1 ? "M" : "F",
-        sexo_codigo: cadastro!.sexoCodigo,
-        nome_mae: cadastro!.nomeMae,
-        contatos: cadastro!.contatos,
-        endereco: cadastro!.endereco,
-        cliente_sera_usuario: true,
-        empresa_id: link.empresa_codigo,
-        empresa_codigo: link.empresa_codigo,
-        empresa_nome: link.empresa_nome,
-        empresa_cnpj: link.empresa_cnpj,
-        empresa_raw: link.empresa_raw,
-        empresa_exige_matricula: link.empresa_exige_matricula,
-        planos_raw: link.planos_raw,
-        dependentes: dependentesNormalizados,
-        numero_matricula: cadastro!.numeroMatricula || null,
-        vendedor_id: link.vendedor_id,
-        vendedor_codigo: vendedorCodigoResolvido,
-        vendedor_nome: link.vendedor_nome,
-        origem_link_id: link.id,
-        fluxo_publico: true,
-      })
-      .select("id")
-      .single();
+    const cadastroPersistPayload = {
+      status: "incompleto",
+      tipo_cadastro: "cadastro",
+      created_by: link.created_by,
+      team_id: link.team_id,
+      cpf: normalizedCpf,
+      nome: cadastro!.nome,
+      data_nascimento: cadastro!.dataNascimento,
+      sexo: cadastro!.sexoCodigo === 1 ? "M" : "F",
+      sexo_codigo: cadastro!.sexoCodigo,
+      nome_mae: cadastro!.nomeMae,
+      contatos: cadastro!.contatos,
+      endereco: cadastro!.endereco,
+      cliente_sera_usuario: true,
+      empresa_id: link.empresa_codigo,
+      empresa_codigo: link.empresa_codigo,
+      empresa_nome: link.empresa_nome,
+      empresa_cnpj: link.empresa_cnpj,
+      empresa_raw: link.empresa_raw,
+      empresa_exige_matricula: link.empresa_exige_matricula,
+      planos_raw: link.planos_raw,
+      dependentes: dependentesNormalizados,
+      numero_matricula: cadastro!.numeroMatricula || null,
+      vendedor_id: link.vendedor_id,
+      vendedor_codigo: vendedorCodigoResolvido,
+      vendedor_nome: link.vendedor_nome,
+      origem_link_id: link.id,
+      fluxo_publico: true,
+    };
 
-    if (insertError || !insertedCadastro) {
-      console.error("[cadastro-public-submit] insert error:", insertError);
-      return jsonResponse({ error: "Nao foi possivel criar o cadastro" }, 500);
+    let workingCadastroId: string | null = existingDecision?.kind === "reusable"
+      ? existingDecision.cadastro.id
+      : null;
+
+    if (workingCadastroId) {
+      const { error: updateExistingError } = await supabase
+        .from("cadastros")
+        .update(cadastroPersistPayload)
+        .eq("id", workingCadastroId);
+
+      if (updateExistingError) {
+        console.error("[cadastro-public-submit] failed to update existing cadastro:", updateExistingError);
+        return await logAndRespond(
+          { error: "Nao foi possivel atualizar o cadastro existente para reenvio" },
+          500,
+          false,
+          "Falha ao atualizar cadastro existente",
+          workingCadastroId,
+        );
+      }
+    } else {
+      const { data: insertedCadastro, error: insertError } = await supabase
+        .from("cadastros")
+        .insert(cadastroPersistPayload)
+        .select("id")
+        .single();
+
+      if (insertError || !insertedCadastro) {
+        const duplicateError = insertError?.code === "23505" ||
+          (typeof insertError?.message === "string" && insertError.message.toLowerCase().includes("duplicate"));
+
+        if (duplicateError) {
+          const concurrentCadastros = await findPublicCadastrosByLinkAndCpf(supabase, link.id, normalizedCpf);
+          const concurrentDecision = pickCadastroToReuse(concurrentCadastros);
+
+          if (concurrentDecision?.kind === "enviado") {
+            return await logAndRespond({
+              ok: true,
+              idempotent: true,
+              cadastroId: concurrentDecision.cadastro.id,
+              message: "Cadastro concluido com sucesso",
+            }, 200, true, undefined, concurrentDecision.cadastro.id);
+          }
+
+          if (concurrentDecision?.kind === "reusable") {
+            workingCadastroId = concurrentDecision.cadastro.id;
+          }
+        }
+
+        if (!workingCadastroId) {
+          console.error("[cadastro-public-submit] insert error:", insertError);
+          return await logAndRespond(
+            { error: "Nao foi possivel criar o cadastro" },
+            500,
+            false,
+            "Falha ao criar cadastro",
+          );
+        }
+      } else {
+        workingCadastroId = insertedCadastro.id;
+      }
     }
 
-    const { ok: erpOk, result: erpResult } = await sendCadastroToErp(supabase, erpPayload, insertedCadastro.id);
+    if (!workingCadastroId) {
+      return await logAndRespond(
+        { error: "Nao foi possivel resolver o cadastro para envio" },
+        500,
+        false,
+        "Cadastro sem id para envio",
+      );
+    }
+
+    logCadastroId = workingCadastroId;
+
+    const { ok: erpOk, result: erpResult } = await sendCadastroToErp(
+      supabase,
+      erpPayload,
+      workingCadastroId,
+      idempotencyKey,
+    );
 
     if (!erpOk || erpResult?.error) {
       await supabase
@@ -809,19 +1009,19 @@ Deno.serve(async (req: Request) => {
           payload_erp: erpPayload,
           erp_response: erpResult,
         })
-        .eq("id", insertedCadastro.id);
+        .eq("id", workingCadastroId);
 
-      return jsonResponse({
+      return await logAndRespond({
         error: extractMessage(erpResult) || "Erro ao enviar cadastro para o ERP",
         details: erpResult,
-        cadastroId: insertedCadastro.id,
-      }, 400);
+        cadastroId: workingCadastroId,
+      }, 400, false, extractMessage(erpResult) || "Erro ao enviar cadastro para o ERP", workingCadastroId);
     }
 
     try {
       await syncCadastroEnviado(
         supabase,
-        insertedCadastro.id,
+        workingCadastroId,
         erpPayload,
         erpResult,
         cadastro!.dependentes,
@@ -829,36 +1029,36 @@ Deno.serve(async (req: Request) => {
     } catch (syncError) {
       console.error("[cadastro-public-submit] cadastro sync error after ERP success:", syncError);
 
-      return jsonResponse({
+      return await logAndRespond({
         ok: true,
         warning: syncError instanceof Error
           ? syncError.message
           : "Cadastro enviado ao ERP, mas houve uma divergencia na sincronizacao local",
-        cadastroId: insertedCadastro.id,
+        cadastroId: workingCadastroId,
         message: "Cadastro concluido com sucesso",
-      });
+      }, 200, true, undefined, workingCadastroId);
     }
 
     try {
-      await syncLinkUsage(supabase, link.id, normalizedCpf, insertedCadastro.id);
+      await syncLinkUsage(supabase, link.id, normalizedCpf, workingCadastroId);
     } catch (linkSyncError) {
       console.error("[cadastro-public-submit] link sync warning after ERP success:", linkSyncError);
 
-      return jsonResponse({
+      return await logAndRespond({
         ok: true,
         warning: linkSyncError instanceof Error
           ? linkSyncError.message
           : "Cadastro concluido, mas o historico do link nao foi atualizado corretamente",
-        cadastroId: insertedCadastro.id,
+        cadastroId: workingCadastroId,
         message: "Cadastro concluido com sucesso",
-      });
+      }, 200, true, undefined, workingCadastroId);
     }
 
-    return jsonResponse({
+    return await logAndRespond({
       ok: true,
-      cadastroId: insertedCadastro.id,
+      cadastroId: workingCadastroId,
       message: "Cadastro concluido com sucesso",
-    });
+    }, 200, true, undefined, workingCadastroId);
   } catch (error) {
     console.error("[cadastro-public-submit] unexpected error:", error);
     const message = error instanceof Error ? error.message : "Erro inesperado";

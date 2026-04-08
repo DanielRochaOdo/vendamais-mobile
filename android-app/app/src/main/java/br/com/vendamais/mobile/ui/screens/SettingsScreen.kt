@@ -31,7 +31,6 @@ import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
 import br.com.vendamais.mobile.ui.components.ScreenHeading
 import br.com.vendamais.mobile.ui.components.WebCard
-import br.com.vendamais.mobile.ui.theme.Slate500
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -227,7 +226,7 @@ private fun ConfigSwitchCard(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(description, style = MaterialTheme.typography.bodySmall, color = Slate500)
+                Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = checked, onCheckedChange = onCheckedChange)
         }
@@ -247,7 +246,7 @@ private fun ConfigListEditorCard(
     WebCard {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text(description, style = MaterialTheme.typography.bodySmall, color = Slate500)
+            Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (editing) {
                 OutlinedTextField(
                     value = text,
@@ -288,7 +287,7 @@ private fun MappingCard(
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             if (lines.isEmpty()) {
-                Text(emptyMessage, color = Slate500)
+                Text(emptyMessage, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 lines.forEach { line ->
                     Text(line, style = MaterialTheme.typography.bodyMedium)
@@ -304,7 +303,7 @@ private fun StatusAdesoesCard(items: List<StatusAdesao>) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Status de Adesão", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             if (items.isEmpty()) {
-                Text("Nenhum status cadastrado.", color = Slate500)
+                Text("Nenhum status cadastrado.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 items.forEach { status ->
                     Row(
@@ -323,3 +322,4 @@ private fun StatusAdesoesCard(items: List<StatusAdesao>) {
         }
     }
 }
+

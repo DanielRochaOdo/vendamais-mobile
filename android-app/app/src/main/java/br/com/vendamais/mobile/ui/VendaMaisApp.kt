@@ -23,13 +23,12 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Logout
-import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material.icons.outlined.Dashboard
-import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material.icons.outlined.Groups
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.material.icons.rounded.Dashboard
+import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -52,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -83,9 +83,6 @@ import br.com.vendamais.mobile.ui.theme.EmeraldDark
 import br.com.vendamais.mobile.ui.theme.EmeraldSoft
 import br.com.vendamais.mobile.ui.theme.Red100
 import br.com.vendamais.mobile.ui.theme.Red500
-import br.com.vendamais.mobile.ui.theme.Slate100
-import br.com.vendamais.mobile.ui.theme.Slate500
-import br.com.vendamais.mobile.ui.theme.White
 import java.util.Locale
 
 private enum class AppNavGroup {
@@ -174,8 +171,6 @@ fun VendaMaisApp(
             AppHeaderBar(
                 profileName = state.profile?.name.orEmpty(),
                 profileRole = state.profile?.role.orEmpty(),
-                onRefresh = viewModel::refresh,
-                onLogout = viewModel::logout,
             )
 
             Box(
@@ -249,6 +244,8 @@ fun VendaMaisApp(
                     MainTab.PERFIL -> ProfileScreen(
                         state = state,
                         onLogout = viewModel::logout,
+                        onRefresh = viewModel::refresh,
+                        onToggleDarkMode = viewModel::setDarkModeEnabled,
                     )
                 }
 
@@ -402,8 +399,7 @@ fun VendaMaisApp(
                 onDismiss = viewModel::closeCadastro,
                 onSuccess = {
                     viewModel.selectTab(MainTab.CADASTROS)
-                    viewModel.selectCadastroAreaTab(CadastroAreaTab.INCOMPLETOS)
-                    viewModel.selectCadastroFiltro(CadastroFiltro.PENDENTES)
+                    viewModel.selectCadastroAreaTab(CadastroAreaTab.DEPENDENTE)
                 },
             )
         } else {
@@ -427,15 +423,13 @@ fun VendaMaisApp(
 private fun AppHeaderBar(
     profileName: String,
     profileRole: String,
-    onRefresh: () -> Unit,
-    onLogout: () -> Unit,
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding(),
         shadowElevation = 2.dp,
-        color = White,
+        color = MaterialTheme.colorScheme.surface,
     ) {
         Row(
             modifier = Modifier
@@ -465,7 +459,7 @@ private fun AppHeaderBar(
                         Text(
                             text = subtitle,
                             style = MaterialTheme.typography.bodySmall,
-                            color = Slate500,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -473,14 +467,6 @@ private fun AppHeaderBar(
                 }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TopBarActionButton(onClick = onRefresh) {
-                    Icon(Icons.Outlined.Refresh, contentDescription = "Atualizar dados")
-                }
-                TopBarActionButton(onClick = onLogout) {
-                    Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = "Sair")
-                }
-            }
         }
     }
 }
@@ -499,7 +485,7 @@ private fun MagicBottomNavigationBar(
             .navigationBarsPadding(),
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         shadowElevation = 10.dp,
-        color = White,
+        color = MaterialTheme.colorScheme.surface,
     ) {
         Row(
             modifier = Modifier
@@ -548,14 +534,14 @@ private fun MagicBottomNavigationBar(
                             .offset(y = indicatorOffsetY)
                             .size(indicatorSize),
                         shape = CircleShape,
-                        color = if (selected) Emerald else Slate100,
+                        color = if (selected) Emerald else MaterialTheme.colorScheme.surfaceVariant,
                         shadowElevation = indicatorElevation,
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = group.icon,
                                 contentDescription = group.label,
-                                tint = if (selected) White else Slate500,
+                                tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier
                                     .size(if (selected) 22.dp else 20.dp)
                                     .graphicsLayer(
@@ -568,7 +554,7 @@ private fun MagicBottomNavigationBar(
                     Text(
                         text = group.label,
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (selected) Emerald else Slate500,
+                        color = if (selected) Emerald else MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -605,10 +591,10 @@ private fun NavigationGroupSheet(
                 Surface(
                     onClick = { onSelect(module) },
                     shape = RoundedCornerShape(14.dp),
-                    color = if (selected) EmeraldSoft else White,
+                    color = if (selected) EmeraldSoft else MaterialTheme.colorScheme.surface,
                     border = BorderStroke(
                         width = 1.dp,
-                        color = if (selected) Emerald.copy(alpha = 0.35f) else Slate100,
+                        color = if (selected) Emerald.copy(alpha = 0.35f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
                     ),
                 ) {
                     Column {
@@ -626,13 +612,13 @@ private fun NavigationGroupSheet(
                                 Surface(
                                     modifier = Modifier.size(30.dp),
                                     shape = CircleShape,
-                                    color = if (selected) Emerald else Slate100,
+                                    color = if (selected) Emerald else MaterialTheme.colorScheme.surfaceVariant,
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(
                                             imageVector = module.icon,
                                             contentDescription = module.label,
-                                            tint = if (selected) White else Slate500,
+                                            tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.size(17.dp),
                                         )
                                     }
@@ -654,7 +640,7 @@ private fun NavigationGroupSheet(
                         if (index < group.modules.lastIndex) {
                             HorizontalDivider(
                                 modifier = Modifier.padding(horizontal = 14.dp),
-                                color = Slate100,
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
                             )
                         }
                     }
@@ -676,12 +662,12 @@ private fun resolveNavigationGroups(roleRaw: String?): List<AppNavGroupItem> {
     val inicio = AppNavGroupItem(
         group = AppNavGroup.INICIO,
         label = "Inicio",
-        icon = Icons.Outlined.Dashboard,
+        icon = Icons.Rounded.Dashboard,
         modules = listOf(
             AppNavModule(
                 key = "dashboard",
                 label = "Dashboard",
-                icon = Icons.Outlined.Dashboard,
+                icon = Icons.Rounded.Dashboard,
                 tab = MainTab.DASHBOARD,
             ),
         ),
@@ -689,45 +675,45 @@ private fun resolveNavigationGroups(roleRaw: String?): List<AppNavGroupItem> {
     val operacao = AppNavGroupItem(
         group = AppNavGroup.OPERACAO,
         label = "Cadastros",
-        icon = Icons.Outlined.Description,
+        icon = Icons.Rounded.Description,
         modules = listOf(
-            AppNavModule("cadastros", "Cadastros", Icons.Outlined.Description, MainTab.CADASTROS),
+            AppNavModule("cadastros", "Cadastros", Icons.Rounded.Description, MainTab.CADASTROS),
         ),
     )
     val pessoasCompleto = AppNavGroupItem(
         group = AppNavGroup.PESSOAS,
         label = "Pessoas",
-        icon = Icons.Outlined.Groups,
+        icon = Icons.Rounded.Groups,
         modules = listOf(
-            AppNavModule("users", "Usuarios", Icons.Outlined.AccountCircle, MainTab.USERS),
-            AppNavModule("teams", "Equipes", Icons.Outlined.Groups, MainTab.TEAMS),
+            AppNavModule("users", "Usuarios", Icons.Rounded.AccountCircle, MainTab.USERS),
+            AppNavModule("teams", "Equipes", Icons.Rounded.Groups, MainTab.TEAMS),
         ),
     )
     val pessoasEquipes = AppNavGroupItem(
         group = AppNavGroup.PESSOAS,
         label = "Pessoas",
-        icon = Icons.Outlined.Groups,
+        icon = Icons.Rounded.Groups,
         modules = listOf(
-            AppNavModule("teams", "Equipes", Icons.Outlined.Groups, MainTab.TEAMS),
+            AppNavModule("teams", "Equipes", Icons.Rounded.Groups, MainTab.TEAMS),
         ),
     )
     val administracao = AppNavGroupItem(
         group = AppNavGroup.ADMINISTRACAO,
         label = "Admin",
-        icon = Icons.Outlined.Settings,
+        icon = Icons.Rounded.Settings,
         modules = listOf(
-            AppNavModule("settings", "Configuracoes", Icons.Outlined.Settings, MainTab.SETTINGS),
-            AppNavModule("aud_lemmit", "Auditoria Lemmit", Icons.Outlined.Description, MainTab.AUDITORIA_LEMMIT),
-            AppNavModule("fila_upload", "Fila Upload ERP", Icons.Outlined.Refresh, MainTab.FILA_UPLOAD_ERP),
-            AppNavModule("adesoes_exc", "Adesoes Excluidas", Icons.Outlined.Description, MainTab.ADESOES_EXCLUIDAS),
+            AppNavModule("settings", "Configuracoes", Icons.Rounded.Settings, MainTab.SETTINGS),
+            AppNavModule("aud_lemmit", "Auditoria Lemmit", Icons.Rounded.Description, MainTab.AUDITORIA_LEMMIT),
+            AppNavModule("fila_upload", "Fila Upload ERP", Icons.Rounded.Refresh, MainTab.FILA_UPLOAD_ERP),
+            AppNavModule("adesoes_exc", "Adesoes Excluidas", Icons.Rounded.Description, MainTab.ADESOES_EXCLUIDAS),
         ),
     )
     val conta = AppNavGroupItem(
         group = AppNavGroup.CONTA,
         label = "Conta",
-        icon = Icons.Outlined.AccountCircle,
+        icon = Icons.Rounded.AccountCircle,
         modules = listOf(
-            AppNavModule("perfil", "Meu Perfil", Icons.Outlined.AccountCircle, MainTab.PERFIL),
+            AppNavModule("perfil", "Meu Perfil", Icons.Rounded.AccountCircle, MainTab.PERFIL),
         ),
     )
 
@@ -810,12 +796,22 @@ private fun resolveGlobalMessageSeverity(message: String): GlobalMessageSeverity
     }
 }
 
+@Composable
 private fun globalMessageSeverityColors(severity: GlobalMessageSeverity): Pair<Color, Color> {
+    val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
     return when (severity) {
-        GlobalMessageSeverity.SUCCESS -> EmeraldSoft to EmeraldDark
-        GlobalMessageSeverity.WARNING -> Amber100 to Amber500
-        GlobalMessageSeverity.ALERT -> BrandOrange.copy(alpha = 0.18f) to BrandOrange
-        GlobalMessageSeverity.ERROR -> Red100 to Red500
+        GlobalMessageSeverity.SUCCESS ->
+            if (darkTheme) MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+            else EmeraldSoft to EmeraldDark
+        GlobalMessageSeverity.WARNING ->
+            if (darkTheme) Color(0xFF4A3A1E) to Color(0xFFFFDE9E)
+            else Amber100 to Amber500
+        GlobalMessageSeverity.ALERT ->
+            if (darkTheme) Color(0xFF4B2F1F) to Color(0xFFFFC39A)
+            else BrandOrange.copy(alpha = 0.18f) to BrandOrange
+        GlobalMessageSeverity.ERROR ->
+            if (darkTheme) MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+            else Red100 to Red500
     }
 }
 
@@ -827,7 +823,7 @@ private fun TopBarActionButton(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
-        color = Slate100,
+        color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Box(
             modifier = Modifier

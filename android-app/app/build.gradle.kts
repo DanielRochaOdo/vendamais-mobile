@@ -16,6 +16,15 @@ val localProperties = Properties().apply {
 
 fun quoted(value: String): String = "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
+val releaseStoreFile = localProperties.getProperty("releaseStoreFile")?.takeIf { it.isNotBlank() }
+val releaseStorePassword = localProperties.getProperty("releaseStorePassword")?.takeIf { it.isNotBlank() }
+val releaseKeyAlias = localProperties.getProperty("releaseKeyAlias")?.takeIf { it.isNotBlank() }
+val releaseKeyPassword = localProperties.getProperty("releaseKeyPassword")?.takeIf { it.isNotBlank() }
+val hasReleaseSigningConfig = !releaseStoreFile.isNullOrBlank() &&
+    !releaseStorePassword.isNullOrBlank() &&
+    !releaseKeyAlias.isNullOrBlank() &&
+    !releaseKeyPassword.isNullOrBlank()
+
 android {
     namespace = "br.com.vendamais.mobile"
     compileSdk = 35
@@ -39,8 +48,22 @@ android {
         manifestPlaceholders["publicAppHost"] = localProperties.getProperty("publicAppHost", "vendamais.app")
     }
 
+    signingConfigs {
+        if (hasReleaseSigningConfig) {
+            create("release") {
+                storeFile = rootProject.file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (hasReleaseSigningConfig) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

@@ -1,4 +1,4 @@
-package br.com.vendamais.mobile.ui.screens
+﻿package br.com.vendamais.mobile.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,6 +24,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -30,7 +33,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import br.com.vendamais.mobile.data.models.AdminTeam
+import br.com.vendamais.mobile.data.models.AdminUser
 import br.com.vendamais.mobile.data.models.CadastroDetalhe
 import br.com.vendamais.mobile.data.models.CadastroResumo
 import br.com.vendamais.mobile.data.models.EmpresaResumo
@@ -47,16 +54,41 @@ import br.com.vendamais.mobile.ui.theme.Emerald
 import br.com.vendamais.mobile.ui.theme.EmeraldSoft
 import br.com.vendamais.mobile.ui.theme.Slate100
 import br.com.vendamais.mobile.ui.theme.Slate500
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 
-private enum class CadastrosSearchType {
-    NOME,
-    CPF,
-    CODIGO,
+private enum class TipoBuscaFiltro {
+    ASSOCIADO,
     EMPRESA,
 }
+
+private data class EmpresaCadastroGroup(
+    val key: String,
+    val nome: String,
+    val cnpj: String?,
+    val cadastros: List<CadastroResumo>,
+)
+
+private data class VendedorCadastroGroup(
+    val key: String,
+    val nome: String,
+    val empresas: List<EmpresaCadastroGroup>,
+)
+
+private data class EquipeCadastroGroup(
+    val key: String,
+    val nome: String,
+    val vendedores: List<VendedorCadastroGroup>,
+)
 
 @Composable
 fun CadastrosScreen(
@@ -86,12 +118,27 @@ fun CadastrosScreen(
 ) {
     var showInclusaoDialog by rememberSaveable { mutableStateOf(false) }
     var showFilters by rememberSaveable { mutableStateOf(false) }
-    var searchType by rememberSaveable { mutableStateOf(CadastrosSearchType.NOME) }
-    var searchValue by rememberSaveable { mutableStateOf("") }
+    val defaultDataInicio = firstDayOfCurrentMonthIso()
+    var tipoBusca by rememberSaveable { mutableStateOf(TipoBuscaFiltro.ASSOCIADO) }
+    var tipoBuscaAplicada by rememberSaveable { mutableStateOf(TipoBuscaFiltro.ASSOCIADO) }
+    var buscaNome by rememberSaveable { mutableStateOf("") }
+    var buscaNomeAplicada by rememberSaveable { mutableStateOf("") }
+    var buscaCpf by rememberSaveable { mutableStateOf("") }
+    var buscaCpfAplicada by rememberSaveable { mutableStateOf("") }
+    var buscaCnpj by rememberSaveable { mutableStateOf("") }
+    var buscaCnpjAplicada by rememberSaveable { mutableStateOf("") }
+    var buscaCodigo by rememberSaveable { mutableStateOf("") }
+    var buscaCodigoAplicada by rememberSaveable { mutableStateOf("") }
     var tipoCadastroFiltro by rememberSaveable { mutableStateOf("todos") }
+    var tipoCadastroFiltroAplicado by rememberSaveable { mutableStateOf("todos") }
     var vendedorFiltro by rememberSaveable { mutableStateOf("") }
-    var dataInicioFiltro by rememberSaveable { mutableStateOf("") }
+    var vendedorFiltroAplicado by rememberSaveable { mutableStateOf("") }
+    var statusAdesaoFiltro by rememberSaveable { mutableStateOf("") }
+    var statusAdesaoFiltroAplicado by rememberSaveable { mutableStateOf("") }
+    var dataInicioFiltro by rememberSaveable { mutableStateOf(defaultDataInicio) }
     var dataFimFiltro by rememberSaveable { mutableStateOf("") }
+    var dataInicioFiltroAplicado by rememberSaveable { mutableStateOf(defaultDataInicio) }
+    var dataFimFiltroAplicado by rememberSaveable { mutableStateOf("") }
 
     val baseCadastros = state.cadastros.filter {
         when (state.cadastroFiltro) {
@@ -99,45 +146,116 @@ fun CadastrosScreen(
             CadastroFiltro.ENVIADOS -> it.status == "enviado"
         }
     }
-    val searchValueTrim = searchValue.trim()
-    val vendedorFiltroTrim = vendedorFiltro.trim()
-    val dataInicio = parseFilterDate(dataInicioFiltro)
-    val dataFim = parseFilterDate(dataFimFiltro)
+    val buscaNomeAplicadaTrim = buscaNomeAplicada.trim()
+    val buscaCpfAplicadaDigits = buscaCpfAplicada.filter(Char::isDigit)
+    val buscaCnpjAplicadaDigits = buscaCnpjAplicada.filter(Char::isDigit)
+    val buscaCodigoAplicadaTrim = buscaCodigoAplicada.trim()
+    val vendedorFiltroAplicadoTrim = vendedorFiltroAplicado.trim()
+    val dataInicio = parseFilterDate(dataInicioFiltroAplicado)
+    val dataFim = parseFilterDate(dataFimFiltroAplicado)
+    val isVendedor = state.profile?.role == "VENDEDOR"
+
+    val cadastrosPorPeriodo = baseCadastros.filter { cadastro ->
+        val cadastroData = parseCadastroDate(cadastro.createdAt)
+        val matchesDataInicio = dataInicio?.let { start -> cadastroData?.let { !it.isBefore(start) } ?: false } ?: true
+        val matchesDataFim = dataFim?.let { end -> cadastroData?.let { !it.isAfter(end) } ?: false } ?: true
+        matchesDataInicio && matchesDataFim
+    }
+
     val filteredCadastros = baseCadastros.filter { cadastro ->
-        val matchesBusca = when {
-            searchValueTrim.isBlank() -> true
-            searchType == CadastrosSearchType.CPF -> {
-                val query = searchValueTrim.filter(Char::isDigit)
-                if (query.isBlank()) true else cadastro.cpf.filter(Char::isDigit).contains(query)
+        val matchesBusca = when (tipoBuscaAplicada) {
+            TipoBuscaFiltro.ASSOCIADO -> {
+                val matchNomeTitular = buscaNomeAplicadaTrim.isBlank() || cadastro.nome.orEmpty().contains(buscaNomeAplicadaTrim, ignoreCase = true)
+                val matchCpfTitular = buscaCpfAplicadaDigits.isBlank() || cadastro.cpf.filter(Char::isDigit).contains(buscaCpfAplicadaDigits)
+                val titularOk = matchNomeTitular && matchCpfTitular
+                if (titularOk) {
+                    true
+                } else {
+                    searchInDependentes(cadastro, buscaNomeAplicadaTrim, buscaCpfAplicadaDigits)
+                }
             }
-            searchType == CadastrosSearchType.CODIGO -> cadastro.id.contains(searchValueTrim, ignoreCase = true)
-            searchType == CadastrosSearchType.EMPRESA -> cadastro.empresaNome.orEmpty().contains(searchValueTrim, ignoreCase = true)
-            else -> {
-                cadastro.nome.orEmpty().contains(searchValueTrim, ignoreCase = true) ||
-                    cadastro.empresaNome.orEmpty().contains(searchValueTrim, ignoreCase = true)
+            TipoBuscaFiltro.EMPRESA -> {
+                val matchNomeEmpresa = buscaNomeAplicadaTrim.isBlank() || cadastro.empresaNome.orEmpty().contains(buscaNomeAplicadaTrim, ignoreCase = true)
+                val matchCnpj = buscaCnpjAplicadaDigits.isBlank() || cadastro.empresaCnpj.orEmpty().filter(Char::isDigit).contains(buscaCnpjAplicadaDigits)
+                val matchCodigo = buscaCodigoAplicadaTrim.isBlank() || cadastro.empresaCodigo?.toString()?.contains(buscaCodigoAplicadaTrim) == true
+                matchNomeEmpresa && matchCnpj && matchCodigo
             }
         }
 
-        val matchesTipo = when (tipoCadastroFiltro) {
+        val matchesTipo = when (tipoCadastroFiltroAplicado) {
             "cadastro" -> cadastro.tipoCadastro == "cadastro"
             "inclusao_dependente" -> cadastro.tipoCadastro == "inclusao_dependente"
             else -> true
         }
 
-        val matchesVendedor = if (vendedorFiltroTrim.isBlank()) {
+        val matchesStatusAdesao = if (statusAdesaoFiltroAplicado.isBlank()) {
             true
         } else {
-            cadastro.vendedorNome.orEmpty().contains(vendedorFiltroTrim, ignoreCase = true)
+            cadastro.statusAdesaoId == statusAdesaoFiltroAplicado
         }
 
-        val cadastroData = parseCadastroDate(cadastro.updatedAt) ?: parseCadastroDate(cadastro.createdAt)
+        val matchesVendedor = if (isVendedor || vendedorFiltroAplicadoTrim.isBlank()) {
+            true
+        } else {
+            cadastro.vendedorId == vendedorFiltroAplicadoTrim
+        }
+
+        val cadastroData = parseCadastroDate(cadastro.createdAt)
         val matchesDataInicio = dataInicio?.let { start -> cadastroData?.let { !it.isBefore(start) } ?: false } ?: true
         val matchesDataFim = dataFim?.let { end -> cadastroData?.let { !it.isAfter(end) } ?: false } ?: true
 
-        matchesBusca && matchesTipo && matchesVendedor && matchesDataInicio && matchesDataFim
+        matchesBusca && matchesTipo && matchesStatusAdesao && matchesVendedor && matchesDataInicio && matchesDataFim
     }
+    val vendedoresUnicos = baseCadastros
+        .mapNotNull { cadastro ->
+            val id = cadastro.vendedorId?.trim().orEmpty()
+            val nome = cadastro.vendedorNome?.trim().orEmpty()
+            if (id.isBlank()) null else id to (nome.ifBlank { "Vendedor" })
+        }
+        .distinctBy { it.first }
+        .sortedBy { it.second.lowercase() }
+
+    fun applyFilters() {
+        tipoBuscaAplicada = tipoBusca
+        buscaNomeAplicada = buscaNome
+        buscaCpfAplicada = buscaCpf
+        buscaCnpjAplicada = buscaCnpj
+        buscaCodigoAplicada = buscaCodigo
+        tipoCadastroFiltroAplicado = tipoCadastroFiltro
+        statusAdesaoFiltroAplicado = statusAdesaoFiltro
+        vendedorFiltroAplicado = vendedorFiltro
+        dataInicioFiltroAplicado = dataInicioFiltro
+        dataFimFiltroAplicado = dataFimFiltro
+    }
+
+    fun clearFilters() {
+        tipoBusca = TipoBuscaFiltro.ASSOCIADO
+        tipoBuscaAplicada = TipoBuscaFiltro.ASSOCIADO
+        buscaNome = ""
+        buscaNomeAplicada = ""
+        buscaCpf = ""
+        buscaCpfAplicada = ""
+        buscaCnpj = ""
+        buscaCnpjAplicada = ""
+        buscaCodigo = ""
+        buscaCodigoAplicada = ""
+        tipoCadastroFiltro = "todos"
+        tipoCadastroFiltroAplicado = "todos"
+        statusAdesaoFiltro = ""
+        statusAdesaoFiltroAplicado = ""
+        vendedorFiltro = ""
+        vendedorFiltroAplicado = ""
+        dataInicioFiltro = defaultDataInicio
+        dataInicioFiltroAplicado = defaultDataInicio
+        dataFimFiltro = ""
+        dataFimFiltroAplicado = ""
+    }
+
     val pendentesCount = state.cadastroStats.cadastro_incompletos + state.cadastroStats.inclusao_incompletos
     val completosCount = state.cadastroStats.cadastro_enviados + state.cadastroStats.inclusao_enviados
+    val profileRole = state.profile?.role.orEmpty()
+    val useSupervisorGroupedView = state.cadastroTab == CadastroAreaTab.INCOMPLETOS && profileRole == "SUPERVISOR"
+    val useGerenteGroupedView = state.cadastroTab == CadastroAreaTab.INCOMPLETOS && profileRole == "GERENTE"
 
     LazyColumn(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
@@ -228,63 +346,114 @@ fun CadastrosScreen(
             CadastroAreaTab.INCOMPLETOS,
             CadastroAreaTab.COMPLETOS,
             -> {
-                item {
-                    CadastrosFilterPanel(
-                        expanded = showFilters,
-                        onToggleExpanded = { showFilters = !showFilters },
-                        searchType = searchType,
-                        searchValue = searchValue,
-                        onSearchTypeChange = { searchType = it },
-                        onSearchValueChange = { searchValue = it },
-                        tipoCadastroFiltro = tipoCadastroFiltro,
-                        onTipoCadastroFiltroChange = { tipoCadastroFiltro = it },
-                        vendedorFiltro = vendedorFiltro,
-                        onVendedorFiltroChange = { vendedorFiltro = it },
-                        dataInicioFiltro = dataInicioFiltro,
-                        onDataInicioFiltroChange = { dataInicioFiltro = it },
-                        dataFimFiltro = dataFimFiltro,
-                        onDataFimFiltroChange = { dataFimFiltro = it },
-                        filteredCount = filteredCadastros.size,
-                        totalCount = baseCadastros.size,
-                        onClearFilters = {
-                            searchType = CadastrosSearchType.NOME
-                            searchValue = ""
-                            tipoCadastroFiltro = "todos"
-                            vendedorFiltro = ""
-                            dataInicioFiltro = ""
-                            dataFimFiltro = ""
-                        },
-                    )
-                }
-
-                if (state.cadastrosLoading && !state.cadastrosLoaded) {
-                    item {
-                        WebCard {
-                            Text(
-                                text = "Carregando cadastros...",
-                                style = MaterialTheme.typography.bodyLarge,
+                if (useSupervisorGroupedView) {
+                    if (state.cadastrosLoading && !state.cadastrosLoaded) {
+                        item {
+                            WebCard {
+                                Text(
+                                    text = "Carregando cadastros...",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                )
+                            }
+                        }
+                    } else {
+                        item {
+                            CadastrosSupervisorGroupedSection(
+                                cadastros = baseCadastros,
+                                state = state,
+                                viewModel = viewModel,
+                                onCadastroClick = onCadastroClick,
                             )
                         }
                     }
-                } else if (filteredCadastros.isEmpty()) {
-                    item {
-                        WebCard {
-                            Text(
-                                text = if (state.cadastroTab == CadastroAreaTab.INCOMPLETOS) {
-                                    "Nenhuma adesão pendente encontrada."
-                                } else {
-                                    "Nenhuma adesão cadastrada encontrada."
-                                },
-                                style = MaterialTheme.typography.bodyLarge,
+                } else if (useGerenteGroupedView) {
+                    if (state.cadastrosLoading && !state.cadastrosLoaded) {
+                        item {
+                            WebCard {
+                                Text(
+                                    text = "Carregando cadastros...",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                )
+                            }
+                        }
+                    } else {
+                        item {
+                            CadastrosGerenteGroupedSection(
+                                cadastros = baseCadastros,
+                                users = state.adminUsers,
+                                teams = state.adminTeams,
+                                state = state,
+                                viewModel = viewModel,
+                                onCadastroClick = onCadastroClick,
                             )
                         }
                     }
                 } else {
-                    items(filteredCadastros) { cadastro ->
-                        CadastroCard(
-                            cadastro = cadastro,
-                            onClick = { onCadastroClick(cadastro.id) },
+                    item {
+                        CadastrosFilterPanel(
+                            expanded = showFilters,
+                            onToggleExpanded = { showFilters = !showFilters },
+                            isVendedor = state.profile?.role == "VENDEDOR",
+                            tipoBusca = tipoBusca,
+                            onTipoBuscaChange = { tipoBusca = it },
+                            buscaNome = buscaNome,
+                            onBuscaNomeChange = { buscaNome = it },
+                            buscaCpf = buscaCpf,
+                            onBuscaCpfChange = { buscaCpf = it },
+                            buscaCnpj = buscaCnpj,
+                            onBuscaCnpjChange = { buscaCnpj = it },
+                            buscaCodigo = buscaCodigo,
+                            onBuscaCodigoChange = { buscaCodigo = it },
+                            tipoCadastroFiltro = tipoCadastroFiltro,
+                            onTipoCadastroFiltroChange = { tipoCadastroFiltro = it },
+                            statusAdesaoFiltro = statusAdesaoFiltro,
+                            onStatusAdesaoFiltroChange = { statusAdesaoFiltro = it },
+                            statusOptions = state.statusAdesoes.map { it.id to it.nome },
+                            vendedorFiltro = vendedorFiltro,
+                            onVendedorFiltroChange = { vendedorFiltro = it },
+                            vendedorOptions = vendedoresUnicos,
+                            dataInicioFiltro = dataInicioFiltro,
+                            onDataInicioFiltroChange = { dataInicioFiltro = it },
+                            dataFimFiltro = dataFimFiltro,
+                            onDataFimFiltroChange = { dataFimFiltro = it },
+                            onApplyFilters = ::applyFilters,
+                            filteredCount = filteredCadastros.size,
+                            totalCount = cadastrosPorPeriodo.size,
+                            onClearFilters = ::clearFilters,
                         )
+                    }
+
+                    if (state.cadastrosLoading && !state.cadastrosLoaded) {
+                        item {
+                            WebCard {
+                                Text(
+                                    text = "Carregando cadastros...",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                )
+                            }
+                        }
+                    } else if (filteredCadastros.isEmpty()) {
+                        item {
+                            WebCard {
+                                Text(
+                                    text = if (state.cadastroTab == CadastroAreaTab.INCOMPLETOS) {
+                                        "Nenhuma adesao pendente encontrada."
+                                    } else {
+                                        "Nenhuma adesao cadastrada encontrada."
+                                    },
+                                    style = MaterialTheme.typography.bodyLarge,
+                                )
+                            }
+                        }
+                    } else {
+                        items(filteredCadastros) { cadastro ->
+                            CadastroCard(
+                                cadastro = cadastro,
+                                state = state,
+                                viewModel = viewModel,
+                                onClick = { onCadastroClick(cadastro.id) },
+                            )
+                        }
                     }
                 }
             }
@@ -298,29 +467,432 @@ fun CadastrosScreen(
             onDismiss = { showInclusaoDialog = false },
             onSuccess = {
                 showInclusaoDialog = false
-                onTabChange(CadastroAreaTab.INCOMPLETOS)
-                onFilterChange(CadastroFiltro.PENDENTES)
+                onTabChange(CadastroAreaTab.DEPENDENTE)
             },
         )
     }
 }
 
 @Composable
+private fun CadastrosSupervisorGroupedSection(
+    cadastros: List<CadastroResumo>,
+    state: AppUiState,
+    viewModel: AppViewModel,
+    onCadastroClick: (String) -> Unit,
+) {
+    if (cadastros.isEmpty()) {
+        WebCard {
+            Text(
+                text = "Nenhuma adesao pendente encontrada.",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        }
+        return
+    }
+
+    val groups = remember(cadastros) { groupByVendedorEmpresa(cadastros) }
+    var expandedVendedores by remember { mutableStateOf(setOf<String>()) }
+    var expandedEmpresas by remember { mutableStateOf(setOf<String>()) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        groups.forEach { vendedorGroup ->
+            val vendedorExpanded = expandedVendedores.contains(vendedorGroup.key)
+            val totalCadastros = vendedorGroup.empresas.sumOf { it.cadastros.size }
+            WebCard {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { expandedVendedores = toggleKey(expandedVendedores, vendedorGroup.key) },
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column {
+                            Text(
+                                text = vendedorGroup.nome,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                text = "${vendedorGroup.empresas.size} empresas",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Slate500,
+                            )
+                        }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            BoxBadge(
+                                value = totalCadastros.toString(),
+                                bgColor = Amber100,
+                                textColor = Amber500,
+                            )
+                            Text(
+                                text = if (vendedorExpanded) "Ocultar" else "Ver",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = Emerald,
+                            )
+                        }
+                    }
+
+                    if (vendedorExpanded) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            vendedorGroup.empresas.forEach { empresaGroup ->
+                                val empresaExpanded = expandedEmpresas.contains(empresaGroup.key)
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Slate100,
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable { expandedEmpresas = toggleKey(expandedEmpresas, empresaGroup.key) },
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Column {
+                                                Text(
+                                                    text = empresaGroup.nome,
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.Medium,
+                                                )
+                                                empresaGroup.cnpj?.takeIf { it.isNotBlank() }?.let { cnpj ->
+                                                    Text(
+                                                        text = "CNPJ: $cnpj",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = Slate500,
+                                                    )
+                                                }
+                                            }
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                BoxBadge(
+                                                    value = empresaGroup.cadastros.size.toString(),
+                                                    bgColor = EmeraldSoft,
+                                                    textColor = Emerald,
+                                                )
+                                                Text(
+                                                    text = if (empresaExpanded) "Ocultar" else "Abrir",
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    color = Emerald,
+                                                )
+                                            }
+                                        }
+
+                                        if (empresaExpanded) {
+                                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                empresaGroup.cadastros.forEach { cadastro ->
+                                                    CadastroCard(
+                                                        cadastro = cadastro,
+                                                        state = state,
+                                                        viewModel = viewModel,
+                                                        onClick = { onCadastroClick(cadastro.id) },
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CadastrosGerenteGroupedSection(
+    cadastros: List<CadastroResumo>,
+    users: List<AdminUser>,
+    teams: List<AdminTeam>,
+    state: AppUiState,
+    viewModel: AppViewModel,
+    onCadastroClick: (String) -> Unit,
+) {
+    if (cadastros.isEmpty()) {
+        WebCard {
+            Text(
+                text = "Nenhuma adesao pendente encontrada.",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        }
+        return
+    }
+
+    val groups = remember(cadastros, users, teams) { groupByEquipeVendedorEmpresa(cadastros, users, teams) }
+    var expandedEquipes by remember { mutableStateOf(setOf<String>()) }
+    var expandedVendedores by remember { mutableStateOf(setOf<String>()) }
+    var expandedEmpresas by remember { mutableStateOf(setOf<String>()) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        groups.forEach { equipeGroup ->
+            val equipeExpanded = expandedEquipes.contains(equipeGroup.key)
+            val totalEquipe = equipeGroup.vendedores.sumOf { vendedor -> vendedor.empresas.sumOf { it.cadastros.size } }
+            WebCard {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { expandedEquipes = toggleKey(expandedEquipes, equipeGroup.key) },
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column {
+                            Text(
+                                text = equipeGroup.nome,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                text = "${equipeGroup.vendedores.size} vendedores",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Slate500,
+                            )
+                        }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            BoxBadge(
+                                value = totalEquipe.toString(),
+                                bgColor = Amber100,
+                                textColor = Amber500,
+                            )
+                            Text(
+                                text = if (equipeExpanded) "Ocultar" else "Ver",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = Emerald,
+                            )
+                        }
+                    }
+
+                    if (equipeExpanded) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            equipeGroup.vendedores.forEach { vendedorGroup ->
+                                val vendedorPath = "${equipeGroup.key}:${vendedorGroup.key}"
+                                val vendedorExpanded = expandedVendedores.contains(vendedorPath)
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Slate100,
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable { expandedVendedores = toggleKey(expandedVendedores, vendedorPath) },
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Text(
+                                                text = vendedorGroup.nome,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Medium,
+                                            )
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                BoxBadge(
+                                                    value = vendedorGroup.empresas.sumOf { it.cadastros.size }.toString(),
+                                                    bgColor = EmeraldSoft,
+                                                    textColor = Emerald,
+                                                )
+                                                Text(
+                                                    text = if (vendedorExpanded) "Ocultar" else "Abrir",
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    color = Emerald,
+                                                )
+                                            }
+                                        }
+
+                                        if (vendedorExpanded) {
+                                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                vendedorGroup.empresas.forEach { empresaGroup ->
+                                                    val empresaPath = "$vendedorPath:${empresaGroup.key}"
+                                                    val empresaExpanded = expandedEmpresas.contains(empresaPath)
+                                                    Surface(
+                                                        shape = RoundedCornerShape(10.dp),
+                                                        color = MaterialTheme.colorScheme.surface,
+                                                    ) {
+                                                        Column(
+                                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                                                        ) {
+                                                            Row(
+                                                                modifier = Modifier
+                                                                    .fillMaxWidth()
+                                                                    .clickable { expandedEmpresas = toggleKey(expandedEmpresas, empresaPath) },
+                                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                                verticalAlignment = Alignment.CenterVertically,
+                                                            ) {
+                                                                Column {
+                                                                    Text(
+                                                                        text = empresaGroup.nome,
+                                                                        style = MaterialTheme.typography.bodyMedium,
+                                                                        fontWeight = FontWeight.Medium,
+                                                                    )
+                                                                    empresaGroup.cnpj?.takeIf { it.isNotBlank() }?.let { cnpj ->
+                                                                        Text(
+                                                                            text = "CNPJ: $cnpj",
+                                                                            style = MaterialTheme.typography.bodySmall,
+                                                                            color = Slate500,
+                                                                        )
+                                                                    }
+                                                                }
+                                                                Row(
+                                                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                                    verticalAlignment = Alignment.CenterVertically,
+                                                                ) {
+                                                                    BoxBadge(
+                                                                        value = empresaGroup.cadastros.size.toString(),
+                                                                        bgColor = EmeraldSoft,
+                                                                        textColor = Emerald,
+                                                                    )
+                                                                    Text(
+                                                                        text = if (empresaExpanded) "Ocultar" else "Abrir",
+                                                                        style = MaterialTheme.typography.labelLarge,
+                                                                        color = Emerald,
+                                                                    )
+                                                                }
+                                                            }
+
+                                                            if (empresaExpanded) {
+                                                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                                    empresaGroup.cadastros.forEach { cadastro ->
+                                                                        CadastroCard(
+                                                                            cadastro = cadastro,
+                                                                            state = state,
+                                                                            viewModel = viewModel,
+                                                                            onClick = { onCadastroClick(cadastro.id) },
+                                                                        )
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun groupByVendedorEmpresa(cadastros: List<CadastroResumo>): List<VendedorCadastroGroup> {
+    val groupedByVendedor = cadastros.groupBy { cadastro ->
+        cadastro.vendedorId?.takeIf { it.isNotBlank() } ?: "sem_vendedor"
+    }
+
+    return groupedByVendedor.map { (vendedorKey, vendedorCadastros) ->
+        val vendedorNome = vendedorCadastros.firstNotNullOfOrNull { cadastro ->
+            cadastro.vendedorNome?.takeIf { it.isNotBlank() }
+        } ?: "Vendedor nao identificado"
+
+        val empresas = vendedorCadastros
+            .groupBy { cadastro ->
+                val codigo = cadastro.empresaCodigo?.toString() ?: "sem_codigo"
+                val nome = cadastro.empresaNome?.trim().orEmpty()
+                val cnpj = cadastro.empresaCnpj?.filter(Char::isDigit).orEmpty()
+                "$codigo|$nome|$cnpj"
+            }
+            .map { (empresaKey, empresaCadastros) ->
+                val first = empresaCadastros.first()
+                EmpresaCadastroGroup(
+                    key = "$vendedorKey:$empresaKey",
+                    nome = first.empresaNome?.takeIf { it.isNotBlank() } ?: "Empresa nao informada",
+                    cnpj = first.empresaCnpj,
+                    cadastros = empresaCadastros.sortedByDescending { it.updatedAt },
+                )
+            }
+            .sortedBy { it.nome.lowercase() }
+
+        VendedorCadastroGroup(
+            key = vendedorKey,
+            nome = vendedorNome,
+            empresas = empresas,
+        )
+    }.sortedWith(
+        compareBy<VendedorCadastroGroup> { if (it.key == "sem_vendedor") 1 else 0 }
+            .thenBy { it.nome.lowercase() },
+    )
+}
+
+private fun groupByEquipeVendedorEmpresa(
+    cadastros: List<CadastroResumo>,
+    users: List<AdminUser>,
+    teams: List<AdminTeam>,
+): List<EquipeCadastroGroup> {
+    val userById = users.associateBy { it.id }
+    val teamById = teams.associateBy { it.id }
+
+    val groupedByEquipe = cadastros.groupBy { cadastro ->
+        val teamId = cadastro.vendedorId?.let { vendedorId -> userById[vendedorId]?.teamId }
+        teamId?.takeIf { it.isNotBlank() } ?: "sem_equipe"
+    }
+
+    return groupedByEquipe.map { (equipeKey, equipeCadastros) ->
+        val equipeNome = teamById[equipeKey]?.name ?: "Equipe nao informada"
+        EquipeCadastroGroup(
+            key = equipeKey,
+            nome = equipeNome,
+            vendedores = groupByVendedorEmpresa(equipeCadastros),
+        )
+    }.sortedWith(
+        compareBy<EquipeCadastroGroup> { if (it.key == "sem_equipe") 1 else 0 }
+            .thenBy { it.nome.lowercase() },
+    )
+}
+
+private fun toggleKey(current: Set<String>, key: String): Set<String> {
+    return if (current.contains(key)) current - key else current + key
+}
+
+@Composable
 private fun CadastrosFilterPanel(
     expanded: Boolean,
     onToggleExpanded: () -> Unit,
-    searchType: CadastrosSearchType,
-    searchValue: String,
-    onSearchTypeChange: (CadastrosSearchType) -> Unit,
-    onSearchValueChange: (String) -> Unit,
+    isVendedor: Boolean,
+    tipoBusca: TipoBuscaFiltro,
+    onTipoBuscaChange: (TipoBuscaFiltro) -> Unit,
+    buscaNome: String,
+    onBuscaNomeChange: (String) -> Unit,
+    buscaCpf: String,
+    onBuscaCpfChange: (String) -> Unit,
+    buscaCnpj: String,
+    onBuscaCnpjChange: (String) -> Unit,
+    buscaCodigo: String,
+    onBuscaCodigoChange: (String) -> Unit,
     tipoCadastroFiltro: String,
     onTipoCadastroFiltroChange: (String) -> Unit,
+    statusAdesaoFiltro: String,
+    onStatusAdesaoFiltroChange: (String) -> Unit,
+    statusOptions: List<Pair<String, String>>,
     vendedorFiltro: String,
     onVendedorFiltroChange: (String) -> Unit,
+    vendedorOptions: List<Pair<String, String>>,
     dataInicioFiltro: String,
     onDataInicioFiltroChange: (String) -> Unit,
     dataFimFiltro: String,
     onDataFimFiltroChange: (String) -> Unit,
+    onApplyFilters: () -> Unit,
     filteredCount: Int,
     totalCount: Int,
     onClearFilters: () -> Unit,
@@ -339,97 +911,110 @@ private fun CadastrosFilterPanel(
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        text = "$filteredCount de $totalCount cadastros",
+                        text = "Mostrando $filteredCount de $totalCount adesoes",
                         style = MaterialTheme.typography.bodySmall,
                         color = Slate500,
                     )
                 }
-                TextButton(onClick = onToggleExpanded) {
-                    Text(if (expanded) "Ocultar" else "Mostrar")
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TextButton(onClick = onToggleExpanded) {
+                        Text(if (expanded) "Ocultar" else "Mostrar")
+                    }
+                    TextButton(onClick = onClearFilters) {
+                        Text("Limpar filtros")
+                    }
                 }
             }
 
             if (expanded) {
-                Text("Buscar por", style = MaterialTheme.typography.labelMedium, color = Slate500)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    FilterChipButton(
-                        label = "Nome",
-                        selected = searchType == CadastrosSearchType.NOME,
-                        onClick = { onSearchTypeChange(CadastrosSearchType.NOME) },
-                    )
-                    FilterChipButton(
-                        label = "CPF",
-                        selected = searchType == CadastrosSearchType.CPF,
-                        onClick = { onSearchTypeChange(CadastrosSearchType.CPF) },
-                    )
-                    FilterChipButton(
-                        label = "Codigo",
-                        selected = searchType == CadastrosSearchType.CODIGO,
-                        onClick = { onSearchTypeChange(CadastrosSearchType.CODIGO) },
-                    )
-                    FilterChipButton(
-                        label = "Empresa",
-                        selected = searchType == CadastrosSearchType.EMPRESA,
-                        onClick = { onSearchTypeChange(CadastrosSearchType.EMPRESA) },
-                    )
-                }
-
-                OutlinedTextField(
-                    value = searchValue,
-                    onValueChange = onSearchValueChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = {
-                        Text(
-                            when (searchType) {
-                                CadastrosSearchType.NOME -> "Nome ou razao social"
-                                CadastrosSearchType.CPF -> "CPF"
-                                CadastrosSearchType.CODIGO -> "Codigo do cadastro"
-                                CadastrosSearchType.EMPRESA -> "Nome da empresa"
-                            },
-                        )
-                    },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = if (searchType == CadastrosSearchType.CPF) {
-                            KeyboardType.Number
-                        } else {
-                            KeyboardType.Text
-                        },
+                SelectionField(
+                    label = "Tipo de Busca",
+                    value = if (tipoBusca == TipoBuscaFiltro.ASSOCIADO) "Associado" else "Empresa",
+                    options = listOf(
+                        TipoBuscaFiltro.ASSOCIADO to "Associado",
+                        TipoBuscaFiltro.EMPRESA to "Empresa",
                     ),
-                    singleLine = true,
+                    onSelected = {
+                        onTipoBuscaChange(it)
+                        onBuscaNomeChange("")
+                        onBuscaCpfChange("")
+                        onBuscaCnpjChange("")
+                        onBuscaCodigoChange("")
+                    },
                 )
 
-                Text("Tipo de cadastro", style = MaterialTheme.typography.labelMedium, color = Slate500)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    FilterChipButton(
-                        label = "Todos",
-                        selected = tipoCadastroFiltro == "todos",
-                        onClick = { onTipoCadastroFiltroChange("todos") },
+                if (tipoBusca == TipoBuscaFiltro.ASSOCIADO) {
+                    OutlinedTextField(
+                        value = buscaNome,
+                        onValueChange = onBuscaNomeChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Nome") },
+                        singleLine = true,
                     )
-                    FilterChipButton(
-                        label = "Cadastro",
-                        selected = tipoCadastroFiltro == "cadastro",
-                        onClick = { onTipoCadastroFiltroChange("cadastro") },
+                    OutlinedTextField(
+                        value = buscaCpf,
+                        onValueChange = onBuscaCpfChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("CPF") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
                     )
-                    FilterChipButton(
-                        label = "Incl. dep.",
-                        selected = tipoCadastroFiltro == "inclusao_dependente",
-                        onClick = { onTipoCadastroFiltroChange("inclusao_dependente") },
+                } else {
+                    OutlinedTextField(
+                        value = buscaNome,
+                        onValueChange = onBuscaNomeChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Nome da empresa") },
+                        singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = buscaCnpj,
+                        onValueChange = onBuscaCnpjChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("CNPJ") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = buscaCodigo,
+                        onValueChange = onBuscaCodigoChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Codigo da empresa") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
                     )
                 }
 
-                OutlinedTextField(
-                    value = vendedorFiltro,
-                    onValueChange = onVendedorFiltroChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Vendedor (nome)") },
-                    singleLine = true,
+                SelectionField(
+                    label = "Tipo",
+                    value = when (tipoCadastroFiltro) {
+                        "cadastro" -> "Cadastro"
+                        "inclusao_dependente" -> "Inclusao"
+                        else -> "Todos"
+                    },
+                    options = listOf(
+                        "todos" to "Todos",
+                        "cadastro" to "Cadastro",
+                        "inclusao_dependente" to "Inclusao",
+                    ),
+                    onSelected = onTipoCadastroFiltroChange,
                 )
+
+                SelectionField(
+                    label = "Status da Adesao",
+                    value = statusOptions.firstOrNull { it.first == statusAdesaoFiltro }?.second ?: "Todos os Status",
+                    options = listOf("" to "Todos os Status") + statusOptions,
+                    onSelected = onStatusAdesaoFiltroChange,
+                )
+
+                if (!isVendedor) {
+                    SelectionField(
+                        label = "Vendedor",
+                        value = vendedorOptions.firstOrNull { it.first == vendedorFiltro }?.second ?: "Todos",
+                        options = listOf("" to "Todos") + vendedorOptions,
+                        onSelected = onVendedorFiltroChange,
+                    )
+                }
 
                 OutlinedTextField(
                     value = dataInicioFiltro,
@@ -450,33 +1035,12 @@ private fun CadastrosFilterPanel(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
                 ) {
-                    Button(onClick = onClearFilters) {
-                        Text("Limpar filtros")
+                    Button(onClick = onApplyFilters) {
+                        Text("Filtrar")
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun FilterChipButton(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
-        color = if (selected) EmeraldSoft else Slate100,
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-            color = if (selected) Emerald else Slate500,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Medium,
-        )
     }
 }
 
@@ -493,7 +1057,7 @@ private fun CadastroTabBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             CadastroTabButton(
-                label = "Nova Adesão",
+                label = "Nova Adesao",
                 selected = selectedTab == CadastroAreaTab.NOVO,
                 onClick = { onTabSelected(CadastroAreaTab.NOVO) },
                 modifier = Modifier.weight(1f),
@@ -513,14 +1077,14 @@ private fun CadastroTabBar(
                 label = "Incluir Dep.",
                 selected = selectedTab == CadastroAreaTab.DEPENDENTE,
                 onClick = { onTabSelected(CadastroAreaTab.DEPENDENTE) },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(0.88f),
             )
             CadastroTabButton(
-                label = "Adesões Pendentes",
+                label = "Adesoes Pendentes",
                 selected = selectedTab == CadastroAreaTab.INCOMPLETOS,
                 badge = pendentesCount.takeIf { it > 0 }?.toString(),
                 onClick = { onTabSelected(CadastroAreaTab.INCOMPLETOS) },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1.12f),
             )
         }
         CadastroTabButton(
@@ -550,15 +1114,18 @@ private fun CadastroTabButton(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = label,
+                modifier = Modifier.weight(1f),
                 color = if (selected) Emerald else Slate500,
                 fontWeight = FontWeight.Medium,
                 style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             if (badge != null) {
                 BoxBadge(
@@ -580,12 +1147,16 @@ private fun BoxBadge(
     Text(
         text = value,
         modifier = Modifier
+            .widthIn(min = 32.dp)
             .clip(RoundedCornerShape(999.dp))
             .background(bgColor)
-            .padding(horizontal = 8.dp, vertical = 2.dp),
+            .padding(horizontal = 6.dp, vertical = 2.dp),
         color = textColor,
-        style = MaterialTheme.typography.labelMedium,
+        style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.Bold,
+        textAlign = TextAlign.Center,
+        maxLines = 1,
+        overflow = TextOverflow.Clip,
     )
 }
 
@@ -629,7 +1200,7 @@ fun CadastroDetailDialog(
                 DetailLine("Empresa", cadastro.empresaNome ?: "-")
                 DetailLine("Vendedor", cadastro.vendedorNome ?: "-")
                 DetailLine("Adesionista", cadastro.adesionistaNome ?: "-")
-                DetailLine("Matrícula", cadastro.numeroMatricula ?: "-")
+                DetailLine("MatrÃ­cula", cadastro.numeroMatricula ?: "-")
                 DetailLine("Arquivo", cadastro.arquivoPath ?: "-")
                 DetailLine("Data de envio", cadastro.dataEnvio?.let(::formatDateTime) ?: "-")
                 DetailLine("Atualizado", formatDateTime(cadastro.updatedAt))
@@ -644,21 +1215,45 @@ fun CadastroDetailDialog(
 @Composable
 private fun CadastroCard(
     cadastro: CadastroResumo,
+    state: AppUiState,
+    viewModel: AppViewModel,
     onClick: () -> Unit,
 ) {
+    val scope = rememberCoroutineScope()
+    var selectedStatusId by rememberSaveable(cadastro.id, cadastro.statusAdesaoId) {
+        mutableStateOf(cadastro.statusAdesaoId.orEmpty())
+    }
+    var updatingStatus by rememberSaveable(cadastro.id) { mutableStateOf(false) }
+    var statusError by rememberSaveable(cadastro.id) { mutableStateOf<String?>(null) }
+    val statusNome = state.statusAdesoes.firstOrNull { it.id == selectedStatusId }?.nome ?: "Selecione"
+
     WebCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = cadastro.nome ?: "Sem nome",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                if (cadastro.status == "incompleto") {
+                    TextButton(
+                        onClick = onClick,
+                        enabled = !updatingStatus,
+                    ) {
+                        Text("Continuar")
+                    }
+                }
+            }
             Text(
-                text = cadastro.nome ?: "Sem nome",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = "${tipoCadastroLabel(cadastro.tipoCadastro)} • ${statusLabel(cadastro.status)}",
+                text = "${tipoCadastroLabel(cadastro.tipoCadastro)} â€¢ ${statusLabel(cadastro.status)}",
                 style = MaterialTheme.typography.labelLarge,
                 color = if (cadastro.status == "enviado") Emerald else Amber500,
             )
@@ -669,6 +1264,39 @@ private fun CadastroCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (cadastro.status == "incompleto") {
+                SelectionField(
+                    label = "Status da adesao",
+                    value = statusNome,
+                    options = listOf("" to "Selecione") + state.statusAdesoes.map { it.id to it.nome },
+                    onSelected = { statusId ->
+                        if (selectedStatusId == statusId || updatingStatus) return@SelectionField
+                        selectedStatusId = statusId
+                        statusError = null
+                        scope.launch {
+                            updatingStatus = true
+                            runCatching {
+                                viewModel.updateCadastroRecord(
+                                    cadastro.id,
+                                    buildJsonObject {
+                                        if (statusId.isBlank()) put("status_adesao_id", JsonNull) else put("status_adesao_id", statusId)
+                                    },
+                                )
+                            }.onFailure { throwable ->
+                                statusError = throwable.message ?: "Falha ao atualizar status da adesao."
+                            }
+                            updatingStatus = false
+                        }
+                    },
+                )
+                statusError?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
         }
     }
 }
@@ -689,7 +1317,7 @@ private fun formatDateTime(value: String): String {
 
 private fun tipoCadastroLabel(value: String): String {
     return when (value) {
-        "inclusao_dependente" -> "Inclusão de Dependente"
+        "inclusao_dependente" -> "InclusÃ£o de Dependente"
         else -> "Cadastro"
     }
 }
@@ -706,6 +1334,23 @@ private fun formatCpf(value: String): String {
     val digits = value.filter(Char::isDigit).take(11)
     if (digits.length != 11) return value
     return "${digits.substring(0, 3)}.${digits.substring(3, 6)}.${digits.substring(6, 9)}-${digits.substring(9, 11)}"
+}
+
+private fun firstDayOfCurrentMonthIso(): String {
+    val now = LocalDate.now()
+    return now.withDayOfMonth(1).toString()
+}
+
+private fun searchInDependentes(cadastro: CadastroResumo, nome: String, cpfDigits: String): Boolean {
+    val deps = runCatching { cadastro.dependentes?.jsonArray }.getOrNull() ?: return false
+    return deps.any { dep ->
+        val obj = runCatching { dep.jsonObject }.getOrNull() ?: return@any false
+        val depNome = obj["nome"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val depCpf = obj["cpf"]?.jsonPrimitive?.contentOrNull.orEmpty().filter(Char::isDigit)
+        val matchNome = nome.isBlank() || depNome.contains(nome, ignoreCase = true)
+        val matchCpf = cpfDigits.isBlank() || depCpf.contains(cpfDigits)
+        matchNome && matchCpf
+    }
 }
 
 private fun parseFilterDate(value: String): LocalDate? {

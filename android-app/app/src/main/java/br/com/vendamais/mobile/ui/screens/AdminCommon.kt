@@ -31,9 +31,6 @@ import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.ui.components.WebCard
 import br.com.vendamais.mobile.ui.theme.Emerald
 import br.com.vendamais.mobile.ui.theme.EmeraldSoft
-import br.com.vendamais.mobile.ui.theme.Slate200
-import br.com.vendamais.mobile.ui.theme.Slate100
-import br.com.vendamais.mobile.ui.theme.Slate500
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 
@@ -52,7 +49,7 @@ internal fun AdminLoadingCard() {
 @Composable
 internal fun EmptyAdminCard(message: String) {
     WebCard {
-        Text(message, color = Slate500)
+        Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -79,8 +76,12 @@ internal fun <T> SelectionField(
     onSelected: (T) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
-    val fieldColor = if (highlighted) EmeraldSoft.copy(alpha = 0.55f) else Slate100
-    val fieldBorder = if (highlighted) BorderStroke(1.dp, Emerald.copy(alpha = 0.35f)) else BorderStroke(1.dp, Slate200)
+    val fieldColor = if (highlighted) EmeraldSoft.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+    val fieldBorder = if (highlighted) {
+        BorderStroke(1.dp, Emerald.copy(alpha = 0.35f))
+    } else {
+        BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge)
@@ -95,7 +96,7 @@ internal fun <T> SelectionField(
             Text(
                 text = value,
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 16.dp),
-                color = if (enabled) MaterialTheme.colorScheme.onSurface else Slate500,
+                color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             )
         }
     }
@@ -110,6 +111,7 @@ internal fun <T> SelectionField(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(options) { option ->
+                        val selected = option.second == value
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -118,11 +120,12 @@ internal fun <T> SelectionField(
                                     open = false
                                 },
                             shape = RoundedCornerShape(12.dp),
-                            color = Slate100,
+                            color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                         ) {
                             Text(
                                 text = option.second,
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 16.dp),
+                                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
                             )
                         }
                     }

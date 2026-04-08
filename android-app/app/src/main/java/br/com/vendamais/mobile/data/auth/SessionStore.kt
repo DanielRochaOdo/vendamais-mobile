@@ -1,6 +1,7 @@
 package br.com.vendamais.mobile.data.auth
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -19,6 +20,7 @@ class SessionStore(private val context: Context) {
     private val refreshTokenKey = stringPreferencesKey("refresh_token")
     private val emailKey = stringPreferencesKey("email")
     private val expiresAtKey = longPreferencesKey("expires_at")
+    private val darkModeKey = booleanPreferencesKey("dark_mode")
 
     val sessionFlow: Flow<SavedSession?> =
         context.authDataStore.data
@@ -54,6 +56,17 @@ class SessionStore(private val context: Context) {
                 }
             }
 
+    val darkModeFlow: Flow<Boolean> =
+        context.authDataStore.data
+            .catch { throwable ->
+                if (throwable is IOException) {
+                    emit(emptyPreferences())
+                } else {
+                    throw throwable
+                }
+            }
+            .map { preferences -> preferences[darkModeKey] ?: false }
+
     suspend fun save(session: SavedSession) {
         context.authDataStore.edit { preferences ->
             preferences[userIdKey] = session.userId
@@ -66,7 +79,15 @@ class SessionStore(private val context: Context) {
 
     suspend fun clear() {
         context.authDataStore.edit { preferences ->
+            val darkMode = preferences[darkModeKey] ?: false
             preferences.clear()
+            preferences[darkModeKey] = darkMode
+        }
+    }
+
+    suspend fun setDarkMode(enabled: Boolean) {
+        context.authDataStore.edit { preferences ->
+            preferences[darkModeKey] = enabled
         }
     }
 }

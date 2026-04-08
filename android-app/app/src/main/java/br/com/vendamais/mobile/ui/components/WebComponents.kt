@@ -22,18 +22,18 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import br.com.vendamais.mobile.ui.theme.Slate100
-import br.com.vendamais.mobile.ui.theme.Slate200
-import br.com.vendamais.mobile.ui.theme.Slate50
-import br.com.vendamais.mobile.ui.theme.Slate500
-import br.com.vendamais.mobile.ui.theme.White
 
 @Composable
 fun ScreenBackground(content: @Composable () -> Unit) {
+    val colors = MaterialTheme.colorScheme
     Box(
         modifier = Modifier.background(
             brush = Brush.verticalGradient(
-                colors = listOf(White, Slate50, Slate100),
+                colors = listOf(
+                    colors.background,
+                    colors.surface,
+                    colors.surfaceVariant.copy(alpha = 0.72f),
+                ),
             ),
         ),
     ) {
@@ -51,15 +51,15 @@ fun WebCard(
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = White),
-        border = BorderStroke(1.dp, Slate200),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         if (title != null) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = White,
-                border = BorderStroke(1.dp, Slate200),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
             ) {
                 Text(
                     text = title,
@@ -102,7 +102,7 @@ fun InfoRow(label: String, value: String, modifier: Modifier = Modifier) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
-            color = Slate500,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
             text = value,
