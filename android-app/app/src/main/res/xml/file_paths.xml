@@ -3,4 +3,7 @@
     <cache-path
         name="shared_qrcodes"
         path="shared_qrcodes/" />
+    <cache-path
+        name="camera_uploads"
+        path="camera_uploads/" />
 </paths>

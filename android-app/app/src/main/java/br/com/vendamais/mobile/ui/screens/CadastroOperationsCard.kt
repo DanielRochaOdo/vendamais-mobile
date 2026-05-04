@@ -9,19 +9,24 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
@@ -42,8 +47,6 @@ import br.com.vendamais.mobile.ui.components.ScreenHeading
 import br.com.vendamais.mobile.ui.components.WebCard
 import br.com.vendamais.mobile.ui.theme.Emerald
 import br.com.vendamais.mobile.ui.theme.EmeraldSoft
-import br.com.vendamais.mobile.ui.theme.Slate100
-import br.com.vendamais.mobile.ui.theme.Slate500
 
 @Composable
 fun CadastroOperationsCard(
@@ -137,21 +140,32 @@ fun CadastroOperationsCard(
                             },
                             imeAction = ImeAction.Search,
                         ),
+                        keyboardActions = KeyboardActions(
+                            onSearch = { onSearchEmpresa() },
+                            onDone = { onSearchEmpresa() },
+                        ),
                         singleLine = true,
                     )
 
-                    Button(
-                        onClick = onSearchEmpresa,
-                        enabled = !workspace.operationLoading && workspace.empresaSearchValue.isNotBlank(),
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
                     ) {
-                        if (workspace.operationLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                            )
-                        } else {
-                            Text("Buscar empresa")
+                        IconButton(
+                            onClick = onSearchEmpresa,
+                            enabled = !workspace.operationLoading && workspace.empresaSearchValue.isNotBlank(),
+                        ) {
+                            if (workspace.operationLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Rounded.Search,
+                                    contentDescription = "Buscar empresa",
+                                )
+                            }
                         }
                     }
 
@@ -161,7 +175,7 @@ fun CadastroOperationsCard(
                                 Surface(
                                     onClick = { onSelectEmpresa(empresa) },
                                     shape = RoundedCornerShape(16.dp),
-                                    color = Slate100,
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                                 ) {
                                     Column(
                                         modifier = Modifier
@@ -177,7 +191,7 @@ fun CadastroOperationsCard(
                                         if (empresa.razaoSocial.isNotBlank()) {
                                             Text(
                                                 text = empresa.razaoSocial,
-                                                color = Slate500,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 style = MaterialTheme.typography.bodyMedium,
                                             )
                                         }
@@ -186,7 +200,7 @@ fun CadastroOperationsCard(
                                                 append("Codigo ${empresa.id}")
                                                 if (empresa.cnpj.isNotBlank()) append(" - ${empresa.cnpj}")
                                             },
-                                            color = Slate500,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             style = MaterialTheme.typography.bodySmall,
                                         )
                                     }
@@ -208,7 +222,7 @@ fun CadastroOperationsCard(
                         if (workspace.selectedEmpresa.razaoSocial.isNotBlank()) {
                             Text(
                                 text = workspace.selectedEmpresa.razaoSocial,
-                                color = Slate500,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                         }
@@ -217,7 +231,7 @@ fun CadastroOperationsCard(
                                 append("Codigo ${workspace.selectedEmpresa.id}")
                                 if (workspace.selectedEmpresa.cnpj.isNotBlank()) append(" - ${workspace.selectedEmpresa.cnpj}")
                             },
-                            color = Slate500,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall,
                         )
                         workspace.selectedEmpresa.observacoesResolvidas
@@ -225,12 +239,15 @@ fun CadastroOperationsCard(
                             ?.let { observacao ->
                                 Text(
                                     text = observacao,
-                                    color = Slate500,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                             }
-                        TextButton(onClick = onClearEmpresa) {
-                            Text("Alterar empresa")
+                        IconButton(onClick = onClearEmpresa) {
+                            Icon(
+                                imageVector = Icons.Rounded.Edit,
+                                contentDescription = "Alterar empresa",
+                            )
                         }
                     }
                 }
@@ -250,7 +267,7 @@ fun CadastroOperationsCard(
                     if (vendedores.isEmpty()) {
                         Text(
                             text = "Nenhum vendedor disponível. Entre em contato com o administrador.",
-                            color = Slate500,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
@@ -295,24 +312,35 @@ fun CadastroOperationsCard(
                     placeholder = { Text("000.000.000-00") },
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Number,
-                        imeAction = ImeAction.Done,
+                        imeAction = ImeAction.Search,
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onSearch = { onConsultarCpf() },
+                        onDone = { onConsultarCpf() },
                     ),
                     visualTransformation = CpfVisualTransformation(),
                     singleLine = true,
                 )
 
-                Button(
-                    onClick = onConsultarCpf,
-                    enabled = !workspace.operationLoading && workspace.cpfValue.isNotBlank(),
+                Row(
                     modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
                 ) {
-                    if (workspace.operationLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Text("Consultar CPF")
+                    IconButton(
+                        onClick = onConsultarCpf,
+                        enabled = !workspace.operationLoading && workspace.cpfValue.isNotBlank(),
+                    ) {
+                        if (workspace.operationLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Rounded.Search,
+                                contentDescription = "Consultar CPF",
+                            )
+                        }
                     }
                 }
             }
@@ -356,12 +384,12 @@ private fun SearchTypePill(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
-        color = if (selected) EmeraldSoft else Slate100,
+        color = if (selected) EmeraldSoft else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
     ) {
         Text(
             text = label,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            color = if (selected) Emerald else Slate500,
+            color = if (selected) Emerald else MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.Medium,
         )
     }
@@ -403,3 +431,4 @@ private class CpfVisualTransformation : VisualTransformation {
         return TransformedText(AnnotatedString(formatted), offsetMapping)
     }
 }
+

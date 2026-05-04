@@ -12,9 +12,11 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.put
+import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.http.isSuccess
 import io.ktor.http.contentType
 import kotlinx.serialization.json.Json
@@ -51,6 +53,31 @@ internal suspend inline fun <reified T> HttpClient.safePost(
 ): T {
     return try {
         val response = post(url) {
+            if (body != null) {
+                contentType(ContentType.Application.Json)
+                when (body) {
+                    is JsonElement -> setBody(body.toString())
+                    else -> setBody(body)
+                }
+            }
+            builder()
+        }
+        if (!response.status.isSuccess()) throw response.toReadableException(json)
+        response.body()
+    } catch (exception: ClientRequestException) {
+        throw exception.toReadableException(json)
+    }
+}
+
+internal suspend inline fun <reified T> HttpClient.safePatch(
+    url: String,
+    json: Json,
+    body: Any? = null,
+    crossinline builder: HttpRequestBuilder.() -> Unit = {},
+): T {
+    return try {
+        val response = request(url) {
+            method = HttpMethod.Patch
             if (body != null) {
                 contentType(ContentType.Application.Json)
                 when (body) {

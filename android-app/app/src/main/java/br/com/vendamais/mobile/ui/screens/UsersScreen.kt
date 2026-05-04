@@ -1,4 +1,4 @@
-package br.com.vendamais.mobile.ui.screens
+﻿package br.com.vendamais.mobile.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -43,8 +43,10 @@ import br.com.vendamais.mobile.ui.theme.EmeraldSoft
 import br.com.vendamais.mobile.ui.theme.Slate100
 import br.com.vendamais.mobile.ui.theme.Slate500
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.util.Locale
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -55,6 +57,8 @@ fun UsersScreen(
     var searchTerm by rememberSaveable { mutableStateOf("") }
     var editingUser by remember { mutableStateOf<AdminUser?>(null) }
     var creatingUser by remember { mutableStateOf(false) }
+    var userSubmitError by remember { mutableStateOf<String?>(null) }
+    var userSubmitting by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val teamNames = remember(state.adminTeams) { state.adminTeams.associateBy({ it.id }, { it.name }) }
     val filteredUsers = remember(state.adminUsers, searchTerm) {
@@ -74,8 +78,8 @@ fun UsersScreen(
     ) {
         item {
             ScreenHeading(
-                title = "Usuários",
-                subtitle = "Gerencie os usuários do sistema",
+                title = "Usuarios",
+                subtitle = "Gerencie os usuarios do sistema",
             )
         }
 
@@ -90,8 +94,12 @@ fun UsersScreen(
                         singleLine = true,
                     )
                     if (canCreate) {
-                        Button(onClick = { creatingUser = true }) {
-                            Text("Novo Usuário")
+                        Button(onClick = {
+                            userSubmitError = null
+                            userSubmitting = false
+                            creatingUser = true
+                        }) {
+                            Text("Novo Usuario")
                         }
                     }
                 }
@@ -101,7 +109,7 @@ fun UsersScreen(
         if (state.adminLoading && state.adminUsers.isEmpty()) {
             item { AdminLoadingCard() }
         } else if (filteredUsers.isEmpty()) {
-            item { EmptyAdminCard("Nenhum usuário encontrado.") }
+            item { EmptyAdminCard("Nenhum usuario encontrado.") }
         } else {
             items(filteredUsers) { user ->
                 WebCard(
@@ -128,7 +136,11 @@ fun UsersScreen(
                                     color = Slate500,
                                 )
                             }
-                            TextButton(onClick = { editingUser = user }) {
+                            TextButton(onClick = {
+                                userSubmitError = null
+                                userSubmitting = false
+                                editingUser = user
+                            }) {
                                 Text("Editar")
                             }
                         }
@@ -156,14 +168,26 @@ fun UsersScreen(
 
     if (creatingUser) {
         UserEditorDialog(
-            title = "Novo Usuário",
+            title = "Novo Usuario",
             teams = state.adminTeams,
             canEditRole = canEditRole,
-            onDismiss = { creatingUser = false },
+            submitError = userSubmitError,
+            isSubmitting = userSubmitting,
+            onDismiss = {
+                userSubmitError = null
+                userSubmitting = false
+                creatingUser = false
+            },
             onSubmit = { form ->
                 scope.launch {
+                    userSubmitError = null
+                    userSubmitting = true
                     runCatching { viewModel.createUser(form.toCreatePayload()) }
                         .onSuccess { creatingUser = false }
+                        .onFailure { throwable ->
+                            userSubmitError = throwable.message ?: "Falha ao salvar usuario."
+                        }
+                    userSubmitting = false
                 }
             },
         )
@@ -171,15 +195,27 @@ fun UsersScreen(
 
     editingUser?.let { user ->
         UserEditorDialog(
-            title = "Editar Usuário",
+            title = "Editar Usuario",
             teams = state.adminTeams,
             canEditRole = canEditRole,
             initialUser = user,
-            onDismiss = { editingUser = null },
+            submitError = userSubmitError,
+            isSubmitting = userSubmitting,
+            onDismiss = {
+                userSubmitError = null
+                userSubmitting = false
+                editingUser = null
+            },
             onSubmit = { form ->
                 scope.launch {
-                    runCatching { viewModel.updateUser(user.id, form.toUpdatePayload(canEditRole)) }
+                    userSubmitError = null
+                    userSubmitting = true
+                    runCatching { viewModel.updateUser(user.id, form.toUpdatePayload(canEditRole, user)) }
                         .onSuccess { editingUser = null }
+                        .onFailure { throwable ->
+                            userSubmitError = throwable.message ?: "Falha ao atualizar usuario."
+                        }
+                    userSubmitting = false
                 }
             },
         )
@@ -192,11 +228,15 @@ private fun UserEditorDialog(
     teams: List<AdminTeam>,
     canEditRole: Boolean,
     initialUser: AdminUser? = null,
+    submitError: String? = null,
+    isSubmitting: Boolean = false,
     onDismiss: () -> Unit,
     onSubmit: (UserFormState) -> Unit,
 ) {
     var form by remember(initialUser) { mutableStateOf(UserFormState.from(initialUser)) }
-    val requiresTeam = form.role in setOf("CADASTRO", "SUPERVISOR", "VENDEDOR", "ADESIONISTA")
+    val normalizedRole = normalizeRole(form.role)
+    val requiresTeam = requiresTeamAndExternal(normalizedRole)
+    val validationError = form.validationError(initialUser == null, initialUser)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -235,7 +275,7 @@ private fun UserEditorDialog(
                 }
                 item {
                     SelectionField(
-                        label = "Função",
+                        label = "Funcao",
                         value = form.role.roleLabel(),
                         options = roleOptions(canEditRole),
                         enabled = initialUser == null || canEditRole,
@@ -254,9 +294,10 @@ private fun UserEditorDialog(
                 item {
                     OutlinedTextField(
                         value = form.lemmitLimite,
-                        onValueChange = { form = form.copy(lemmitLimite = it) },
+                        onValueChange = { form = form.copy(lemmitLimite = normalizeLemmitEditableInput(it)) },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("Limite Lemmit (R$)") },
+                        prefix = { Text("R$ ") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     )
                 }
@@ -264,10 +305,9 @@ private fun UserEditorDialog(
                     item {
                         OutlinedTextField(
                             value = form.externalId,
-                            onValueChange = { form = form.copy(externalId = it.filter(Char::isDigit)) },
+                            onValueChange = { form = form.copy(externalId = it) },
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("ID Externo") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         )
                     }
                     item {
@@ -286,7 +326,7 @@ private fun UserEditorDialog(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Usuário ativo", fontWeight = FontWeight.Medium)
+                            Text("Usuario ativo", fontWeight = FontWeight.Medium)
                             Text(
                                 text = "Ative ou desative o acesso ao sistema.",
                                 style = MaterialTheme.typography.bodySmall,
@@ -299,18 +339,36 @@ private fun UserEditorDialog(
                         )
                     }
                 }
+                submitError?.takeIf { it.isNotBlank() }?.let { message ->
+                    item {
+                        Text(
+                            text = message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+                validationError?.let { message ->
+                    item {
+                        Text(
+                            text = message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
             }
         },
         confirmButton = {
             TextButton(
-                enabled = form.isValid(initialUser == null),
+                enabled = !isSubmitting && validationError == null,
                 onClick = { onSubmit(form) },
             ) {
-                Text("Salvar")
+                Text(if (isSubmitting) "Salvando..." else "Salvar")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = onDismiss, enabled = !isSubmitting) {
                 Text("Cancelar")
             }
         },
@@ -328,38 +386,72 @@ private data class UserFormState(
     val isActive: Boolean = true,
     val lemmitLimite: String = "",
 ) {
-    fun isValid(isCreate: Boolean): Boolean {
-        if (name.isBlank() || email.isBlank()) return false
-        if (isCreate && password.length < 6) return false
-        return true
+    fun isValid(isCreate: Boolean, initialUser: AdminUser? = null): Boolean {
+        return validationError(isCreate, initialUser) == null
+    }
+
+    fun validationError(isCreate: Boolean, initialUser: AdminUser? = null): String? {
+        if (name.isBlank() || email.isBlank()) return "Nome e email são obrigatórios."
+        if (isCreate && password.length < 6) return "A senha deve ter no mínimo 6 caracteres."
+        if (lemmitLimite.isNotBlank() && parseLemmitLimite(lemmitLimite) == null) {
+            return "Informe um valor válido para o limite Lemmit (ex: 300,00)."
+        }
+        val normalizedRole = normalizeRole(role)
+        if (requiresTeamAndExternal(normalizedRole)) {
+            val effectiveExternal = externalId.trim().ifBlank { initialUser?.externalId?.trim().orEmpty() }
+            val effectiveTeamId = teamId?.takeIf { it.isNotBlank() } ?: initialUser?.teamId?.takeIf { it.isNotBlank() }
+            if (effectiveExternal.isBlank()) return "ID Externo é obrigatório para esta função."
+            if (effectiveTeamId.isNullOrBlank()) return "Equipe é obrigatória para esta função."
+        }
+        return null
     }
 
     fun toCreatePayload() = buildJsonObject {
+        val normalizedRole = normalizeRole(role)
         put("name", name.trim())
         put("email", email.trim())
         put("password", password)
-        put("role", role)
-        if (role in setOf("CADASTRO", "SUPERVISOR", "VENDEDOR", "ADESIONISTA")) {
-            put("external_id", externalId)
+        put("role", normalizedRole)
+        if (requiresTeamAndExternal(normalizedRole)) {
+            put("external_id", externalId.trim())
             teamId?.takeIf { it.isNotBlank() }?.let { put("team_id", it) }
         }
     }
 
-    fun toUpdatePayload(canEditRole: Boolean) = buildJsonObject {
+    fun toUpdatePayload(canEditRole: Boolean, initialUser: AdminUser? = null) = buildJsonObject {
+        val normalizedRole = normalizeRole(role)
+        val initialRole = initialUser?.role?.let(::normalizeRole)
+        val shouldClearTeamAndExternal = canEditRole &&
+            initialRole != null &&
+            requiresTeamAndExternal(initialRole) &&
+            !requiresTeamAndExternal(normalizedRole)
+
         put("name", name.trim())
         put("email", email.trim())
-        put("telefone", onlyDigits(telefone).ifBlank { "" })
-        put("is_active", isActive)
-        lemmitLimite.toDoubleOrNull()?.let { put("lemmit_limite_consultas", it) }
-        if (canEditRole) {
-            put("role", role)
-        }
-        if (role in setOf("CADASTRO", "SUPERVISOR", "VENDEDOR", "ADESIONISTA")) {
-            put("external_id", externalId.ifBlank { "" })
-            put("team_id", teamId ?: "")
+        val normalizedPhone = onlyDigits(telefone)
+        if (normalizedPhone.isBlank()) {
+            put("telefone", JsonNull)
         } else {
-            put("external_id", "")
-            put("team_id", "")
+            put("telefone", normalizedPhone)
+        }
+        put("is_active", isActive)
+        val normalizedLimit = parseLemmitLimite(lemmitLimite)
+        if (lemmitLimite.isBlank()) {
+            put("lemmit_limite_consultas", JsonNull)
+        } else {
+            normalizedLimit?.let { put("lemmit_limite_consultas", it) }
+        }
+        if (canEditRole) {
+            put("role", normalizedRole)
+        }
+        if (requiresTeamAndExternal(normalizedRole)) {
+            val effectiveExternal = externalId.trim().ifBlank { initialUser?.externalId?.trim().orEmpty() }
+            val effectiveTeamId = teamId?.takeIf { it.isNotBlank() } ?: initialUser?.teamId?.takeIf { it.isNotBlank() }
+            put("external_id", effectiveExternal)
+            effectiveTeamId?.let { put("team_id", it) } ?: put("team_id", JsonNull)
+        } else if (shouldClearTeamAndExternal) {
+            put("external_id", JsonNull)
+            put("team_id", JsonNull)
         }
     }
 
@@ -372,7 +464,76 @@ private data class UserFormState(
             externalId = user?.externalId.orEmpty(),
             teamId = user?.teamId,
             isActive = user?.isActive ?: true,
-            lemmitLimite = user?.lemmitLimiteConsultas?.toString().orEmpty(),
+            lemmitLimite = user?.lemmitLimiteConsultas?.let(::formatLemmitEditableValue).orEmpty(),
         )
     }
 }
+
+private fun normalizeRole(role: String): String {
+    return role.trim().uppercase(Locale.ROOT)
+}
+
+private fun requiresTeamAndExternal(role: String): Boolean {
+    return role in setOf("CADASTRO", "SUPERVISOR", "VENDEDOR", "ADESIONISTA")
+}
+
+private fun parseLemmitLimite(rawValue: String): Double? {
+    val sanitized = rawValue
+        .trim()
+        .replace("R$", "", ignoreCase = true)
+        .replace("\u00A0", "")
+        .replace(" ", "")
+    if (sanitized.isBlank()) return null
+
+    val cleaned = sanitized.filter { it.isDigit() || it == '.' || it == ',' }
+    if (cleaned.isBlank()) return null
+
+    val lastComma = cleaned.lastIndexOf(',')
+    val lastDot = cleaned.lastIndexOf('.')
+    val decimalSeparator = when {
+        lastComma >= 0 && lastDot >= 0 -> if (lastComma > lastDot) ',' else '.'
+        lastComma >= 0 -> ','
+        lastDot >= 0 -> '.'
+        else -> null
+    }
+
+    return if (decimalSeparator == null) {
+        cleaned.filter(Char::isDigit).toDoubleOrNull()
+    } else {
+        val separatorIndex = cleaned.lastIndexOf(decimalSeparator)
+        val integerPart = cleaned.substring(0, separatorIndex).filter(Char::isDigit).ifBlank { "0" }
+        val decimalPart = cleaned.substring(separatorIndex + 1).filter(Char::isDigit)
+        val numeric = if (decimalPart.isBlank()) integerPart else "$integerPart.$decimalPart"
+        numeric.toDoubleOrNull()
+    }
+}
+
+private fun normalizeLemmitEditableInput(rawValue: String): String {
+    val sanitized = rawValue
+        .replace("R$", "", ignoreCase = true)
+        .replace("\u00A0", "")
+        .replace(" ", "")
+    if (sanitized.isBlank()) return ""
+
+    val cleaned = sanitized.filter { it.isDigit() || it == '.' || it == ',' }
+    if (cleaned.isBlank()) return ""
+
+    val normalized = cleaned.replace('.', ',')
+    val separatorIndex = normalized.indexOf(',')
+    if (separatorIndex < 0) {
+        val integerPart = normalized.filter(Char::isDigit).trimStart('0')
+        return integerPart.ifBlank { "0" }
+    }
+
+    val integerPartRaw = normalized.substring(0, separatorIndex).filter(Char::isDigit)
+    val integerPart = integerPartRaw.trimStart('0').ifBlank { "0" }
+    val decimalPart = normalized.substring(separatorIndex + 1).filter(Char::isDigit).take(2)
+    return "$integerPart,$decimalPart"
+}
+
+private fun formatLemmitEditableValue(value: Double): String {
+    return String.format(Locale.US, "%.2f", value).replace('.', ',')
+}
+
+
+

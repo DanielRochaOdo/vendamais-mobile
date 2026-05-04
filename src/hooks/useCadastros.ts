@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -165,7 +165,7 @@ export function useCadastros() {
     setCadastros((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const fetchCadastros = async () => {
+  const fetchCadastros = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -205,9 +205,9 @@ export function useCadastros() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     if (!profile?.id) {
       return;
     }
@@ -253,7 +253,7 @@ export function useCadastros() {
     } finally {
       setLoadingStats(false);
     }
-  };
+  }, [profile?.id]);
 
   // Stats devem ser carregados sob demanda, não automaticamente
 
@@ -461,14 +461,29 @@ export function useCadastros() {
   const createOrUpdateRascunho = async (data: Partial<Cadastro>) => {
     if (!profile?.id) throw new Error('User not authenticated');
 
-    const existing = cadastros.find(
-      (c) => c.cpf === data.cpf && c.status === 'incompleto' && c.created_by === profile.id
+    const cpfNormalizado = normalizeCpf(data.cpf);
+    const { data: existingRows, error: existingError } = await supabase
+      .from('cadastros')
+      .select('id,created_by,status,cpf')
+      .eq('cpf', cpfNormalizado)
+      .eq('status', 'incompleto')
+      .eq('created_by', profile.id)
+      .order('updated_at', { ascending: false })
+      .limit(1);
+
+    if (existingError) throw existingError;
+
+    const existing = existingRows?.[0] || cadastros.find(
+      (c) => c.cpf === cpfNormalizado && c.status === 'incompleto' && c.created_by === profile.id
     );
 
     if (existing) {
       const { data: updated, error } = await supabase
         .from('cadastros')
-        .update(data)
+        .update({
+          ...data,
+          ...(cpfNormalizado ? { cpf: cpfNormalizado } : {}),
+        })
         .eq('id', existing.id)
         .select()
         .single();
@@ -482,6 +497,7 @@ export function useCadastros() {
         .from('cadastros')
         .insert({
           ...data,
+          ...(cpfNormalizado ? { cpf: cpfNormalizado } : {}),
           created_by: profile.id,
           team_id: profile.team_id,
           status: 'incompleto',
@@ -873,12 +889,35 @@ export function useCadastros() {
     return dependentesAtivos;
   };
 
-  const deleteCadastro = async (id: string) => {
-    const { error } = await supabase.from('cadastros').delete().eq('id', id);
+  const deleteCadastro = async (id: string, motivoExclusao = 'Exclusao solicitada via web') => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) {
+      throw new Error('Usuario nao autenticado');
+    }
 
-    if (error) throw error;
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/excluir-cadastro`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          cadastroId: id,
+          motivoExclusao,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => null);
+      throw new Error(error?.error || 'Erro ao excluir cadastro');
+    }
 
     removeCadastroState(id);
+    await fetchStats();
   };
 
   const canDelete = profile?.role === 'ADMINISTRADOR';
@@ -892,10 +931,20 @@ export function useCadastros() {
 
   // Carrega stats automaticamente quando o profile está disponível
   useEffect(() => {
-    if (profile?.id) {
+    if (profile?.id) fetchStats();
+  }, [profile?.id, fetchStats]);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    const intervalId = window.setInterval(() => {
+      fetchCadastros();
       fetchStats();
-    }
-  }, [profile?.id]);
+    }, 30000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [profile?.id, fetchCadastros, fetchStats]);
 
   // Carrega stats sob demanda
   const loadStats = async () => {
@@ -927,4 +976,3 @@ export function useCadastros() {
     refresh,
   };
 }
-

@@ -1,27 +1,46 @@
 ﻿package br.com.vendamais.mobile.ui.screens
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.webkit.MimeTypeMap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -40,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
@@ -51,13 +71,16 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.FileProvider
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import br.com.vendamais.mobile.data.models.CadastroDetalhe
 import br.com.vendamais.mobile.data.models.MobileProfile
 import br.com.vendamais.mobile.data.models.TeamMemberOption
+import br.com.vendamais.mobile.domain.cadastro.CadastroApiErrorMapper
 import br.com.vendamais.mobile.domain.cadastro.CadastroModalSignal
+import br.com.vendamais.mobile.domain.cadastro.isPendingCadastroStatus
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
 import br.com.vendamais.mobile.ui.components.WebCard
@@ -71,8 +94,10 @@ import br.com.vendamais.mobile.ui.theme.Red500
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.booleanOrNull
@@ -83,11 +108,16 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.text.NumberFormat
+import java.io.File
 import java.time.LocalDate
 import java.time.Period
 import java.util.Locale
 
 private const val MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+private val cadastroEditorJsonParser = Json {
+    ignoreUnknownKeys = true
+    isLenient = true
+}
 
 private data class ContatoFormState(
     val tipo: String = "celular",
@@ -115,6 +145,22 @@ private data class CadastroPlanoOption(
     val label: String = nome,
 )
 
+private data class CadastroEnderecoFormState(
+    val cep: String = "",
+    val tipoLogradouro: String = "",
+    val logradouro: String = "",
+    val numero: String = "",
+    val complemento: String = "",
+    val bairro: String = "",
+    val cidade: String = "",
+    val uf: String = "",
+    val idTipoLogradouro: Int? = null,
+    val idBairro: Int? = null,
+    val idMunicipio: Int? = null,
+    val idUf: Int? = null,
+    val ufSigla: String? = null,
+)
+
 private enum class CadastroMessageTone {
     WARNING,
     ALERT,
@@ -133,6 +179,7 @@ fun CadastroEditorDialog(
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     val profile = state.profile
+    val enderecoInicial = remember(cadastro.id) { parseCadastroEndereco(cadastro.endereco) }
 
     var nome by rememberSaveable(cadastro.id) { mutableStateOf(cadastro.nome.orEmpty()) }
     var sexoCodigo by rememberSaveable(cadastro.id) { mutableStateOf(cadastro.sexoCodigo?.toString() ?: "") }
@@ -153,12 +200,34 @@ fun CadastroEditorDialog(
     var novoContatoValorField by rememberSaveable(cadastro.id, stateSaver = textFieldValueSaver()) {
         mutableStateOf(TextFieldValue(""))
     }
+    var enderecoCep by rememberSaveable(cadastro.id) { mutableStateOf(enderecoInicial.cep) }
+    var enderecoTipoLogradouro by rememberSaveable(cadastro.id) { mutableStateOf(enderecoInicial.tipoLogradouro) }
+    var enderecoLogradouro by rememberSaveable(cadastro.id) { mutableStateOf(enderecoInicial.logradouro) }
+    var enderecoNumero by rememberSaveable(cadastro.id) { mutableStateOf(enderecoInicial.numero) }
+    var enderecoComplemento by rememberSaveable(cadastro.id) { mutableStateOf(enderecoInicial.complemento) }
+    var enderecoBairro by rememberSaveable(cadastro.id) { mutableStateOf(enderecoInicial.bairro) }
+    var enderecoCidade by rememberSaveable(cadastro.id) { mutableStateOf(enderecoInicial.cidade) }
+    var enderecoUf by rememberSaveable(cadastro.id) { mutableStateOf(enderecoInicial.uf) }
+    var enderecoIdTipoLogradouro by rememberSaveable(cadastro.id) { mutableStateOf(enderecoInicial.idTipoLogradouro) }
+    var enderecoIdBairro by rememberSaveable(cadastro.id) { mutableStateOf(enderecoInicial.idBairro) }
+    var enderecoIdMunicipio by rememberSaveable(cadastro.id) { mutableStateOf(enderecoInicial.idMunicipio) }
+    var enderecoIdUf by rememberSaveable(cadastro.id) { mutableStateOf(enderecoInicial.idUf) }
+    var enderecoUfSigla by rememberSaveable(cadastro.id) { mutableStateOf(enderecoInicial.ufSigla.orEmpty()) }
+    var enderecoCepTouched by rememberSaveable(cadastro.id) { mutableStateOf(false) }
+    var cepLookupLoading by rememberSaveable(cadastro.id) { mutableStateOf(false) }
+    var cepLookupError by rememberSaveable(cadastro.id) { mutableStateOf<String?>(null) }
+    var ultimoCepConsultado by rememberSaveable(cadastro.id) { mutableStateOf("") }
 
     var saving by rememberSaveable { mutableStateOf(false) }
     var uploading by rememberSaveable { mutableStateOf(false) }
+    var previewingArquivo by rememberSaveable { mutableStateOf(false) }
     var localMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var showSelectStatusOnClose by rememberSaveable { mutableStateOf(false) }
     var suppressBackgroundPersist by rememberSaveable(cadastro.id) { mutableStateOf(false) }
+    var showArquivoSourceModal by rememberSaveable { mutableStateOf(false) }
+    var cameraCapturePath by rememberSaveable { mutableStateOf("") }
+    val navigationBottomInset = WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding()
+    val footerSafeBottomPadding = maxOf(navigationBottomInset, 56.dp)
 
     var dataNascimentoField by rememberSaveable(cadastro.id, stateSaver = textFieldValueSaver()) {
         val digits = extractDateDigits(cadastro.dataNascimento.orEmpty())
@@ -220,6 +289,127 @@ fun CadastroEditorDialog(
         "VENDEDOR",
         "CADASTRO",
     )
+    val enderecoFieldColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+        disabledTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        focusedContainerColor = MaterialTheme.colorScheme.surface,
+        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        cursorColor = MaterialTheme.colorScheme.primary,
+        focusedLabelColor = MaterialTheme.colorScheme.primary,
+        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        focusedBorderColor = MaterialTheme.colorScheme.primary,
+        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+    )
+
+    LaunchedEffect(enderecoCep, enderecoCepTouched) {
+        val cepNormalizado = enderecoCep.filter(Char::isDigit).take(8)
+        if (!enderecoCepTouched) return@LaunchedEffect
+        if (cepNormalizado.length != 8) return@LaunchedEffect
+        if (cepNormalizado == ultimoCepConsultado) return@LaunchedEffect
+
+        ultimoCepConsultado = cepNormalizado
+        cepLookupLoading = true
+        cepLookupError = null
+
+        runCatching { viewModel.consultarEnderecoCep(cepNormalizado) }
+            .onSuccess { endereco ->
+                if (endereco.cep.isNotBlank()) {
+                    enderecoCep = endereco.cep.filter(Char::isDigit).take(8)
+                }
+                if (endereco.tipoLogradouro.isNotBlank()) {
+                    enderecoTipoLogradouro = endereco.tipoLogradouro
+                }
+                if (endereco.logradouro.isNotBlank()) {
+                    enderecoLogradouro = endereco.logradouro
+                }
+                if (endereco.bairro.isNotBlank()) {
+                    enderecoBairro = endereco.bairro
+                }
+                if (endereco.cidade.isNotBlank()) {
+                    enderecoCidade = endereco.cidade
+                }
+                val ufNormalizada = endereco.uf
+                    .ifBlank { endereco.ufSigla.orEmpty() }
+                    .uppercase(Locale.ROOT)
+                    .take(2)
+                if (ufNormalizada.isNotBlank()) {
+                    enderecoUf = ufNormalizada
+                    enderecoUfSigla = ufNormalizada
+                }
+                endereco.idTipoLogradouro?.let { enderecoIdTipoLogradouro = it }
+                endereco.idBairro?.let { enderecoIdBairro = it }
+                endereco.idMunicipio?.let { enderecoIdMunicipio = it }
+                endereco.idUf?.let { enderecoIdUf = it }
+            }
+            .onFailure { throwable ->
+                cepLookupError = CadastroApiErrorMapper.mapUserMessage(
+                    throwable.message,
+                    "Nao foi possivel consultar o CEP no S4E.",
+                )
+            }
+
+        cepLookupLoading = false
+    }
+
+    suspend fun uploadSelectedArquivo(
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray,
+    ) {
+        if (arquivoPath.isNotBlank()) {
+            runCatching { viewModel.deleteTempFile(arquivoPath) }
+        }
+        validateUpload(
+            fileName = fileName,
+            mimeType = mimeType,
+            size = bytes.size.toLong(),
+        )
+        val uploaded = viewModel.uploadTempFile(
+            fileName = fileName,
+            mimeType = mimeType,
+            bytes = bytes,
+            prefix = "cadastros/${cadastro.id}",
+        )
+        arquivoPath = uploaded.path
+        arquivoNome = uploaded.nome
+        viewModel.persistCadastroDraftSilently(
+            cadastro.id,
+            buildJsonObject { put("arquivo_path", uploaded.path) },
+        )
+        localMessage = "Arquivo atualizado com sucesso."
+    }
+
+    suspend fun openArquivoPreview() {
+        val path = arquivoPath.trim()
+        if (path.isBlank()) {
+            localMessage = "Nenhum arquivo anexado para visualizacao."
+            return
+        }
+        previewingArquivo = true
+        runCatching {
+            val bytes = viewModel.downloadTempFile(path)
+            val uri = writePreviewFile(
+                context = context,
+                fileName = arquivoNome.ifBlank { path.substringAfterLast('/') },
+                bytes = bytes,
+            )
+            val mime = resolvePreviewMimeType(arquivoNome.ifBlank { path.substringAfterLast('/') })
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mime)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(Intent.createChooser(intent, "Visualizar arquivo"))
+        }.onFailure { throwable ->
+            localMessage = CadastroApiErrorMapper.mapUserMessage(
+                throwable.message,
+                "Nao foi possivel abrir o arquivo.",
+            )
+        }
+        previewingArquivo = false
+    }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         suppressBackgroundPersist = false
@@ -227,33 +417,47 @@ fun CadastroEditorDialog(
         scope.launch {
             uploading = true
             runCatching {
-                if (arquivoPath.isNotBlank()) {
-                    runCatching { viewModel.deleteTempFile(arquivoPath) }
-                }
                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                     ?: error("Nao foi possivel ler o arquivo.")
-                validateUpload(
-                    fileName = resolveFileName(context, uri),
-                    mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream",
-                    size = bytes.size.toLong(),
-                )
-                viewModel.uploadTempFile(
+                uploadSelectedArquivo(
                     fileName = resolveFileName(context, uri),
                     mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream",
                     bytes = bytes,
-                    prefix = "cadastros/${cadastro.id}",
                 )
-            }.onSuccess { uploaded ->
-                arquivoPath = uploaded.path
-                arquivoNome = uploaded.nome
-                viewModel.persistCadastroDraftSilently(
-                    cadastro.id,
-                    buildJsonObject { put("arquivo_path", uploaded.path) },
-                )
-                localMessage = "Arquivo atualizado com sucesso."
+            }.onSuccess {
             }.onFailure { throwable ->
-                localMessage = throwable.message ?: "Falha ao carregar arquivo."
+                localMessage = CadastroApiErrorMapper.mapUserMessage(
+                    throwable.message,
+                    "Falha ao carregar arquivo.",
+                )
             }
+            uploading = false
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        suppressBackgroundPersist = false
+        val cameraPath = cameraCapturePath
+        cameraCapturePath = ""
+        if (!success || cameraPath.isBlank()) return@rememberLauncherForActivityResult
+
+        scope.launch {
+            uploading = true
+            runCatching {
+                val cameraFile = File(cameraPath)
+                val bytes = cameraFile.readBytes()
+                uploadSelectedArquivo(
+                    fileName = cameraFile.name,
+                    mimeType = "image/jpeg",
+                    bytes = bytes,
+                )
+            }.onFailure { throwable ->
+                localMessage = CadastroApiErrorMapper.mapUserMessage(
+                    throwable.message,
+                    "Falha ao capturar arquivo pela camera.",
+                )
+            }
+            runCatching { File(cameraPath).delete() }
             uploading = false
         }
     }
@@ -363,8 +567,19 @@ fun CadastroEditorDialog(
                 )
             }
         }
+        val cpfTitularPersist = dependentes
+            .firstOrNull()
+            ?.cpf
+            ?.text
+            ?.filter(Char::isDigit)
+            ?.takeIf { it.length == 11 }
+            ?: cadastro.cpf
+                ?.filter(Char::isDigit)
+                ?.takeIf { it.length == 11 }
 
         return buildJsonObject {
+            put("tipo_cadastro", "cadastro")
+            cpfTitularPersist?.let { put("cpf", it) }
             put("nome", nome.ifBlank { "" })
             if (dataIso != null) {
                 put("data_nascimento", dataIso)
@@ -372,6 +587,29 @@ fun CadastroEditorDialog(
             sexoCodigo.toIntOrNull()?.let { put("sexo_codigo", it) }
             put("nome_mae", nomeMae.ifBlank { "" })
             put("numero_matricula", numeroMatricula.ifBlank { "" })
+            put(
+                "endereco",
+                buildJsonObject {
+                    put("cep", enderecoCep.filter(Char::isDigit).take(8))
+                    put("tipoLogradouro", enderecoTipoLogradouro.trim())
+                    put("logradouro", enderecoLogradouro.trim())
+                    put("numero", enderecoNumero.trim())
+                    put("complemento", enderecoComplemento.trim())
+                    put("bairro", enderecoBairro.trim())
+                    put("cidade", enderecoCidade.trim())
+                    put("uf", enderecoUf.trim().uppercase(Locale.ROOT).take(2))
+                    enderecoIdTipoLogradouro?.let { put("idTipoLogradouro", it) }
+                    enderecoIdBairro?.let { put("idBairro", it) }
+                    enderecoIdMunicipio?.let { put("idMunicipio", it) }
+                    enderecoIdUf?.let { put("idUf", it) }
+                    enderecoUfSigla
+                        .trim()
+                        .uppercase(Locale.ROOT)
+                        .take(2)
+                        .takeIf { it.isNotBlank() }
+                        ?.let { put("ufSigla", it) }
+                },
+            )
             if (statusAdesaoId.isNotBlank()) put("status_adesao_id", statusAdesaoId)
             put("arquivo_path", arquivoPath.ifBlank { "" })
             put("contatos", contatosJson)
@@ -396,7 +634,11 @@ fun CadastroEditorDialog(
     }
 
     fun requestCloseEditor() {
-        if (statusAdesaoId.isBlank() && state.statusAdesoes.isNotEmpty()) {
+        if (statusAdesaoId.isBlank()) {
+            if (state.statusAdesoes.isEmpty()) {
+                localMessage = "Nenhum status de adesao disponivel. Cadastre ao menos um status antes de fechar."
+                return
+            }
             showSelectStatusOnClose = true
             return
         }
@@ -404,7 +646,10 @@ fun CadastroEditorDialog(
             val payload = buildDraftPatchPayload()
             runCatching { viewModel.updateCadastroRecord(cadastro.id, payload) }
                 .onFailure { throwable ->
-                    localMessage = throwable.message ?: "Falha ao salvar rascunho antes de fechar."
+                    localMessage = CadastroApiErrorMapper.mapUserMessage(
+                        throwable.message,
+                        "Falha ao salvar rascunho antes de fechar.",
+                    )
                     return@launch
                 }
             onDismiss()
@@ -517,7 +762,7 @@ fun CadastroEditorDialog(
 
         if (requireStatus && statusAdesaoId.isBlank()) {
             if (!silentValidation) {
-                localMessage = "Selecione o status da adesao antes de cadastrar."
+                localMessage = "Selecione o status da adesao antes de continuar."
             }
             return null
         }
@@ -588,10 +833,21 @@ fun CadastroEditorDialog(
                 )
             }
         }
+        val cpfTitularPersist = dependentes
+            .firstOrNull()
+            ?.cpf
+            ?.text
+            ?.filter(Char::isDigit)
+            ?.takeIf { it.length == 11 }
+            ?: cadastro.cpf
+                ?.filter(Char::isDigit)
+                ?.takeIf { it.length == 11 }
 
         return buildJsonObject {
             profile?.id?.takeIf { it.isNotBlank() }?.let { put("created_by", it) }
             profile?.teamId?.takeIf { it.isNotBlank() }?.let { put("team_id", it) }
+            put("tipo_cadastro", "cadastro")
+            cpfTitularPersist?.let { put("cpf", it) }
             empresaIdPersist?.let { put("empresa_id", it) }
             empresaCodigoPersist?.let { put("empresa_codigo", it) }
             empresaNomePersist?.takeIf { it.isNotBlank() }?.let { put("empresa_nome", it) }
@@ -606,6 +862,29 @@ fun CadastroEditorDialog(
             sexoCodigo.toIntOrNull()?.let { put("sexo_codigo", it) } ?: put("sexo_codigo", JsonNull)
             put("nome_mae", nomeMae.ifBlank { "" })
             put("numero_matricula", numeroMatricula.ifBlank { "" })
+            put(
+                "endereco",
+                buildJsonObject {
+                    put("cep", enderecoCep.filter(Char::isDigit).take(8))
+                    put("tipoLogradouro", enderecoTipoLogradouro.trim())
+                    put("logradouro", enderecoLogradouro.trim())
+                    put("numero", enderecoNumero.trim())
+                    put("complemento", enderecoComplemento.trim())
+                    put("bairro", enderecoBairro.trim())
+                    put("cidade", enderecoCidade.trim())
+                    put("uf", enderecoUf.trim().uppercase(Locale.ROOT).take(2))
+                    enderecoIdTipoLogradouro?.let { put("idTipoLogradouro", it) }
+                    enderecoIdBairro?.let { put("idBairro", it) }
+                    enderecoIdMunicipio?.let { put("idMunicipio", it) }
+                    enderecoIdUf?.let { put("idUf", it) }
+                    enderecoUfSigla
+                        .trim()
+                        .uppercase(Locale.ROOT)
+                        .take(2)
+                        .takeIf { it.isNotBlank() }
+                        ?.let { put("ufSigla", it) }
+                },
+            )
             if (statusAdesaoId.isNotBlank()) put("status_adesao_id", statusAdesaoId)
             vendedor?.let {
                 put("vendedor_id", it.id)
@@ -621,6 +900,43 @@ fun CadastroEditorDialog(
             put("contatos", contatosJson)
             put("dependentes", dependentesJson)
         }
+    }
+
+    suspend fun submitCadastro() {
+        if (saving || state.sendingCadastro) {
+            return
+        }
+        saving = true
+        if (uploading) {
+            localMessage = "Aguarde o upload do arquivo finalizar antes de cadastrar."
+            saving = false
+            return
+        }
+        val validation = validateStepOne()
+        if (validation != null) {
+            localMessage = validation
+            currentStep = 1
+            saving = false
+            return
+        }
+
+        val payload = buildPayload(requireStatus = false)
+        if (payload == null) {
+            saving = false
+            return
+        }
+        runCatching {
+            viewModel.sendSelectedCadastro(
+                cadastroSnapshot = cadastro,
+                payloadHint = payload,
+            )
+        }.onFailure { throwable ->
+            localMessage = CadastroApiErrorMapper.mapUserMessage(
+                throwable.message,
+                "Falha ao preparar envio.",
+            )
+        }
+        saving = false
     }
 
     val autosaveSignature = buildString {
@@ -643,6 +959,22 @@ fun CadastroEditorDialog(
         append(arquivoPath)
         append('|')
         append(arquivoNome)
+        append('|')
+        append(enderecoCep)
+        append('|')
+        append(enderecoTipoLogradouro)
+        append('|')
+        append(enderecoLogradouro)
+        append('|')
+        append(enderecoNumero)
+        append('|')
+        append(enderecoComplemento)
+        append('|')
+        append(enderecoBairro)
+        append('|')
+        append(enderecoCidade)
+        append('|')
+        append(enderecoUf)
         contatos.forEach { contato ->
             append("|c:")
             append(contato.tipo)
@@ -717,6 +1049,7 @@ fun CadastroEditorDialog(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
                     .padding(16.dp)
                     .navigationBarsPadding()
                     .imePadding(),
@@ -745,7 +1078,16 @@ fun CadastroEditorDialog(
                     TextButton(
                         onClick = { requestCloseEditor() },
                     ) {
-                        Text("Fechar")
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = null,
+                            )
+                            Text("Fechar")
+                        }
                     }
                 }
 
@@ -763,6 +1105,7 @@ fun CadastroEditorDialog(
                                     onValueChange = { nome = it },
                                     modifier = Modifier.fillMaxWidth(),
                                     label = { Text("Nome Completo") },
+                                    colors = enderecoFieldColors,
                                 )
                                 OutlinedTextField(
                                     value = formatCpf(cadastro.cpf),
@@ -770,6 +1113,7 @@ fun CadastroEditorDialog(
                                     modifier = Modifier.fillMaxWidth(),
                                     label = { Text("CPF") },
                                     enabled = false,
+                                    colors = enderecoFieldColors,
                                 )
                                 OutlinedTextField(
                                     value = dataNascimentoField,
@@ -783,6 +1127,7 @@ fun CadastroEditorDialog(
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     visualTransformation = DateVisualTransformation(),
                                     singleLine = true,
+                                    colors = enderecoFieldColors,
                                 )
                                 SelectionField(
                                     label = "Sexo",
@@ -799,6 +1144,7 @@ fun CadastroEditorDialog(
                                     onValueChange = { nomeMae = it },
                                     modifier = Modifier.fillMaxWidth(),
                                     label = { Text("Nome da Mae") },
+                                    colors = enderecoFieldColors,
                                 )
                                 if (cadastro.empresaExigeMatricula == 1) {
                                     OutlinedTextField(
@@ -806,6 +1152,7 @@ fun CadastroEditorDialog(
                                         onValueChange = { numeroMatricula = it },
                                         modifier = Modifier.fillMaxWidth(),
                                         label = { Text("Matricula") },
+                                        colors = enderecoFieldColors,
                                     )
                                 }
 
@@ -833,6 +1180,7 @@ fun CadastroEditorDialog(
                                         modifier = Modifier.fillMaxWidth(),
                                         label = { Text("Vendedor") },
                                         enabled = false,
+                                        colors = enderecoFieldColors,
                                     )
                                 }
 
@@ -847,6 +1195,98 @@ fun CadastroEditorDialog(
                                         onSelected = { selectedAdesionistaId = it },
                                     )
                                 }
+
+                                Text("Endereco", fontWeight = FontWeight.SemiBold)
+                                OutlinedTextField(
+                                    value = enderecoCep,
+                                    onValueChange = {
+                                        val cepNormalizado = it.filter(Char::isDigit).take(8)
+                                        enderecoCepTouched = true
+                                        enderecoCep = cepNormalizado
+                                        cepLookupError = null
+                                        if (cepNormalizado.length < 8) {
+                                            ultimoCepConsultado = ""
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("CEP") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    colors = enderecoFieldColors,
+                                )
+                                if (cepLookupLoading) {
+                                    Text(
+                                        text = "Consultando CEP no S4E...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                cepLookupError?.let { erroCep ->
+                                    Text(
+                                        text = erroCep,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                }
+                                OutlinedTextField(
+                                    value = enderecoTipoLogradouro,
+                                    onValueChange = { enderecoTipoLogradouro = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("Tipo Logradouro") },
+                                    singleLine = true,
+                                    colors = enderecoFieldColors,
+                                )
+                                OutlinedTextField(
+                                    value = enderecoLogradouro,
+                                    onValueChange = { enderecoLogradouro = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("Logradouro") },
+                                    singleLine = true,
+                                    colors = enderecoFieldColors,
+                                )
+                                OutlinedTextField(
+                                    value = enderecoNumero,
+                                    onValueChange = { enderecoNumero = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("Numero") },
+                                    singleLine = true,
+                                    colors = enderecoFieldColors,
+                                )
+                                OutlinedTextField(
+                                    value = enderecoComplemento,
+                                    onValueChange = { enderecoComplemento = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("Complemento") },
+                                    singleLine = true,
+                                    colors = enderecoFieldColors,
+                                )
+                                OutlinedTextField(
+                                    value = enderecoBairro,
+                                    onValueChange = { enderecoBairro = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("Bairro") },
+                                    singleLine = true,
+                                    colors = enderecoFieldColors,
+                                )
+                                OutlinedTextField(
+                                    value = enderecoCidade,
+                                    onValueChange = { enderecoCidade = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("Cidade") },
+                                    singleLine = true,
+                                    colors = enderecoFieldColors,
+                                )
+                                OutlinedTextField(
+                                    value = enderecoUf,
+                                    onValueChange = {
+                                        enderecoUf = it.uppercase(Locale.ROOT).filter(Char::isLetter).take(2)
+                                        enderecoUfSigla = enderecoUf
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("UF") },
+                                    singleLine = true,
+                                    colors = enderecoFieldColors,
+                                )
 
                             }
                         }
@@ -879,10 +1319,22 @@ fun CadastroEditorDialog(
                                             )
                                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                 TextButton(onClick = { toggleContatoPrincipal(index) }) {
-                                                    Text(if (contato.principal) "Principal" else "Tornar principal")
+                                                    Row(
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.CheckCircle,
+                                                            contentDescription = null,
+                                                        )
+                                                        Text(if (contato.principal) "Principal" else "Tornar principal")
+                                                    }
                                                 }
-                                                TextButton(onClick = { removeContato(index) }) {
-                                                    Text("Remover")
+                                                IconButton(onClick = { removeContato(index) }) {
+                                                    Icon(
+                                                        imageVector = Icons.Rounded.Delete,
+                                                        contentDescription = "Remover",
+                                                    )
                                                 }
                                             }
                                         }
@@ -926,10 +1378,20 @@ fun CadastroEditorDialog(
                                         ContatoPhoneVisualTransformation()
                                     },
                                     singleLine = true,
+                                    colors = enderecoFieldColors,
                                 )
 
                                 Button(onClick = ::addContato, modifier = Modifier.fillMaxWidth()) {
-                                    Text("Adicionar contato")
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Add,
+                                            contentDescription = null,
+                                        )
+                                        Text("Adicionar contato")
+                                    }
                                 }
                             }
                         }
@@ -967,8 +1429,11 @@ fun CadastroEditorDialog(
                                                     fontWeight = FontWeight.SemiBold,
                                                 )
                                                 if (!isTitular) {
-                                                    TextButton(onClick = { removeDependente(index) }) {
-                                                        Text("Remover")
+                                                    IconButton(onClick = { removeDependente(index) }) {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.Delete,
+                                                            contentDescription = "Remover",
+                                                        )
                                                     }
                                                 }
                                             }
@@ -994,6 +1459,7 @@ fun CadastroEditorDialog(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 label = { Text("Nome") },
                                                 enabled = !isTitular,
+                                                colors = enderecoFieldColors,
                                             )
 
                                             OutlinedTextField(
@@ -1010,6 +1476,7 @@ fun CadastroEditorDialog(
                                                 visualTransformation = CadastroDependenteCpfVisualTransformation(),
                                                 singleLine = true,
                                                 enabled = !isTitular,
+                                                colors = enderecoFieldColors,
                                             )
 
                                             OutlinedTextField(
@@ -1026,6 +1493,7 @@ fun CadastroEditorDialog(
                                                 visualTransformation = DateVisualTransformation(),
                                                 singleLine = true,
                                                 enabled = !isTitular,
+                                                colors = enderecoFieldColors,
                                             )
 
                                             SelectionField(
@@ -1070,22 +1538,43 @@ fun CadastroEditorDialog(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 label = { Text("Nome da Mae") },
                                                 enabled = !isTitular,
+                                                colors = enderecoFieldColors,
                                             )
                                         }
                                     }
                                 }
 
                                 Button(onClick = ::addDependente, modifier = Modifier.fillMaxWidth()) {
-                                    Text("Incluir dependente")
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Add,
+                                            contentDescription = null,
+                                        )
+                                        Text("Incluir dependente")
+                                    }
                                 }
                             }
                         }
                     } else {
+                        val titularDependente = dependentes.firstOrNull()
+                        val planoTitularResumo = when {
+                            titularDependente == null -> "Nao informado"
+                            titularDependente.plano <= 0 -> "Nao informado"
+                            else -> planoOptions
+                                .firstOrNull { it.codigo == titularDependente.plano }
+                                ?.label
+                                ?: "Plano ${titularDependente.plano}"
+                        }
+
                         WebCard {
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text("Resumo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                                 Text("Titular: ${nome.ifBlank { "Nao informado" }}")
                                 Text("Empresa: ${cadastro.empresaNome ?: "Nao informada"}")
+                                Text("Plano do titular: $planoTitularResumo")
                                 Text("Dependentes: ${dependentes.size}")
                                 Text("Contatos: ${contatos.size}")
                                 Text("Arquivo obrigatorio: ${if (state.cadastroWorkspace.config?.exigirArquivo == true) "Sim" else "Nao"}")
@@ -1096,24 +1585,48 @@ fun CadastroEditorDialog(
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text("Documento", fontWeight = FontWeight.SemiBold)
                                 if (arquivoNome.isNotBlank()) {
-                                    Text("Arquivo atual: $arquivoNome")
+                                    TextButton(
+                                        onClick = { scope.launch { openArquivoPreview() } },
+                                        enabled = arquivoPath.isNotBlank() && !previewingArquivo,
+                                    ) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Description,
+                                                contentDescription = null,
+                                            )
+                                            Text(
+                                                text = if (previewingArquivo) "Abrindo arquivo..." else "Arquivo atual: $arquivoNome",
+                                            )
+                                        }
+                                    }
                                 }
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Button(
                                         onClick = {
-                                            suppressBackgroundPersist = true
-                                            filePicker.launch("*/*")
+                                            showArquivoSourceModal = true
                                         },
                                         enabled = !uploading,
                                     ) {
                                         if (uploading) {
                                             CircularProgressIndicator(strokeWidth = 2.dp)
                                         } else {
-                                            Text(if (arquivoNome.isBlank()) "Selecionar Arquivo" else "Trocar Arquivo")
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Description,
+                                                    contentDescription = null,
+                                                )
+                                                Text(if (arquivoNome.isBlank()) "Selecionar Arquivo" else "Trocar Arquivo")
+                                            }
                                         }
                                     }
                                     if (arquivoPath.isNotBlank()) {
-                                        TextButton(
+                                        IconButton(
                                             onClick = {
                                                 scope.launch {
                                                     runCatching { viewModel.deleteTempFile(arquivoPath) }
@@ -1126,7 +1639,10 @@ fun CadastroEditorDialog(
                                                 }
                                             },
                                         ) {
-                                            Text("Remover")
+                                            Icon(
+                                                imageVector = Icons.Rounded.Delete,
+                                                contentDescription = "Remover",
+                                            )
                                         }
                                     }
                                 }
@@ -1156,11 +1672,17 @@ fun CadastroEditorDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .navigationBarsPadding(),
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                        .navigationBarsPadding()
+                        .padding(bottom = footerSafeBottomPadding),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (state.profile?.role in setOf("ADMINISTRADOR", "ADMIN") && currentStep == 1) {
+                    if (
+                        state.profile?.role in setOf("ADMINISTRADOR", "ADMIN", "VENDEDOR") &&
+                        currentStep == 1 &&
+                        isPendingCadastroStatus(cadastro.status)
+                    ) {
                         TextButton(
                             onClick = {
                                 viewModel.resolveCadastroOverlay(
@@ -1171,14 +1693,32 @@ fun CadastroEditorDialog(
                                 )
                             },
                         ) {
-                            Text("Excluir")
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Delete,
+                                    contentDescription = null,
+                                )
+                                Text("Excluir")
+                            }
                         }
                     }
 
                     TextButton(
                         onClick = { requestCloseEditor() },
                     ) {
-                        Text("Cancelar")
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = null,
+                            )
+                            Text("Cancelar")
+                        }
                     }
 
                     if (currentStep == 1) {
@@ -1199,14 +1739,26 @@ fun CadastroEditorDialog(
                                     runCatching { viewModel.updateCadastroRecord(cadastro.id, payload) }
                                         .onSuccess { localMessage = "Cadastro salvo com sucesso." }
                                         .onFailure { throwable ->
-                                            localMessage = throwable.message ?: "Falha ao salvar cadastro."
+                                            localMessage = CadastroApiErrorMapper.mapUserMessage(
+                                                throwable.message,
+                                                "Falha ao salvar cadastro.",
+                                            )
                                         }
                                     saving = false
                                 }
                             },
                             enabled = !saving && !uploading && !state.sendingCadastro,
                         ) {
-                            Text("Salvar")
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.CheckCircle,
+                                    contentDescription = null,
+                                )
+                                Text("Salvar")
+                            }
                         }
 
                         Button(
@@ -1222,57 +1774,148 @@ fun CadastroEditorDialog(
                                     runCatching { viewModel.updateCadastroRecord(cadastro.id, payload) }
                                         .onSuccess { currentStep = 2 }
                                         .onFailure { throwable ->
-                                            localMessage = throwable.message ?: "Falha ao salvar antes de avançar."
+                                            localMessage = CadastroApiErrorMapper.mapUserMessage(
+                                                throwable.message,
+                                                "Falha ao salvar antes de avancar.",
+                                            )
                                         }
                                     saving = false
                                 }
                             },
                             enabled = !saving && !uploading && !state.sendingCadastro,
                         ) {
-                            Text("Seguinte")
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                contentDescription = "Seguinte",
+                            )
                         }
                     } else {
                         TextButton(
                             onClick = { currentStep = 1 },
                             enabled = !saving && !uploading && !state.sendingCadastro,
                         ) {
-                            Text("Voltar")
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                    contentDescription = null,
+                                )
+                                Text("Voltar")
+                            }
                         }
 
                         Button(
                             onClick = {
                                 scope.launch {
-                                    if (uploading) {
-                                        localMessage = "Aguarde o upload do arquivo finalizar antes de cadastrar."
-                                        return@launch
-                                    }
-                                    val validation = validateStepOne()
-                                    if (validation != null) {
-                                        localMessage = validation
-                                        currentStep = 1
-                                        return@launch
-                                    }
-
-                                    val payload = buildPayload(requireStatus = false) ?: return@launch
-                                    saving = true
-                                    runCatching {
-                                        viewModel.updateCadastroRecord(cadastro.id, payload)
-                                    }.onSuccess { updated ->
-                                        viewModel.sendSelectedCadastro(updated, payload)
-                                    }.onFailure { throwable ->
-                                        localMessage = throwable.message ?: "Falha ao preparar envio."
-                                    }
-                                    saving = false
+                                    submitCadastro()
                                 }
                             },
                             enabled = !saving && !uploading && !state.sendingCadastro,
                         ) {
-                            Text(if (state.sendingCadastro) "Enviando..." else "Cadastrar")
+                            if (state.sendingCadastro) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.CheckCircle,
+                                        contentDescription = null,
+                                    )
+                                    Text("Cadastrar")
+                                }
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    if (showArquivoSourceModal) {
+        AlertDialog(
+            onDismissRequest = {
+                showArquivoSourceModal = false
+                suppressBackgroundPersist = false
+            },
+            title = { Text("Anexar arquivo") },
+            text = { Text("Escolha a origem do arquivo.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showArquivoSourceModal = false
+                        suppressBackgroundPersist = true
+                        filePicker.launch("*/*")
+                    },
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Description,
+                            contentDescription = null,
+                        )
+                        Text("Documentos")
+                    }
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TextButton(
+                        onClick = {
+                            showArquivoSourceModal = false
+                            runCatching {
+                                val (uri, path) = createCameraCaptureUri(context)
+                                cameraCapturePath = path
+                                suppressBackgroundPersist = true
+                                cameraLauncher.launch(uri)
+                            }.onFailure { throwable ->
+                                suppressBackgroundPersist = false
+                                localMessage = CadastroApiErrorMapper.mapUserMessage(
+                                    throwable.message,
+                                    "Nao foi possivel iniciar a camera.",
+                                )
+                            }
+                        },
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Add,
+                                contentDescription = null,
+                            )
+                            Text("Camera")
+                        }
+                    }
+                    TextButton(
+                        onClick = {
+                            showArquivoSourceModal = false
+                            suppressBackgroundPersist = false
+                        },
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = null,
+                            )
+                            Text("Cancelar")
+                        }
+                    }
+                }
+            },
+        )
     }
 
     if (showSelectStatusOnClose) {
@@ -1294,7 +1937,7 @@ fun CadastroEditorDialog(
                 TextButton(
                     onClick = {
                         scope.launch {
-                            val payload = buildPayload(requireStatus = state.statusAdesoes.isNotEmpty()) ?: return@launch
+                            val payload = buildPayload(requireStatus = true) ?: return@launch
                             saving = true
                             runCatching { viewModel.updateCadastroRecord(cadastro.id, payload) }
                                 .onSuccess {
@@ -1302,23 +1945,45 @@ fun CadastroEditorDialog(
                                     onDismiss()
                                 }
                                 .onFailure { throwable ->
-                                    localMessage = throwable.message ?: "Falha ao salvar status antes de fechar."
+                                    localMessage = CadastroApiErrorMapper.mapUserMessage(
+                                        throwable.message,
+                                        "Falha ao salvar status antes de fechar.",
+                                    )
                                 }
                             saving = false
                         }
                     },
                     enabled = !saving,
                 ) {
-                    Text("Salvar e fechar")
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.CheckCircle,
+                            contentDescription = null,
+                        )
+                        Text("Salvar e fechar")
+                    }
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showSelectStatusOnClose = false }, enabled = !saving) {
-                    Text("Continuar editando")
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = null,
+                        )
+                        Text("Continuar editando")
+                    }
                 }
             },
         )
     }
+
 }
 
 private fun textFieldValueSaver(): Saver<TextFieldValue, Any> {
@@ -1383,21 +2048,99 @@ private fun validateCpf(cpf: String): Boolean {
     return remainder == cpf[10].digitToInt()
 }
 
+private fun decodeEmbeddedJsonElement(value: JsonElement?): JsonElement? {
+    val current = value ?: return null
+    if (current is JsonNull) return null
+    if (current !is kotlinx.serialization.json.JsonPrimitive) return current
+    val raw = current.contentOrNull?.trim().orEmpty()
+    if (raw.isBlank()) return null
+    if (!raw.startsWith("{") && !raw.startsWith("[")) return current
+    return runCatching { cadastroEditorJsonParser.parseToJsonElement(raw) }.getOrNull() ?: current
+}
+
+private fun JsonElement?.asJsonObjectFlexible(): JsonObject? {
+    val normalized = decodeEmbeddedJsonElement(this)
+    return when (normalized) {
+        is JsonObject -> normalized
+        else -> runCatching { normalized?.jsonObject }.getOrNull()
+    }
+}
+
+private fun JsonElement?.asJsonArrayFlexible(): JsonArray? {
+    val normalized = decodeEmbeddedJsonElement(this)
+    return when (normalized) {
+        is JsonArray -> normalized
+        else -> runCatching { normalized?.jsonArray }.getOrNull()
+    }
+}
+
+private fun JsonObject.jsonObjectFlexible(vararg keys: String): JsonObject? {
+    keys.forEach { key ->
+        this[key].asJsonObjectFlexible()?.let { return it }
+    }
+    return null
+}
+
+private fun JsonObject.jsonArrayFlexible(vararg keys: String): JsonArray? {
+    keys.forEach { key ->
+        this[key].asJsonArrayFlexible()?.let { return it }
+    }
+    return null
+}
+
+private fun JsonObject.hasEnderecoHints(): Boolean {
+    return containsKey("cep") ||
+        containsKey("CEP") ||
+        containsKey("logradouro") ||
+        containsKey("Logradouro") ||
+        containsKey("bairro") ||
+        containsKey("Bairro") ||
+        containsKey("cidade") ||
+        containsKey("Cidade") ||
+        containsKey("municipio") ||
+        containsKey("Municipio") ||
+        containsKey("uf") ||
+        containsKey("Uf") ||
+        containsKey("ufSigla") ||
+        containsKey("UfSigla")
+}
+
+private fun resolveEnderecoObject(value: JsonElement?): JsonObject? {
+    val root = value.asJsonObjectFlexible() ?: return null
+    val data = root.jsonObjectFlexible("data", "Data")
+    val dados = root.jsonObjectFlexible("dados", "Dados")
+    val responsavel = root.jsonObjectFlexible("responsavelFinanceiro", "responsavel_financeiro", "ResponsavelFinanceiro")
+    val nestedResponsavel = data?.jsonObjectFlexible("responsavelFinanceiro", "responsavel_financeiro", "ResponsavelFinanceiro")
+    val candidates = listOfNotNull(
+        root,
+        root.jsonObjectFlexible("endereco", "Endereco"),
+        data,
+        data?.jsonObjectFlexible("endereco", "Endereco"),
+        dados,
+        dados?.jsonObjectFlexible("endereco", "Endereco"),
+        responsavel,
+        responsavel?.jsonObjectFlexible("endereco", "Endereco"),
+        nestedResponsavel,
+        nestedResponsavel?.jsonObjectFlexible("endereco", "Endereco"),
+    )
+    return candidates.firstOrNull { it.hasEnderecoHints() } ?: candidates.firstOrNull()
+}
+
 private fun parseContatos(cadastro: CadastroDetalhe): List<ContatoFormState> {
-    val contatosElement = cadastro.contatos ?: return emptyList()
+    val contatosElement = decodeEmbeddedJsonElement(cadastro.contatos) ?: return emptyList()
     val contatosArray = when (contatosElement) {
         is JsonArray -> contatosElement
         is JsonObject -> {
-            contatosElement["contatos"]?.let { runCatching { it.jsonArray }.getOrNull() }
-                ?: contatosElement["telefones"]?.let { runCatching { it.jsonArray }.getOrNull() }
-                ?: contatosElement["items"]?.let { runCatching { it.jsonArray }.getOrNull() }
+            contatosElement.jsonArrayFlexible("contatos", "telefones", "items")
+                ?: contatosElement.jsonObjectFlexible("data", "dados")
+                    ?.jsonArrayFlexible("contatos", "telefones", "items")
         }
 
-        else -> runCatching { contatosElement.jsonArray }.getOrNull()
+        else -> contatosElement.asJsonArrayFlexible()
     } ?: return emptyList()
 
     return contatosArray.mapNotNull { item ->
-        val obj = runCatching { item.jsonObject }.getOrNull() ?: return@mapNotNull null
+        val obj = item.asJsonObjectFlexible() ?: return@mapNotNull null
         val tipoRaw = obj.jsonString("tipo", "tipoContato", "tipo_contato", "kind")
             ?.lowercase(Locale.ROOT)
             ?.trim()
@@ -1428,9 +2171,18 @@ private fun parseContatos(cadastro: CadastroDetalhe): List<ContatoFormState> {
 }
 
 private fun parseDependentes(cadastro: CadastroDetalhe): List<CadastroDependenteFormState> {
-    val dependentesArray = cadastro.dependentes?.jsonArray ?: return emptyList()
+    val dependentesRaw = decodeEmbeddedJsonElement(cadastro.dependentes) ?: return emptyList()
+    val dependentesArray = when (dependentesRaw) {
+        is JsonArray -> dependentesRaw
+        is JsonObject -> {
+            dependentesRaw.jsonArrayFlexible("dependentes", "items")
+                ?: dependentesRaw.jsonObjectFlexible("dados", "data")
+                    ?.jsonArrayFlexible("dependentes", "items")
+        }
+        else -> dependentesRaw.asJsonArrayFlexible()
+    } ?: return emptyList()
     return dependentesArray.mapIndexedNotNull { index, element ->
-        val obj = runCatching { element.jsonObject }.getOrNull() ?: return@mapIndexedNotNull null
+        val obj = element.asJsonObjectFlexible() ?: return@mapIndexedNotNull null
         val nome = obj["nome"]?.jsonPrimitive?.contentOrNull
             ?.trim()
             ?.takeIf { it.isNotBlank() }
@@ -1551,6 +2303,51 @@ private fun extractPlanosFromCadastro(
     }
 }
 
+private fun parseCadastroEndereco(value: JsonElement?): CadastroEnderecoFormState {
+    val obj = resolveEnderecoObject(value) ?: return CadastroEnderecoFormState()
+    val municipioObj = obj.jsonObjectFlexible("municipio", "Municipio", "cidadeObj", "Cidade")
+    val bairroObj = obj.jsonObjectFlexible("bairro", "Bairro")
+    val tipoLogradouroObj = obj.jsonObjectFlexible("tipoLogradouro", "TipoLogradouro")
+    val ufObj = obj.jsonObjectFlexible("uf", "Uf", "estado", "Estado")
+    val cep = obj.jsonString("cep", "CEP", "codigoPostal", "postalCode")
+        ?: obj.jsonString("enderecoCep", "cepResponsavel")
+    val tipoLogradouro = obj.jsonString("tipoLogradouro", "tipo_logradouro", "TipoLogradouro")
+        ?: tipoLogradouroObj?.jsonString("nome", "descricao", "tipo")
+    val logradouro = obj.jsonString("logradouro", "Logradouro", "endereco", "Endereco")
+    val bairro = obj.jsonString("bairro", "Bairro")
+        ?: bairroObj?.jsonString("nome", "descricao")
+    val cidade = obj.jsonString("cidade", "Cidade", "municipio", "Municipio")
+        ?: municipioObj?.jsonString("nome", "descricao", "municipio", "cidade")
+    val uf = obj.jsonString("uf", "Uf", "descricaoUf", "ufSigla", "UfSigla", "estado", "Estado")
+        ?: ufObj?.jsonString("sigla", "uf", "descricao", "nome")
+        ?: municipioObj?.jsonString("uf", "Uf", "ufSigla", "UfSigla")
+    val idTipoLogradouro = obj.jsonIntFlexible("idTipoLogradouro", "IdTipoLogradouro")
+        ?: tipoLogradouroObj?.jsonIntFlexible("id", "Id", "codigo")
+    val idBairro = obj.jsonIntFlexible("idBairro", "IdBairro")
+        ?: bairroObj?.jsonIntFlexible("id", "Id", "codigo")
+    val idMunicipio = obj.jsonIntFlexible("idMunicipio", "IdMunicipio")
+        ?: municipioObj?.jsonIntFlexible("id", "Id", "codigo", "codigoMunicipio")
+    val idUf = obj.jsonIntFlexible("idUf", "IdUf")
+        ?: ufObj?.jsonIntFlexible("id", "Id", "codigo", "codigoUf")
+    val ufSigla = obj.jsonString("ufSigla", "UfSigla", "descricaoUf")
+        ?: ufObj?.jsonString("sigla", "uf")
+    return CadastroEnderecoFormState(
+        cep = cep?.filter(Char::isDigit).orEmpty().take(8),
+        tipoLogradouro = tipoLogradouro.orEmpty(),
+        logradouro = logradouro.orEmpty(),
+        numero = obj.jsonString("numero", "Numero", "numeroLogradouro").orEmpty(),
+        complemento = obj.jsonString("complemento", "Complemento").orEmpty(),
+        bairro = bairro.orEmpty(),
+        cidade = cidade.orEmpty(),
+        uf = uf.orEmpty().uppercase(Locale.ROOT).take(2),
+        idTipoLogradouro = idTipoLogradouro,
+        idBairro = idBairro,
+        idMunicipio = idMunicipio,
+        idUf = idUf,
+        ufSigla = ufSigla?.uppercase(Locale.ROOT),
+    )
+}
+
 private fun CadastroPlanoOption.valorFor(isTitular: Boolean): Double? {
     return if (isTitular) valorTitular else valorDependente
 }
@@ -1567,6 +2364,15 @@ private fun JsonObject.jsonInt(vararg keys: String): Int? {
     keys.forEach { key ->
         val value = this[key]?.jsonPrimitive?.intOrNull
         if (value != null) return value
+    }
+    return null
+}
+
+private fun JsonObject.jsonIntFlexible(vararg keys: String): Int? {
+    keys.forEach { key ->
+        val primitive = this[key]?.jsonPrimitive ?: return@forEach
+        primitive.intOrNull?.let { return it }
+        primitive.contentOrNull?.toIntOrNull()?.let { return it }
     }
     return null
 }
@@ -1686,12 +2492,22 @@ private fun resolveCadastroMessageTone(message: String): CadastroMessageTone {
     }
 }
 
+@Composable
 private fun messageToneColors(tone: CadastroMessageTone): Pair<androidx.compose.ui.graphics.Color, androidx.compose.ui.graphics.Color> {
+    val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
     return when (tone) {
-        CadastroMessageTone.SUCCESS -> EmeraldSoft to EmeraldDark
-        CadastroMessageTone.WARNING -> Amber100 to Amber500
-        CadastroMessageTone.ALERT -> BrandOrange.copy(alpha = 0.18f) to BrandOrange
-        CadastroMessageTone.ERROR -> Red100 to Red500
+        CadastroMessageTone.SUCCESS ->
+            if (darkTheme) MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+            else EmeraldSoft to EmeraldDark
+        CadastroMessageTone.WARNING ->
+            if (darkTheme) androidx.compose.ui.graphics.Color(0xFF4A3A1E) to androidx.compose.ui.graphics.Color(0xFFFFDE9E)
+            else Amber100 to Amber500
+        CadastroMessageTone.ALERT ->
+            if (darkTheme) androidx.compose.ui.graphics.Color(0xFF4B2F1F) to androidx.compose.ui.graphics.Color(0xFFFFC39A)
+            else BrandOrange.copy(alpha = 0.18f) to BrandOrange
+        CadastroMessageTone.ERROR ->
+            if (darkTheme) MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+            else Red100 to Red500
     }
 }
 
@@ -1801,6 +2617,17 @@ private fun validateUpload(fileName: String, mimeType: String, size: Long) {
     if (size > MAX_UPLOAD_BYTES) throw IllegalStateException("Arquivo excede 10MB.")
 }
 
+private fun createCameraCaptureUri(context: Context): Pair<Uri, String> {
+    val directory = File(context.cacheDir, "camera_uploads").apply { mkdirs() }
+    val file = File.createTempFile("cadastro_", ".jpg", directory)
+    val uri = FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        file,
+    )
+    return uri to file.absolutePath
+}
+
 private fun resolveFileName(context: Context, uri: Uri): String {
     context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
         val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
@@ -1809,6 +2636,29 @@ private fun resolveFileName(context: Context, uri: Uri): String {
         }
     }
     return uri.lastPathSegment ?: "arquivo"
+}
+
+private fun writePreviewFile(
+    context: Context,
+    fileName: String,
+    bytes: ByteArray,
+): Uri {
+    val directory = File(context.cacheDir, "shared_qrcodes").apply { mkdirs() }
+    val safeName = fileName
+        .ifBlank { "arquivo" }
+        .replace(Regex("[^a-zA-Z0-9._-]"), "_")
+    val file = File(directory, "preview_${System.currentTimeMillis()}_$safeName")
+    file.writeBytes(bytes)
+    return FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        file,
+    )
+}
+
+private fun resolvePreviewMimeType(fileName: String): String {
+    val extension = fileName.substringAfterLast('.', "").lowercase(Locale.ROOT)
+    return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "*/*"
 }
 
 

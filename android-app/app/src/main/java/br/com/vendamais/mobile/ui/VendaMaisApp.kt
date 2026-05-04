@@ -2,34 +2,45 @@ package br.com.vendamais.mobile.ui
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Dashboard
-import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material.icons.outlined.Groups
-import androidx.compose.material.icons.outlined.Logout
-import androidx.compose.material.icons.outlined.Menu
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Workspaces
+import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.material.icons.rounded.Dashboard
+import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,29 +54,33 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.AppConfig
-import br.com.vendamais.mobile.ui.components.VendaBrandIcon
+import br.com.vendamais.mobile.domain.cadastro.isPendingCadastroStatus
 import br.com.vendamais.mobile.ui.components.ScreenBackground
+import br.com.vendamais.mobile.ui.components.VendaBrandIcon
+import br.com.vendamais.mobile.ui.screens.AdesoesExcluidasScreen
+import br.com.vendamais.mobile.ui.screens.AuditoriaLemmitScreen
 import br.com.vendamais.mobile.ui.screens.CadastroDetailDialog
 import br.com.vendamais.mobile.ui.screens.CadastroEditorDialog
 import br.com.vendamais.mobile.ui.screens.CadastroOverlayDialogs
 import br.com.vendamais.mobile.ui.screens.CadastrosScreen
 import br.com.vendamais.mobile.ui.screens.DashboardScreen
+import br.com.vendamais.mobile.ui.screens.FilaUploadErpScreen
 import br.com.vendamais.mobile.ui.screens.InclusaoDependenteDialog
 import br.com.vendamais.mobile.ui.screens.LoginScreen
 import br.com.vendamais.mobile.ui.screens.ProfileScreen
+import br.com.vendamais.mobile.ui.screens.PublicAdesaoTokenScreen
 import br.com.vendamais.mobile.ui.screens.SettingsScreen
 import br.com.vendamais.mobile.ui.screens.TeamsScreen
 import br.com.vendamais.mobile.ui.screens.UsersScreen
-import br.com.vendamais.mobile.ui.screens.AuditoriaLemmitScreen
-import br.com.vendamais.mobile.ui.screens.FilaUploadErpScreen
-import br.com.vendamais.mobile.ui.screens.AdesoesExcluidasScreen
-import br.com.vendamais.mobile.ui.screens.PublicAdesaoTokenScreen
 import br.com.vendamais.mobile.ui.theme.Amber100
 import br.com.vendamais.mobile.ui.theme.Amber500
 import br.com.vendamais.mobile.ui.theme.BrandOrange
@@ -74,11 +89,31 @@ import br.com.vendamais.mobile.ui.theme.EmeraldDark
 import br.com.vendamais.mobile.ui.theme.EmeraldSoft
 import br.com.vendamais.mobile.ui.theme.Red100
 import br.com.vendamais.mobile.ui.theme.Red500
-import br.com.vendamais.mobile.ui.theme.Slate100
-import br.com.vendamais.mobile.ui.theme.Slate200
-import br.com.vendamais.mobile.ui.theme.Slate500
-import br.com.vendamais.mobile.ui.theme.White
 import java.util.Locale
+
+private enum class AppNavGroup {
+    INICIO,
+    OPERACAO,
+    PESSOAS,
+    ADMINISTRACAO,
+    CONTA,
+}
+
+private data class AppNavModule(
+    val key: String,
+    val label: String,
+    val icon: ImageVector,
+    val tab: MainTab,
+    val cadastroArea: CadastroAreaTab? = null,
+    val cadastroFiltro: CadastroFiltro? = null,
+)
+
+private data class AppNavGroupItem(
+    val group: AppNavGroup,
+    val label: String,
+    val icon: ImageVector,
+    val modules: List<AppNavModule>,
+)
 
 @Composable
 fun VendaMaisApp(
@@ -87,7 +122,7 @@ fun VendaMaisApp(
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    var isDrawerOpen by rememberSaveable { mutableStateOf(false) }
+    var openGroupSheet by rememberSaveable { mutableStateOf<String?>(null) }
     val openWebApp = remember(context) {
         {
             if (AppConfig.publicAppUrl.isNotBlank()) {
@@ -117,17 +152,40 @@ fun VendaMaisApp(
             state = state,
             onEmailChange = viewModel::updateEmail,
             onPasswordChange = viewModel::updatePassword,
+            rememberConnected = state.rememberConnected,
+            onRememberConnectedChange = viewModel::setRememberConnected,
             onLogin = viewModel::login,
         )
         return
     }
 
+    val navGroups = remember(state.profile?.role) {
+        resolveNavigationGroups(state.profile?.role)
+    }
+    val activeGroup = remember(state.activeTab) { resolveActiveGroup(state.activeTab) }
+
+    LaunchedEffect(navGroups, state.activeTab) {
+        if (navGroups.isEmpty()) return@LaunchedEffect
+        val activeAllowed = navGroups.any { group ->
+            group.modules.any { module -> module.tab == state.activeTab }
+        }
+        if (!activeAllowed) {
+            applyNavigationModule(viewModel, navGroups.first().modules.first())
+        }
+    }
+
     ScreenBackground {
-        Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            AppHeaderBar(
+                profileName = state.profile?.name.orEmpty(),
+                profileRole = state.profile?.role.orEmpty(),
+            )
+
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = 92.dp),
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)),
             ) {
                 when (state.activeTab) {
                     MainTab.DASHBOARD -> DashboardScreen(
@@ -135,6 +193,7 @@ fun VendaMaisApp(
                         onOpenDrilldown = viewModel::openDashboardDrilldown,
                         onCloseDrilldown = viewModel::closeDashboardDrilldown,
                     )
+
                     MainTab.CADASTROS -> CadastrosScreen(
                         state = state,
                         viewModel = viewModel,
@@ -160,33 +219,42 @@ fun VendaMaisApp(
                         onDeleteLink = viewModel::deleteCadastroLink,
                         onOpenWebApp = if (AppConfig.publicAppUrl.isBlank()) null else openWebApp,
                     )
+
                     MainTab.USERS -> UsersScreen(
                         state = state,
                         viewModel = viewModel,
                     )
+
                     MainTab.TEAMS -> TeamsScreen(
                         state = state,
                         viewModel = viewModel,
                     )
+
                     MainTab.SETTINGS -> SettingsScreen(
                         state = state,
                         viewModel = viewModel,
                     )
+
                     MainTab.AUDITORIA_LEMMIT -> AuditoriaLemmitScreen(
                         state = state,
                         viewModel = viewModel,
                     )
+
                     MainTab.FILA_UPLOAD_ERP -> FilaUploadErpScreen(
                         state = state,
                         viewModel = viewModel,
                     )
+
                     MainTab.ADESOES_EXCLUIDAS -> AdesoesExcluidasScreen(
                         state = state,
                         viewModel = viewModel,
                     )
+
                     MainTab.PERFIL -> ProfileScreen(
                         state = state,
                         onLogout = viewModel::logout,
+                        onRefresh = viewModel::refresh,
+                        onToggleDarkMode = viewModel::setDarkModeEnabled,
                     )
                 }
 
@@ -195,217 +263,31 @@ fun VendaMaisApp(
                 }
             }
 
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .align(Alignment.TopCenter),
-                shadowElevation = 2.dp,
-                color = White,
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TopBarActionButton(onClick = { isDrawerOpen = true }) {
-                        Icon(Icons.Outlined.Menu, contentDescription = "Abrir menu")
+            MagicBottomNavigationBar(
+                groups = navGroups,
+                activeGroup = activeGroup,
+                onGroupTap = { group ->
+                    if (group.modules.size > 1) {
+                        openGroupSheet = group.group.name
+                    } else {
+                        applyNavigationModule(viewModel, group.modules.first())
                     }
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        VendaBrandIcon(
-                            modifier = Modifier.size(30.dp),
-                            showPlusBubble = false,
-                        )
-                        Text(
-                            text = "Venda+",
-                            style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-
-                    TopBarActionButton(onClick = viewModel::logout) {
-                        Icon(Icons.Outlined.Logout, contentDescription = "Sair")
-                    }
-                }
-            }
-
-            if (isDrawerOpen) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.24f))
-                        .clickable { isDrawerOpen = false },
-                )
-
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth(0.9f)
-                        .fillMaxSize()
-                        .statusBarsPadding(),
-                    color = White,
-                    shadowElevation = 10.dp,
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(top = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            TopBarActionButton(onClick = { isDrawerOpen = false }) {
-                                Icon(Icons.Outlined.Close, contentDescription = "Fechar menu")
-                            }
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                VendaBrandIcon(
-                                    modifier = Modifier.size(30.dp),
-                                    showPlusBubble = false,
-                                )
-                                Text(
-                                    text = "Venda+",
-                                    style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                            TopBarActionButton(
-                                onClick = {
-                                    isDrawerOpen = false
-                                    viewModel.logout()
-                                },
-                            ) {
-                                Icon(Icons.Outlined.Logout, contentDescription = "Sair")
-                            }
-                        }
-
-                        HorizontalDivider(color = Slate200)
-
-                        Column(
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
-                            verticalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
-                            Text(
-                                text = state.profile?.name.orEmpty(),
-                                style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Text(
-                                text = state.profile?.role.orEmpty(),
-                                color = Slate500,
-                                style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
-                            )
-                        }
-
-                        DrawerMenuItem(
-                            label = "Dashboard",
-                            selected = state.activeTab == MainTab.DASHBOARD,
-                            icon = { Icon(Icons.Outlined.Dashboard, contentDescription = null) },
-                            onClick = {
-                                viewModel.selectTab(MainTab.DASHBOARD)
-                                isDrawerOpen = false
-                            },
-                        )
-                        DrawerMenuItem(
-                            label = "Usuários",
-                            selected = state.activeTab == MainTab.USERS,
-                            icon = { Icon(Icons.Outlined.Groups, contentDescription = null) },
-                            onClick = {
-                                viewModel.selectTab(MainTab.USERS)
-                                isDrawerOpen = false
-                            },
-                        )
-                        DrawerMenuItem(
-                            label = "Equipes",
-                            selected = state.activeTab == MainTab.TEAMS,
-                            icon = { Icon(Icons.Outlined.Workspaces, contentDescription = null) },
-                            onClick = {
-                                viewModel.selectTab(MainTab.TEAMS)
-                                isDrawerOpen = false
-                            },
-                        )
-                        DrawerMenuItem(
-                            label = "Cadastro",
-                            selected = state.activeTab == MainTab.CADASTROS,
-                            icon = { Icon(Icons.Outlined.Description, contentDescription = null) },
-                            onClick = {
-                                viewModel.selectTab(MainTab.CADASTROS)
-                                isDrawerOpen = false
-                            },
-                        )
-                        DrawerMenuItem(
-                            label = "Meu Perfil",
-                            selected = state.activeTab == MainTab.PERFIL,
-                            icon = { Icon(Icons.Outlined.AccountCircle, contentDescription = null) },
-                            onClick = {
-                                viewModel.selectTab(MainTab.PERFIL)
-                                isDrawerOpen = false
-                            },
-                        )
-                        DrawerMenuItem(
-                            label = "Configurações",
-                            selected = state.activeTab == MainTab.SETTINGS,
-                            icon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
-                            onClick = {
-                                viewModel.selectTab(MainTab.SETTINGS)
-                                isDrawerOpen = false
-                            },
-                        )
-                        if (state.profile?.role in setOf("ADMINISTRADOR", "ADMIN")) {
-                            DrawerMenuItem(
-                                label = "Auditoria Lemmit",
-                                selected = state.activeTab == MainTab.AUDITORIA_LEMMIT,
-                                icon = { Icon(Icons.Outlined.Description, contentDescription = null) },
-                                onClick = {
-                                    viewModel.selectTab(MainTab.AUDITORIA_LEMMIT)
-                                    isDrawerOpen = false
-                                },
-                            )
-                            DrawerMenuItem(
-                                label = "Fila Upload ERP",
-                                selected = state.activeTab == MainTab.FILA_UPLOAD_ERP,
-                                icon = { Icon(Icons.Outlined.Refresh, contentDescription = null) },
-                                onClick = {
-                                    viewModel.selectTab(MainTab.FILA_UPLOAD_ERP)
-                                    isDrawerOpen = false
-                                },
-                            )
-                            DrawerMenuItem(
-                                label = "Adesoes Excluidas",
-                                selected = state.activeTab == MainTab.ADESOES_EXCLUIDAS,
-                                icon = { Icon(Icons.Outlined.Description, contentDescription = null) },
-                                onClick = {
-                                    viewModel.selectTab(MainTab.ADESOES_EXCLUIDAS)
-                                    isDrawerOpen = false
-                                },
-                            )
-                        }
-
-                        DrawerMenuItem(
-                            label = "Atualizar dados",
-                            selected = false,
-                            icon = { Icon(Icons.Outlined.Refresh, contentDescription = null) },
-                            onClick = {
-                                viewModel.refresh()
-                                isDrawerOpen = false
-                            },
-                        )
-                    }
-                }
-            }
+                },
+            )
         }
+    }
+
+    val sheetGroup = navGroups.firstOrNull { it.group.name == openGroupSheet }
+    if (sheetGroup != null) {
+        NavigationGroupSheet(
+            group = sheetGroup,
+            state = state,
+            onDismiss = { openGroupSheet = null },
+            onSelect = { module ->
+                applyNavigationModule(viewModel, module)
+                openGroupSheet = null
+            },
+        )
     }
 
     state.errorMessage?.let { message ->
@@ -414,7 +296,7 @@ fun VendaMaisApp(
         val title = when (severity) {
             GlobalMessageSeverity.SUCCESS -> "Sucesso"
             GlobalMessageSeverity.WARNING -> "Aviso"
-            GlobalMessageSeverity.ALERT -> "Atenção"
+            GlobalMessageSeverity.ALERT -> "Atencao"
             GlobalMessageSeverity.ERROR -> "Erro"
         }
         val titleColor = when (severity) {
@@ -448,11 +330,12 @@ fun VendaMaisApp(
 
     state.noticeMessage?.let { message ->
         val severity = resolveGlobalMessageSeverity(message)
+        val dismissNotice: () -> Unit = viewModel::clearNotice
         val (container, textColor) = globalMessageSeverityColors(severity)
         val title = when (severity) {
             GlobalMessageSeverity.SUCCESS -> "Sucesso"
             GlobalMessageSeverity.WARNING -> "Aviso"
-            GlobalMessageSeverity.ALERT -> "Atenção"
+            GlobalMessageSeverity.ALERT -> "Atencao"
             GlobalMessageSeverity.ERROR -> "Erro"
         }
         val titleColor = when (severity) {
@@ -461,7 +344,7 @@ fun VendaMaisApp(
             else -> BrandOrange
         }
         AlertDialog(
-            onDismissRequest = viewModel::clearNotice,
+            onDismissRequest = dismissNotice,
             title = { Text(title, color = titleColor) },
             text = {
                 Surface(
@@ -477,7 +360,7 @@ fun VendaMaisApp(
                 }
             },
             confirmButton = {
-                TextButton(onClick = viewModel::clearNotice) {
+                TextButton(onClick = dismissNotice) {
                     Text("OK")
                 }
             },
@@ -486,24 +369,53 @@ fun VendaMaisApp(
 
     state.pendingCadastroPrompt?.let { prompt ->
         AlertDialog(
-            onDismissRequest = viewModel::dismissPendingCadastroPrompt,
+            onDismissRequest = {
+                if (!state.pendingCadastroActionLoading) {
+                    viewModel.dismissPendingCadastroPrompt()
+                }
+            },
             title = { Text("Cadastro pendente encontrado") },
             text = {
-                Text(
-                    buildString {
-                        append("Ja existe um cadastro para este CPF")
-                        prompt.empresaNome?.takeIf { it.isNotBlank() }?.let { append(" em $it") }
-                        append(". Deseja continuar o rascunho existente?")
-                    },
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        buildString {
+                            append("Ja existe um cadastro pendente para este CPF")
+                            prompt.empresaNome?.takeIf { it.isNotBlank() }?.let { append(" em $it") }
+                            append(".")
+                        },
+                    )
+                    Text("Voce pode continuar o rascunho atual ou apagar e recomecar.")
+                    Text("Se apagar e recomecar, o pendente atual sera excluido para evitar conflito.")
+                }
             },
             dismissButton = {
-                TextButton(onClick = viewModel::dismissPendingCadastroPrompt) {
-                    Text("Cancelar")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = viewModel::dismissPendingCadastroPrompt,
+                        enabled = !state.pendingCadastroActionLoading,
+                    ) {
+                        Text("Cancelar")
+                    }
+                    TextButton(
+                        onClick = viewModel::restartPendingCadastro,
+                        enabled = !state.pendingCadastroActionLoading,
+                    ) {
+                        if (state.pendingCadastroActionLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Text("Apagar e recomecar")
+                        }
+                    }
                 }
             },
             confirmButton = {
-                TextButton(onClick = viewModel::continuePendingCadastro) {
+                TextButton(
+                    onClick = viewModel::continuePendingCadastro,
+                    enabled = !state.pendingCadastroActionLoading,
+                ) {
                     Text("Continuar")
                 }
             },
@@ -511,14 +423,14 @@ fun VendaMaisApp(
     }
 
     state.selectedCadastro?.let { cadastro ->
-        if (cadastro.tipoCadastro == "cadastro") {
+        if (cadastro.tipoCadastro == "cadastro" && isPendingCadastroStatus(cadastro.status)) {
             CadastroEditorDialog(
                 state = state,
                 viewModel = viewModel,
                 cadastro = cadastro,
                 onDismiss = viewModel::closeCadastro,
             )
-        } else if (cadastro.tipoCadastro == "inclusao_dependente" && cadastro.status == "incompleto") {
+        } else if (cadastro.tipoCadastro == "inclusao_dependente" && isPendingCadastroStatus(cadastro.status)) {
             InclusaoDependenteDialog(
                 state = state,
                 viewModel = viewModel,
@@ -526,8 +438,11 @@ fun VendaMaisApp(
                 onDismiss = viewModel::closeCadastro,
                 onSuccess = {
                     viewModel.selectTab(MainTab.CADASTROS)
-                    viewModel.selectCadastroAreaTab(CadastroAreaTab.INCOMPLETOS)
-                    viewModel.selectCadastroFiltro(CadastroFiltro.PENDENTES)
+                    viewModel.selectCadastroAreaTab(CadastroAreaTab.DEPENDENTE)
+                },
+                onCompleted = {
+                    viewModel.selectTab(MainTab.CADASTROS)
+                    viewModel.selectCadastroAreaTab(CadastroAreaTab.COMPLETOS)
                 },
             )
         } else {
@@ -548,33 +463,363 @@ fun VendaMaisApp(
 }
 
 @Composable
-private fun DrawerMenuItem(
-    label: String,
-    selected: Boolean,
-    icon: @Composable () -> Unit,
-    onClick: () -> Unit,
+private fun AppHeaderBar(
+    profileName: String,
+    profileRole: String,
 ) {
     Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
-        color = if (selected) EmeraldSoft else Slate100,
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding(),
+        shadowElevation = 2.dp,
+        color = MaterialTheme.colorScheme.surface,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
-                .padding(horizontal = 18.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            icon()
-            Text(
-                text = label,
-                color = if (selected) Emerald else Slate500,
-                fontWeight = FontWeight.Medium,
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                VendaBrandIcon(
+                    modifier = Modifier.size(40.dp),
+                    showPlusBubble = false,
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = "Venda+",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    val subtitle = listOf(profileName, profileRole)
+                        .filter { it.isNotBlank() }
+                        .joinToString(" • ")
+                    if (subtitle.isNotBlank()) {
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+
         }
     }
+}
+
+@Composable
+private fun MagicBottomNavigationBar(
+    groups: List<AppNavGroupItem>,
+    activeGroup: AppNavGroup?,
+    onGroupTap: (AppNavGroupItem) -> Unit,
+) {
+    if (groups.isEmpty()) return
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding(),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        shadowElevation = 10.dp,
+        color = MaterialTheme.colorScheme.surface,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            groups.take(5).forEach { group ->
+                val selected = group.group == activeGroup
+                val indicatorSize by animateDpAsState(
+                    targetValue = if (selected) 46.dp else 28.dp,
+                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+                    label = "nav_indicator_size",
+                )
+                val indicatorOffsetY by animateDpAsState(
+                    targetValue = if (selected) (-4).dp else 0.dp,
+                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+                    label = "nav_indicator_offset",
+                )
+                val indicatorElevation by animateDpAsState(
+                    targetValue = if (selected) 8.dp else 0.dp,
+                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+                    label = "nav_indicator_elevation",
+                )
+                val iconScale by animateFloatAsState(
+                    targetValue = if (selected) 1f else 0.92f,
+                    animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+                    label = "nav_icon_scale",
+                )
+                val labelAlpha by animateFloatAsState(
+                    targetValue = if (selected) 1f else 0.78f,
+                    animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                    label = "nav_label_alpha",
+                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onGroupTap(group) }
+                        .padding(vertical = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .offset(y = indicatorOffsetY)
+                            .size(indicatorSize),
+                        shape = CircleShape,
+                        color = if (selected) Emerald else MaterialTheme.colorScheme.surfaceVariant,
+                        shadowElevation = indicatorElevation,
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = group.icon,
+                                contentDescription = group.label,
+                                tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .size(if (selected) 22.dp else 20.dp)
+                                    .graphicsLayer(
+                                        scaleX = iconScale,
+                                        scaleY = iconScale,
+                                    ),
+                            )
+                        }
+                    }
+                    Text(
+                        text = group.label,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (selected) Emerald else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.graphicsLayer(alpha = labelAlpha),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NavigationGroupSheet(
+    group: AppNavGroupItem,
+    state: AppUiState,
+    onDismiss: () -> Unit,
+    onSelect: (AppNavModule) -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = group.label,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            group.modules.forEachIndexed { index, module ->
+                val selected = isNavigationModuleActive(state, module)
+                Surface(
+                    onClick = { onSelect(module) },
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (selected) EmeraldSoft else MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = if (selected) Emerald.copy(alpha = 0.35f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
+                    ),
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Surface(
+                                    modifier = Modifier.size(30.dp),
+                                    shape = CircleShape,
+                                    color = if (selected) Emerald else MaterialTheme.colorScheme.surfaceVariant,
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = module.icon,
+                                            contentDescription = module.label,
+                                            tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(17.dp),
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = module.label,
+                                    color = if (selected) Emerald else MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                                )
+                            }
+                            if (selected) {
+                                Surface(
+                                    modifier = Modifier.size(8.dp),
+                                    shape = CircleShape,
+                                    color = Emerald,
+                                ) {}
+                            }
+                        }
+                        if (index < group.modules.lastIndex) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 14.dp),
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                            )
+                        }
+                    }
+                }
+            }
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.align(Alignment.End),
+            ) {
+                Text("Fechar")
+            }
+        }
+    }
+}
+
+private fun resolveNavigationGroups(roleRaw: String?): List<AppNavGroupItem> {
+    val role = roleRaw?.uppercase(Locale.ROOT).orEmpty()
+
+    val inicio = AppNavGroupItem(
+        group = AppNavGroup.INICIO,
+        label = "Inicio",
+        icon = Icons.Rounded.Dashboard,
+        modules = listOf(
+            AppNavModule(
+                key = "dashboard",
+                label = "Dashboard",
+                icon = Icons.Rounded.Dashboard,
+                tab = MainTab.DASHBOARD,
+            ),
+        ),
+    )
+    val operacao = AppNavGroupItem(
+        group = AppNavGroup.OPERACAO,
+        label = "Cadastros",
+        icon = Icons.Rounded.Description,
+        modules = listOf(
+            AppNavModule("cadastros", "Cadastros", Icons.Rounded.Description, MainTab.CADASTROS),
+        ),
+    )
+    val pessoasCompleto = AppNavGroupItem(
+        group = AppNavGroup.PESSOAS,
+        label = "Pessoas",
+        icon = Icons.Rounded.Groups,
+        modules = listOf(
+            AppNavModule("users", "Usuarios", Icons.Rounded.AccountCircle, MainTab.USERS),
+            AppNavModule("teams", "Equipes", Icons.Rounded.Groups, MainTab.TEAMS),
+        ),
+    )
+    val pessoasEquipes = AppNavGroupItem(
+        group = AppNavGroup.PESSOAS,
+        label = "Pessoas",
+        icon = Icons.Rounded.Groups,
+        modules = listOf(
+            AppNavModule("teams", "Equipes", Icons.Rounded.Groups, MainTab.TEAMS),
+        ),
+    )
+    val administracao = AppNavGroupItem(
+        group = AppNavGroup.ADMINISTRACAO,
+        label = "Admin",
+        icon = Icons.Rounded.Settings,
+        modules = listOf(
+            AppNavModule("settings", "Configuracoes", Icons.Rounded.Settings, MainTab.SETTINGS),
+            AppNavModule("aud_lemmit", "Auditoria Lemmit", Icons.Rounded.Description, MainTab.AUDITORIA_LEMMIT),
+            AppNavModule("fila_upload", "Fila Upload ERP", Icons.Rounded.Refresh, MainTab.FILA_UPLOAD_ERP),
+            AppNavModule("adesoes_exc", "Adesoes Excluidas", Icons.Rounded.Description, MainTab.ADESOES_EXCLUIDAS),
+        ),
+    )
+    val conta = AppNavGroupItem(
+        group = AppNavGroup.CONTA,
+        label = "Conta",
+        icon = Icons.Rounded.AccountCircle,
+        modules = listOf(
+            AppNavModule("perfil", "Meu Perfil", Icons.Rounded.AccountCircle, MainTab.PERFIL),
+        ),
+    )
+
+    return when (role) {
+        "ADMINISTRADOR", "ADMIN" -> listOf(inicio, operacao, pessoasCompleto, administracao, conta)
+        "GERENTE", "SUPERVISOR" -> listOf(inicio, operacao, pessoasCompleto, conta)
+        "CADASTRO", "VENDEDOR", "ADESIONISTA" -> {
+            val groups = mutableListOf(inicio, operacao)
+            if (canSeeEquipes(role)) groups.add(pessoasEquipes)
+            groups.add(conta)
+            groups
+        }
+        "GESTOR" -> listOf(inicio, operacao, conta)
+        else -> listOf(inicio, operacao, conta)
+    }
+}
+
+private fun canSeeEquipes(role: String): Boolean {
+    return role in setOf(
+        "ADMINISTRADOR",
+        "ADMIN",
+        "GERENTE",
+        "SUPERVISOR",
+        "CADASTRO",
+        "VENDEDOR",
+        "ADESIONISTA",
+    )
+}
+
+private fun resolveActiveGroup(activeTab: MainTab): AppNavGroup {
+    return when (activeTab) {
+        MainTab.DASHBOARD -> AppNavGroup.INICIO
+        MainTab.CADASTROS -> AppNavGroup.OPERACAO
+        MainTab.USERS, MainTab.TEAMS -> AppNavGroup.PESSOAS
+        MainTab.SETTINGS,
+        MainTab.AUDITORIA_LEMMIT,
+        MainTab.FILA_UPLOAD_ERP,
+        MainTab.ADESOES_EXCLUIDAS,
+        -> AppNavGroup.ADMINISTRACAO
+        MainTab.PERFIL -> AppNavGroup.CONTA
+    }
+}
+
+private fun applyNavigationModule(
+    viewModel: AppViewModel,
+    module: AppNavModule,
+) {
+    viewModel.selectTab(module.tab)
+    if (module.tab == MainTab.CADASTROS) {
+        module.cadastroArea?.let(viewModel::selectCadastroAreaTab)
+        module.cadastroFiltro?.let(viewModel::selectCadastroFiltro)
+    }
+}
+
+private fun isNavigationModuleActive(
+    state: AppUiState,
+    module: AppNavModule,
+): Boolean {
+    if (state.activeTab != module.tab) return false
+    if (module.tab != MainTab.CADASTROS) return true
+    if (module.cadastroArea != null && state.cadastroTab != module.cadastroArea) return false
+    if (module.cadastroFiltro != null && state.cadastroFiltro != module.cadastroFiltro) return false
+    return true
 }
 
 private enum class GlobalMessageSeverity {
@@ -594,12 +839,22 @@ private fun resolveGlobalMessageSeverity(message: String): GlobalMessageSeverity
     }
 }
 
+@Composable
 private fun globalMessageSeverityColors(severity: GlobalMessageSeverity): Pair<Color, Color> {
+    val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
     return when (severity) {
-        GlobalMessageSeverity.SUCCESS -> EmeraldSoft to EmeraldDark
-        GlobalMessageSeverity.WARNING -> Amber100 to Amber500
-        GlobalMessageSeverity.ALERT -> BrandOrange.copy(alpha = 0.18f) to BrandOrange
-        GlobalMessageSeverity.ERROR -> Red100 to Red500
+        GlobalMessageSeverity.SUCCESS ->
+            if (darkTheme) MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+            else EmeraldSoft to EmeraldDark
+        GlobalMessageSeverity.WARNING ->
+            if (darkTheme) Color(0xFF4A3A1E) to Color(0xFFFFDE9E)
+            else Amber100 to Amber500
+        GlobalMessageSeverity.ALERT ->
+            if (darkTheme) Color(0xFF4B2F1F) to Color(0xFFFFC39A)
+            else BrandOrange.copy(alpha = 0.18f) to BrandOrange
+        GlobalMessageSeverity.ERROR ->
+            if (darkTheme) MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+            else Red100 to Red500
     }
 }
 
@@ -611,12 +866,12 @@ private fun TopBarActionButton(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
-        color = Slate100,
+        color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Box(
             modifier = Modifier
-                .size(48.dp)
-                .padding(12.dp),
+                .size(44.dp)
+                .padding(10.dp),
             contentAlignment = Alignment.Center,
         ) {
             content()

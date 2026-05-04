@@ -7,6 +7,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey, X-Idempotency-Key, X-Cadastro-Id",
 };
 
+const ENDPOINT_NAME = "erp-novo-usuario2";
+
+type IdempotencyRow = {
+  endpoint: string;
+  idempotency_key: string;
+  lock_token: string | null;
+  status: "processing" | "completed" | "failed";
+  response_body: unknown;
+  status_code: number | null;
+  error_message: string | null;
+};
+
 async function saveLog(
   supabase: any,
   logData: {
@@ -73,8 +85,18 @@ Deno.serve(async (req: Request) => {
   let statusCode = 200;
   let errorMessage: string | undefined;
 
-  const idempotencyKey = req.headers.get("X-Idempotency-Key")?.trim() || req.headers.get("x-idempotency-key")?.trim() || "";
-  const cadastroIdHeader = req.headers.get("X-Cadastro-Id")?.trim() || req.headers.get("x-cadastro-id")?.trim() || "";
+  const explicitIdempotencyKey =
+    req.headers.get("X-Idempotency-Key")?.trim() ||
+    req.headers.get("x-idempotency-key")?.trim() ||
+    "";
+  const cadastroIdHeader =
+    req.headers.get("X-Cadastro-Id")?.trim() ||
+    req.headers.get("x-cadastro-id")?.trim() ||
+    "";
+
+  let idempotencyKey = explicitIdempotencyKey;
+  let lockToken: string | null = null;
+  let ownsIdempotencyLock = false;
 
   const enrichRequestBodyForLog = (body: any) => {
     if (body && typeof body === "object" && !Array.isArray(body)) {
@@ -95,6 +117,28 @@ Deno.serve(async (req: Request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  const finalizeIdempotency = async (
+    status: "completed" | "failed",
+    response: unknown,
+    responseStatusCode: number,
+    responseError: string | null = null,
+  ) => {
+    if (!ownsIdempotencyLock || !idempotencyKey || !lockToken) return;
+
+    await supabase
+      .from("erp_idempotency_keys")
+      .update({
+        status,
+        response_body: response,
+        status_code: responseStatusCode,
+        error_message: responseError,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("endpoint", ENDPOINT_NAME)
+      .eq("idempotency_key", idempotencyKey)
+      .eq("lock_token", lockToken);
+  };
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -201,38 +245,109 @@ Deno.serve(async (req: Request) => {
     }
 
     if (idempotencyKey) {
-      const { data: existingLog } = await supabase
-        .from("api_logs")
-        .select("response_body")
-        .eq("endpoint", "erp-novo-usuario2")
-        .eq("success", true)
-        .contains("request_body", { idempotency_key: idempotencyKey })
-        .order("created_at", { ascending: false })
-        .limit(1)
+      lockToken = crypto.randomUUID();
+
+      const upsertRes = await supabase.from("erp_idempotency_keys").upsert(
+        {
+          endpoint: ENDPOINT_NAME,
+          idempotency_key: idempotencyKey,
+          user_id: userId ?? null,
+          status: "processing",
+          lock_token: lockToken,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          onConflict: "endpoint,idempotency_key",
+          ignoreDuplicates: true,
+        },
+      );
+
+      if (upsertRes.error) {
+        console.warn("idempotency upsert failed:", upsertRes.error.message);
+      }
+
+      const { data: idempotencyRowRaw, error: idempotencyFetchError } = await supabase
+        .from("erp_idempotency_keys")
+        .select("endpoint,idempotency_key,lock_token,status,response_body,status_code,error_message")
+        .eq("endpoint", ENDPOINT_NAME)
+        .eq("idempotency_key", idempotencyKey)
         .maybeSingle();
 
-      if (existingLog?.response_body) {
-        responseBody =
-          typeof existingLog.response_body === "object" && existingLog.response_body !== null
-            ? { ...existingLog.response_body, idempotent: true, reused: true, reuseSource: "api_logs" }
-            : { success: true, data: existingLog.response_body, idempotent: true, reused: true, reuseSource: "api_logs" };
+      const idempotencyRow = idempotencyRowRaw as IdempotencyRow | null;
 
-        await saveLog(supabase, {
-          user_id: userId,
-          user_email: userEmail,
-          endpoint: "erp-novo-usuario2",
-          method: "POST",
-          request_body: enrichRequestBodyForLog(requestBody),
-          response_body: responseBody,
-          status_code: 200,
-          success: true,
-          duration_ms: Date.now() - startTime,
-        });
+      if (!idempotencyFetchError && idempotencyRow) {
+        if (idempotencyRow.lock_token === lockToken && idempotencyRow.status === "processing") {
+          ownsIdempotencyLock = true;
+        } else if (idempotencyRow.status === "completed" && idempotencyRow.response_body) {
+          responseBody =
+            typeof idempotencyRow.response_body === "object" && idempotencyRow.response_body !== null
+              ? { ...(idempotencyRow.response_body as Record<string, unknown>), idempotent: true, reused: true, reuseSource: "idempotency_keys" }
+              : { success: true, data: idempotencyRow.response_body, idempotent: true, reused: true, reuseSource: "idempotency_keys" };
 
-        return new Response(JSON.stringify(responseBody), {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+          await saveLog(supabase, {
+            user_id: userId,
+            user_email: userEmail,
+            endpoint: ENDPOINT_NAME,
+            method: "POST",
+            request_body: enrichRequestBodyForLog(requestBody),
+            response_body: responseBody,
+            status_code: 200,
+            success: true,
+            duration_ms: Date.now() - startTime,
+          });
+
+          return new Response(JSON.stringify(responseBody), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        } else if (idempotencyRow.status === "failed") {
+          statusCode = idempotencyRow.status_code ?? 400;
+          errorMessage = idempotencyRow.error_message ?? "Falha anterior com a mesma chave de idempotencia.";
+          responseBody =
+            idempotencyRow.response_body && typeof idempotencyRow.response_body === "object"
+              ? idempotencyRow.response_body
+              : { error: errorMessage };
+
+          await saveLog(supabase, {
+            user_id: userId,
+            user_email: userEmail,
+            endpoint: ENDPOINT_NAME,
+            method: "POST",
+            request_body: enrichRequestBodyForLog(requestBody),
+            response_body: responseBody,
+            status_code: statusCode,
+            success: false,
+            error_message: errorMessage,
+            duration_ms: Date.now() - startTime,
+          });
+
+          return new Response(JSON.stringify(responseBody), {
+            status: statusCode,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        } else {
+          statusCode = 409;
+          errorMessage = "Requisicao ja em processamento. Aguarde alguns segundos e tente novamente.";
+          responseBody = { error: errorMessage, status: statusCode };
+
+          await saveLog(supabase, {
+            user_id: userId,
+            user_email: userEmail,
+            endpoint: ENDPOINT_NAME,
+            method: "POST",
+            request_body: enrichRequestBodyForLog(requestBody),
+            response_body: responseBody,
+            status_code: statusCode,
+            success: false,
+            error_message: errorMessage,
+            duration_ms: Date.now() - startTime,
+          });
+
+          return new Response(JSON.stringify(responseBody), {
+            status: statusCode,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
       }
     }
 
@@ -262,6 +377,7 @@ Deno.serve(async (req: Request) => {
         details: responseData,
         status: statusCode,
       };
+      await finalizeIdempotency("failed", responseBody, statusCode, errorMessage ?? null);
 
       await saveLog(supabase, {
         user_id: userId,
@@ -287,6 +403,8 @@ Deno.serve(async (req: Request) => {
       data: responseData,
     };
 
+    await finalizeIdempotency("completed", responseBody, 200, null);
+
     await saveLog(supabase, {
       user_id: userId,
       user_email: userEmail,
@@ -310,6 +428,8 @@ Deno.serve(async (req: Request) => {
     responseBody = {
       error: errorMessage,
     };
+
+    await finalizeIdempotency("failed", responseBody, statusCode, errorMessage ?? null);
 
     await saveLog(supabase, {
       user_id: userId,

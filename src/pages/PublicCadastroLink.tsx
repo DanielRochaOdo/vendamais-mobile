@@ -130,11 +130,55 @@ export function PublicCadastroLink() {
   const resolvedTokenRef = useRef<string | null>(null);
   const draftRestoredRef = useRef(false);
   const latestDraftStateRef = useRef<PublicCadastroDraft | null>(null);
+  const submittingRef = useRef(false);
 
   const draftStorageKey = useMemo(
     () => (token ? `public-cadastro-link-draft:${token}` : null),
     [token]
   );
+
+  const submissionStorageKey = useMemo(
+    () => (token ? `public-cadastro-link-submission:${token}` : null),
+    [token]
+  );
+
+  const generateSubmissionId = () => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+  };
+
+  const clearSubmissionAttempt = () => {
+    if (!submissionStorageKey) return;
+
+    try {
+      sessionStorage.removeItem(submissionStorageKey);
+    } catch (storageError) {
+      console.error('Error clearing public cadastro submission attempt:', storageError);
+    }
+  };
+
+  const getOrCreateSubmissionId = () => {
+    if (!submissionStorageKey) {
+      return generateSubmissionId();
+    }
+
+    try {
+      const existingAttemptId = sessionStorage.getItem(submissionStorageKey);
+      if (existingAttemptId) {
+        return existingAttemptId;
+      }
+
+      const nextAttemptId = generateSubmissionId();
+      sessionStorage.setItem(submissionStorageKey, nextAttemptId);
+      return nextAttemptId;
+    } catch (storageError) {
+      console.error('Error reading public cadastro submission attempt:', storageError);
+      return generateSubmissionId();
+    }
+  };
 
   const clearDraft = () => {
     if (!draftStorageKey) return;
@@ -162,6 +206,7 @@ export function PublicCadastroLink() {
   };
 
   const resetPublicFlow = () => {
+    clearSubmissionAttempt();
     clearDraft();
     setCpf('');
     setCpfLocked(false);
@@ -761,79 +806,87 @@ export function PublicCadastroLink() {
   };
 
   const handleSubmit = async () => {
+    if (submittingRef.current) {
+      return;
+    }
+
+    submittingRef.current = true;
+    setSubmitting(true);
     setError('');
     setSuccess('');
 
-    if (!selectedEmpresa) {
-      setError('Empresa nao identificada no link');
-      return;
-    }
-
-    if (!cpfLocked) {
-      setError('Consulte o CPF antes de continuar');
-      return;
-    }
-
-    if (!formData.nome) {
-      setError('Campo obrigatorio: Nome Completo');
-      return;
-    }
-
-    if (!formData.nomeMae) {
-      setError('Campo obrigatorio: Nome da Mae');
-      return;
-    }
-
-    if (!formData.dataNascimento) {
-      setError('Campo obrigatorio: Data de Nascimento');
-      return;
-    }
-
-    if (formData.sexo !== 0 && formData.sexo !== 1) {
-      setError('Campo obrigatorio: Sexo');
-      return;
-    }
-
-    const telefones = formData.contatos.filter((contato) =>
-      ['celular', 'fixo', 'whatsapp'].includes(contato.tipo)
-    );
-
-    if (telefones.length === 0) {
-      setError('Adicione pelo menos um telefone antes de cadastrar');
-      return;
-    }
-
-    if (selectedEmpresa.exigeMatricula === 1 && !formData.numeroMatricula) {
-      setError('Campo obrigatorio: Matricula');
-      return;
-    }
-
-    if (!formData.endereco.cep || !formData.endereco.logradouro || !formData.endereco.numero || !formData.endereco.bairro || !formData.endereco.cidade || !formData.endereco.uf) {
-      setError('Preencha todos os campos obrigatorios do endereco');
-      return;
-    }
-
-    const titulares = dependentes.filter((dependente) => dependente.tipo === 1);
-    if (titulares.length !== 1) {
-      setError('O cadastro precisa ter exatamente 1 titular nos dependentes');
-      return;
-    }
-
-    const dependentesSemPlano = dependentes.filter((dependente) => !dependente.plano || dependente.plano === 0);
-    if (dependentesSemPlano.length > 0) {
-      setError('Todos os dependentes precisam ter um plano selecionado');
-      return;
-    }
-
-    const contatosNormalizados = formData.contatos.map((contato, index) => ({
-      ...contato,
-      valor: contato.tipo === 'email' ? contato.valor.trim() : contato.valor.replace(/\D/g, ''),
-      principal: contato.principal || index === 0,
-    }));
-
-    setSubmitting(true);
-
     try {
+      if (!selectedEmpresa) {
+        setError('Empresa nao identificada no link');
+        return;
+      }
+
+      if (!cpfLocked) {
+        setError('Consulte o CPF antes de continuar');
+        return;
+      }
+
+      if (!formData.nome) {
+        setError('Campo obrigatorio: Nome Completo');
+        return;
+      }
+
+      if (!formData.nomeMae) {
+        setError('Campo obrigatorio: Nome da Mae');
+        return;
+      }
+
+      if (!formData.dataNascimento) {
+        setError('Campo obrigatorio: Data de Nascimento');
+        return;
+      }
+
+      if (formData.sexo !== 0 && formData.sexo !== 1) {
+        setError('Campo obrigatorio: Sexo');
+        return;
+      }
+
+      const telefones = formData.contatos.filter((contato) =>
+        ['celular', 'fixo', 'whatsapp'].includes(contato.tipo)
+      );
+
+      if (telefones.length === 0) {
+        setError('Adicione pelo menos um telefone antes de cadastrar');
+        return;
+      }
+
+      if (selectedEmpresa.exigeMatricula === 1 && !formData.numeroMatricula) {
+        setError('Campo obrigatorio: Matricula');
+        return;
+      }
+
+      if (!formData.endereco.cep || !formData.endereco.logradouro || !formData.endereco.numero || !formData.endereco.bairro || !formData.endereco.cidade || !formData.endereco.uf) {
+        setError('Preencha todos os campos obrigatorios do endereco');
+        return;
+      }
+
+      const titulares = dependentes.filter((dependente) => dependente.tipo === 1);
+      if (titulares.length !== 1) {
+        setError('O cadastro precisa ter exatamente 1 titular nos dependentes');
+        return;
+      }
+
+      const dependentesSemPlano = dependentes.filter((dependente) => !dependente.plano || dependente.plano === 0);
+      if (dependentesSemPlano.length > 0) {
+        setError('Todos os dependentes precisam ter um plano selecionado');
+        return;
+      }
+
+      const contatosNormalizados = formData.contatos.map((contato, index) => ({
+        ...contato,
+        valor: contato.tipo === 'email' ? contato.valor.trim() : contato.valor.replace(/\D/g, ''),
+        principal: contato.principal || index === 0,
+      }));
+
+      const normalizedCpf = removeCPFMask(cpf);
+      const submissionId = getOrCreateSubmissionId();
+      const idempotencyKey = `public:${token || 'no-token'}:${normalizedCpf}:${submissionId}`;
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cadastro-public-submit`,
         {
@@ -841,11 +894,12 @@ export function PublicCadastroLink() {
           headers: {
             'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
             'Content-Type': 'application/json',
+            'X-Idempotency-Key': idempotencyKey,
           },
           body: JSON.stringify({
             token,
             cadastro: {
-              cpf: removeCPFMask(cpf),
+              cpf: normalizedCpf,
               nome: formData.nome,
               dataNascimento: formData.dataNascimento,
               sexoCodigo: formData.sexo,
@@ -877,6 +931,7 @@ export function PublicCadastroLink() {
         throw new Error(detailedMessage);
       }
 
+      clearSubmissionAttempt();
       clearDraft();
       setSuccess(
         result.message ||
@@ -892,6 +947,7 @@ export function PublicCadastroLink() {
       setError(err instanceof Error ? err.message : 'Erro ao concluir o cadastro');
     } finally {
       setSubmitting(false);
+      submittingRef.current = false;
     }
   };
 

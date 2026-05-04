@@ -1,33 +1,50 @@
 ﻿package br.com.vendamais.mobile.ui.screens
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.webkit.MimeTypeMap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -36,6 +53,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
@@ -43,15 +62,18 @@ import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.FileProvider
 import br.com.vendamais.mobile.data.models.CadastroDetalhe
 import br.com.vendamais.mobile.data.models.TeamMemberOption
 import br.com.vendamais.mobile.data.remote.InclusaoBuscaTipo
 import br.com.vendamais.mobile.data.remote.ResponsavelFinanceiroResumo
 import br.com.vendamais.mobile.data.remote.UploadedTempFile
 import br.com.vendamais.mobile.domain.cadastro.CadastroApiErrorMapper
+import br.com.vendamais.mobile.domain.cadastro.CadastroOverlayIntent
 import br.com.vendamais.mobile.domain.cadastro.CadastroModalSignal
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
@@ -63,7 +85,9 @@ import br.com.vendamais.mobile.ui.theme.EmeraldDark
 import br.com.vendamais.mobile.ui.theme.EmeraldSoft
 import br.com.vendamais.mobile.ui.theme.Red100
 import br.com.vendamais.mobile.ui.theme.Red500
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -78,12 +102,16 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.text.NumberFormat
+import java.io.File
 import java.time.LocalDate
 import java.time.Period
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private const val MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+private const val LEMMIT_MAX_ATTEMPTS = 3
+private const val LEMMIT_TIMEOUT_MS = 12000L
+private const val LEMMIT_RETRY_DELAY_MS = 900L
 
 private data class DependenteFormState(
     val nome: String = "",
@@ -104,9 +132,19 @@ private data class PlanoOption(
     val codigo: Int,
     val nome: String,
     val valorTitular: Double? = null,
+    val valorAgregado: Double? = null,
     val valorDependente: Double? = null,
+    val regraValor: String = "dependente",
     val label: String = nome,
-)
+) {
+    fun resolveValorPorRegra(): Double? {
+        return when (regraValor.trim().lowercase(Locale.ROOT)) {
+            "titular" -> valorTitular ?: valorDependente
+            "agregado" -> valorAgregado ?: valorDependente ?: valorTitular
+            else -> valorDependente ?: valorTitular
+        }
+    }
+}
 
 private enum class InclusaoMessageTone {
     WARNING,
@@ -121,12 +159,15 @@ fun InclusaoDependenteDialog(
     viewModel: AppViewModel,
     onDismiss: () -> Unit,
     onSuccess: () -> Unit,
+    onCompleted: () -> Unit = {},
     cadastro: CadastroDetalhe? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val profile = state.profile
     val isContinuacao = cadastro != null
+    val navigationBottomInset = WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding()
+    val footerSafeBottomPadding = maxOf(navigationBottomInset, 56.dp)
 
     var tipoBusca by rememberSaveable { mutableStateOf(InclusaoBuscaTipo.CODIGO) }
     var valorBusca by rememberSaveable(stateSaver = textFieldValueSaver()) { mutableStateOf(TextFieldValue("")) }
@@ -136,6 +177,7 @@ fun InclusaoDependenteDialog(
     var localError by rememberSaveable { mutableStateOf<String?>(null) }
     var localNotice by rememberSaveable { mutableStateOf<String?>(null) }
     var successDialogMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var previewingArquivoIndex by rememberSaveable { mutableStateOf<Int?>(null) }
 
     var selectedVendedorId by rememberSaveable {
         mutableStateOf(
@@ -150,6 +192,7 @@ fun InclusaoDependenteDialog(
         mutableStateOf(if (profile?.role == "ADESIONISTA") profile.id else "")
     }
     var selectedStatusId by rememberSaveable { mutableStateOf(cadastro?.statusAdesaoId.orEmpty()) }
+    var showSelectStatusDialog by rememberSaveable { mutableStateOf(false) }
 
     var responsavelSelecionado by remember {
         mutableStateOf(
@@ -167,6 +210,7 @@ fun InclusaoDependenteDialog(
     var empresaCodigo by rememberSaveable { mutableStateOf(cadastro?.empresaCodigo ?: 0) }
     var empresaNome by rememberSaveable { mutableStateOf(cadastro?.empresaNome.orEmpty()) }
     var empresaRaw by remember { mutableStateOf<JsonElement?>(cadastro?.empresaRaw) }
+    var empresaPlanosRaw by remember { mutableStateOf<JsonElement?>(cadastro?.planosRaw ?: cadastro?.empresaRaw) }
     val resultados = remember { mutableStateListOf<ResponsavelFinanceiroResumo>() }
     val dependentes = remember {
         mutableStateListOf<DependenteFormState>().apply {
@@ -178,6 +222,64 @@ fun InclusaoDependenteDialog(
     }
 
     var targetUploadIndex by remember { mutableStateOf<Int?>(null) }
+    var showArquivoSourceModal by rememberSaveable { mutableStateOf(false) }
+    var cameraCapturePath by rememberSaveable { mutableStateOf("") }
+    var consultingLemmitIndex by rememberSaveable { mutableStateOf<Int?>(null) }
+    val cpfValidationErrors = remember { mutableStateMapOf<Int, String>() }
+    val consultedCpfByIndex = remember { mutableStateMapOf<Int, String>() }
+
+    suspend fun uploadDependenteArquivo(
+        index: Int,
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray,
+    ) {
+        validateUpload(fileName, mimeType, bytes.size.toLong())
+        dependentes[index].arquivo?.path?.takeIf { it.isNotBlank() }?.let { path ->
+            runCatching { viewModel.deleteTempFile(path) }
+        }
+        val cpf = dependentes[index].cpf.text.ifBlank { "0" }
+        val uploaded = viewModel.uploadTempFile(
+            fileName = fileName,
+            mimeType = mimeType,
+            bytes = bytes,
+            prefix = if (isContinuacao) "dependentes-continuar/$cpf" else "dependentes-temp/$cpf",
+        )
+        updateDependente(dependentes, index) { it.copy(arquivo = uploaded, uploading = false, saved = false) }
+        localNotice = "Arquivo carregado com sucesso."
+    }
+
+    suspend fun openDependenteArquivoPreview(index: Int) {
+        val dependente = dependentes.getOrNull(index)
+        val arquivo = dependente?.arquivo
+        if (arquivo == null || arquivo.path.isBlank()) {
+            localError = "Nenhum arquivo anexado para visualizacao."
+            return
+        }
+        previewingArquivoIndex = index
+        runCatching {
+            val bytes = viewModel.downloadTempFile(arquivo.path)
+            val uri = writePreviewFile(
+                context = context,
+                fileName = arquivo.nome.ifBlank { arquivo.path.substringAfterLast('/') },
+                bytes = bytes,
+            )
+            val mime = resolvePreviewMimeType(arquivo.nome.ifBlank { arquivo.path.substringAfterLast('/') })
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mime)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(Intent.createChooser(intent, "Visualizar arquivo"))
+        }.onFailure { throwable ->
+            localError = CadastroApiErrorMapper.mapUserMessage(
+                throwable.message,
+                "Nao foi possivel abrir o arquivo.",
+            )
+        }
+        previewingArquivoIndex = null
+    }
+
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         val index = targetUploadIndex
         targetUploadIndex = null
@@ -187,26 +289,48 @@ fun InclusaoDependenteDialog(
             runCatching {
                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                     ?: error("Nao foi possivel ler o arquivo.")
-                val fileName = resolveFileName(context, uri)
-                val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
-                validateUpload(fileName, mime, bytes.size.toLong())
-                dependentes[index].arquivo?.path?.takeIf { it.isNotBlank() }?.let { path ->
-                    runCatching { viewModel.deleteTempFile(path) }
-                }
-                val cpf = dependentes[index].cpf.text.ifBlank { "0" }
-                viewModel.uploadTempFile(
-                    fileName = fileName,
-                    mimeType = mime,
+                uploadDependenteArquivo(
+                    index = index,
+                    fileName = resolveFileName(context, uri),
+                    mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream",
                     bytes = bytes,
-                    prefix = if (isContinuacao) "dependentes-continuar/$cpf" else "dependentes-temp/$cpf",
                 )
-            }.onSuccess { uploaded ->
-                updateDependente(dependentes, index) { it.copy(arquivo = uploaded, uploading = false, saved = false) }
-                localNotice = "Arquivo carregado com sucesso."
+            }.onSuccess {
             }.onFailure { throwable ->
                 updateDependente(dependentes, index) { it.copy(uploading = false) }
-                localError = throwable.message ?: "Erro ao carregar arquivo."
+                localError = CadastroApiErrorMapper.mapUserMessage(
+                    throwable.message,
+                    "Erro ao carregar arquivo.",
+                )
             }
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val index = targetUploadIndex
+        val cameraPath = cameraCapturePath
+        targetUploadIndex = null
+        cameraCapturePath = ""
+        if (!success || index == null || index !in dependentes.indices || cameraPath.isBlank()) return@rememberLauncherForActivityResult
+        scope.launch {
+            updateDependente(dependentes, index) { it.copy(uploading = true) }
+            runCatching {
+                val cameraFile = File(cameraPath)
+                val bytes = cameraFile.readBytes()
+                uploadDependenteArquivo(
+                    index = index,
+                    fileName = cameraFile.name,
+                    mimeType = "image/jpeg",
+                    bytes = bytes,
+                )
+            }.onFailure { throwable ->
+                updateDependente(dependentes, index) { it.copy(uploading = false) }
+                localError = CadastroApiErrorMapper.mapUserMessage(
+                    throwable.message,
+                    "Erro ao capturar arquivo pela camera.",
+                )
+            }
+            runCatching { File(cameraPath).delete() }
         }
     }
 
@@ -289,6 +413,20 @@ fun InclusaoDependenteDialog(
             ?: responsavel?.empresa.orEmpty()
     }
 
+    fun ensureStatusSelecionado(): Boolean {
+        if (state.statusAdesoes.isEmpty()) {
+            showSelectStatusDialog = false
+            localError = "Nenhum status de adesao disponivel. Cadastre ao menos um status para continuar."
+            return false
+        }
+        if (selectedStatusId.isBlank()) {
+            showSelectStatusDialog = true
+            localError = "Selecione o status da adesao antes de continuar."
+            return false
+        }
+        return true
+    }
+
     fun ensureEmpresaIdentificada(responsavel: ResponsavelFinanceiroResumo?): Boolean {
         val codigo = resolveEmpresaCodigo(responsavel)
         val nome = resolveEmpresaNome(responsavel)
@@ -304,11 +442,101 @@ fun InclusaoDependenteDialog(
         return false
     }
 
+    suspend fun consultarLemmitDependente(index: Int, cpfDigits: String) {
+        if (state.cadastroWorkspace.config?.lemmitInclusaoDependente != true) return
+        if (cpfDigits.length != 11 || !validateCpf(cpfDigits)) return
+
+        consultingLemmitIndex = index
+        try {
+            val canUse = viewModel.canUseLemmit()
+            if (!canUse) {
+                val limitInfo = runCatching { viewModel.fetchLemmitLimitInfo() }.getOrNull()
+                val overlay = CadastroOverlayIntent.LemmitLimit(
+                    limiteFormatado = limitInfo?.limiteMensal?.let(::formatCurrencyBr),
+                    consumoFormatado = limitInfo?.consumoMensal?.let(::formatCurrencyBr),
+                    saldoFormatado = limitInfo?.saldoDisponivel?.let(::formatCurrencyBr),
+                    isUnlimited = limitInfo != null && limitInfo.limiteMensal == null,
+                )
+                viewModel.resolveCadastroOverlay(CadastroModalSignal(lemmitLimit = overlay))
+                return
+            }
+
+            var lastFailure: Throwable? = null
+            repeat(LEMMIT_MAX_ATTEMPTS) { attempt ->
+                val result = runCatching {
+                    withTimeoutOrNull(LEMMIT_TIMEOUT_MS) {
+                        viewModel.consultarCpfLemmit(cpfDigits)
+                    } ?: throw IllegalStateException("Tempo limite da consulta Lemmit excedido.")
+                }
+
+                val lemmitData = result.getOrNull()
+                if (lemmitData != null) {
+                    val pessoa = lemmitData.pessoa
+                    if (pessoa == null) {
+                        consultedCpfByIndex.remove(index)
+                        cpfValidationErrors[index] =
+                            "CPF sem retorno na Lemmit. Apague e digite novamente para nova leitura."
+                        return
+                    }
+
+                    val dataNascimentoDigits = resolveLemmitDateDigits(pessoa.dataNascimento)
+                    val sexoCodigo = resolveLemmitSexoCodigo(pessoa.sexo)
+
+                    updateDependente(dependentes, index) { current ->
+                        current.copy(
+                            nome = pessoa.nome?.trim().takeIf { !it.isNullOrBlank() } ?: current.nome,
+                            nomeMae = pessoa.nomeMae?.trim().takeIf { !it.isNullOrBlank() } ?: current.nomeMae,
+                            dataNascimento = dataNascimentoDigits?.let { TextFieldValue(it, TextRange(it.length)) }
+                                ?: current.dataNascimento,
+                            sexo = sexoCodigo ?: current.sexo,
+                            saved = false,
+                        )
+                    }
+                    cpfValidationErrors.remove(index)
+                    localNotice = "Dados Lemmit carregados para o CPF informado."
+                    return
+                }
+
+                lastFailure = result.exceptionOrNull()
+                val shouldRetry = shouldRetryLemmitRequest(lastFailure?.message)
+                if (!shouldRetry || attempt == LEMMIT_MAX_ATTEMPTS - 1) return@repeat
+                delay(LEMMIT_RETRY_DELAY_MS)
+            }
+
+            consultedCpfByIndex.remove(index)
+            val fallback = CadastroApiErrorMapper.mapUserMessage(
+                lastFailure?.message,
+                "Falha na consulta Lemmit.",
+            )
+            val retryPrompt = if (shouldRetryLemmitRequest(lastFailure?.message)) {
+                "Instabilidade na API Lemmit. Apague e digite novamente o CPF para nova leitura."
+            } else {
+                "$fallback Apague e digite novamente o CPF para nova leitura."
+            }
+            cpfValidationErrors[index] = retryPrompt
+        } catch (throwable: Throwable) {
+            consultedCpfByIndex.remove(index)
+            val fallback = CadastroApiErrorMapper.mapUserMessage(
+                throwable.message,
+                "Falha na consulta Lemmit.",
+            )
+            val retryPrompt = if (shouldRetryLemmitRequest(throwable.message)) {
+                "Instabilidade na API Lemmit. Apague e digite novamente o CPF para nova leitura."
+            } else {
+                "$fallback Apague e digite novamente o CPF para nova leitura."
+            }
+            cpfValidationErrors[index] = retryPrompt
+        } finally {
+            consultingLemmitIndex = null
+        }
+    }
+
     suspend fun salvarPendente() {
         val responsavel = responsavelSelecionado ?: run {
             localError = "Selecione um responsavel financeiro."
             return
         }
+        if (!ensureStatusSelecionado()) return
         if (!ensureEmpresaIdentificada(responsavel)) return
         val vendedor = resolveVendedor()
         if (profile?.role != "VENDEDOR" && state.vendedores.isEmpty()) {
@@ -317,6 +545,19 @@ fun InclusaoDependenteDialog(
         }
         if (vendedor?.externalId.isNullOrBlank()) {
             localError = "Selecione um vendedor valido."
+            return
+        }
+
+        val dependentesNaoSalvos = if (isContinuacao) {
+            emptyList()
+        } else {
+            dependentes
+                .mapIndexedNotNull { index, dep ->
+                    if (dep.saved) null else index + 1
+                }
+        }
+        if (dependentesNaoSalvos.isNotEmpty()) {
+            localError = "Existem dependentes nao salvos (${dependentesNaoSalvos.joinToString(", ")}). Salve ou remova antes de continuar."
             return
         }
 
@@ -339,6 +580,7 @@ fun InclusaoDependenteDialog(
             empresaCodigo = resolveEmpresaCodigo(responsavel),
             empresaNome = resolveEmpresaNome(responsavel),
             empresaRaw = empresaRaw,
+            planosRaw = empresaPlanosRaw ?: extractPlanosRawFromEmpresa(empresaRaw),
             status = "incompleto",
             statusAdesaoId = selectedStatusId,
             vendedor = vendedor,
@@ -378,6 +620,19 @@ fun InclusaoDependenteDialog(
             return
         }
 
+        val dependentesNaoSalvos = if (isContinuacao) {
+            emptyList()
+        } else {
+            dependentes
+                .mapIndexedNotNull { index, dep ->
+                    if (dep.saved) null else index + 1
+                }
+        }
+        if (dependentesNaoSalvos.isNotEmpty()) {
+            localError = "Existem dependentes nao salvos (${dependentesNaoSalvos.joinToString(", ")}). Salve ou remova antes de incluir."
+            return
+        }
+
         val base = if (isContinuacao) dependentes.toList() else dependentes.filter { it.saved }
         if (base.isEmpty()) {
             localError = "Nenhum dependente valido para envio."
@@ -398,6 +653,7 @@ fun InclusaoDependenteDialog(
             empresaCodigo = resolveEmpresaCodigo(responsavel),
             empresaNome = resolveEmpresaNome(responsavel),
             empresaRaw = empresaRaw,
+            planosRaw = empresaPlanosRaw ?: extractPlanosRawFromEmpresa(empresaRaw),
             status = "incompleto",
             statusAdesaoId = selectedStatusId,
             vendedor = vendedor ?: TeamMemberOption("", "", "", null),
@@ -406,25 +662,50 @@ fun InclusaoDependenteDialog(
         )
 
         var cadastroId = cadastro?.id
-        if (cadastroId == null) {
-            cadastroId = viewModel.createCadastroRecord(prePayload).id
-        } else {
+        if (cadastroId != null) {
             viewModel.updateCadastroRecord(cadastroId, prePayload)
         }
 
         val response = viewModel.enviarInclusaoDependente(
-            buildErpPayload(
+            payload = buildErpPayload(
                 responsavelCodigo = responsavel.codigo,
                 parceiroCodigo = codigoParceiro,
                 adesionistaCodigo = adesionista?.externalId?.toIntOrNull() ?: 0,
                 funcionarioCodigo = profile?.externalId?.toIntOrNull() ?: 0,
                 dependentes = base,
             ),
+            cadastroId = cadastroId,
         )
+
+        val finalPayloadBase = buildCadastroPayload(
+            profileId = profile?.id.orEmpty(),
+            teamId = profile?.teamId,
+            responsavel = responsavel,
+            empresaCodigo = resolveEmpresaCodigo(responsavel),
+            empresaNome = resolveEmpresaNome(responsavel),
+            empresaRaw = empresaRaw,
+            planosRaw = empresaPlanosRaw ?: extractPlanosRawFromEmpresa(empresaRaw),
+            status = "enviado",
+            statusAdesaoId = selectedStatusId.takeIf { it.isNotBlank() },
+            vendedor = vendedor ?: TeamMemberOption("", "", "", null),
+            adesionista = adesionista,
+            dependentes = base,
+        )
+        val finalPayload = buildJsonObject {
+            finalPayloadBase.forEach { (key, value) -> put(key, value) }
+            put("erp_response", response)
+        }
+
+        cadastroId = if (cadastroId == null) {
+            viewModel.createCadastroRecord(finalPayload).id
+        } else {
+            viewModel.updateCadastroRecord(cadastroId, finalPayload)
+            cadastroId
+        }
 
         val codes = extractDependenteCodes(response)
         val funcionario = profile?.externalId?.toIntOrNull() ?: 0
-        if (funcionario > 0) {
+        if (funcionario > 0 && cadastroId != null) {
             base.forEachIndexed { idx, dep ->
                 val file = dep.arquivo ?: return@forEachIndexed
                 val code = codes.getOrNull(idx) ?: return@forEachIndexed
@@ -441,20 +722,39 @@ fun InclusaoDependenteDialog(
             }
         }
 
-        viewModel.updateCadastroRecord(
-            cadastroId,
-            buildJsonObject {
-                put("status", "enviado")
-                put("tipo_cadastro", "inclusao_dependente")
-                selectedStatusId.takeIf { it.isNotBlank() }?.let { put("status_adesao_id", it) }
-                put("erp_response", response)
-            },
-        )
+        cadastroId?.let { id ->
+            runCatching {
+                viewModel.closeDuplicateInclusaoPendentes(
+                    responsavelCpf = responsavel.cpf,
+                    keepCadastroId = id,
+                    erpResponse = response,
+                )
+            }
+        }
         successDialogMessage = "Dependentes incluidos com sucesso."
     }
 
-    val planoOptions = remember(empresaRaw, state.planosMap) {
-        extractPlanosFromEmpresa(empresaRaw, state.planosMap)
+    val planoOptions = remember(
+        empresaRaw,
+        empresaPlanosRaw,
+        state.planosMap,
+        state.cadastroWorkspace.config?.planosOcultos,
+    ) {
+        extractPlanosFromEmpresa(
+            raw = empresaPlanosRaw ?: empresaRaw,
+            planosMap = state.planosMap,
+            planosOcultos = state.cadastroWorkspace.config?.planosOcultos.orEmpty(),
+        )
+    }
+
+    LaunchedEffect(successDialogMessage) {
+        if (successDialogMessage.isNullOrBlank()) return@LaunchedEffect
+        delay(2000)
+        if (!successDialogMessage.isNullOrBlank()) {
+            successDialogMessage = null
+            onDismiss()
+            onCompleted()
+        }
     }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -462,13 +762,20 @@ fun InclusaoDependenteDialog(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp)
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
                     .navigationBarsPadding()
-                    .imePadding()
-                    .verticalScroll(rememberScrollState()),
+                    .padding(16.dp)
+                    .imePadding(),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text(if (isContinuacao) "Continuar Inclusao de Dependentes" else "Inclusao de Dependente", style = MaterialTheme.typography.headlineSmall)
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(if (isContinuacao) "Continuar Inclusao de Dependentes" else "Inclusao de Dependente", style = MaterialTheme.typography.headlineSmall)
 
                 if (profile?.role != "VENDEDOR") {
                     SelectionField(
@@ -520,6 +827,13 @@ fun InclusaoDependenteDialog(
                                             localError = "Informe um valor para busca."
                                             return@launch
                                         }
+                                        if (tipoBusca == InclusaoBuscaTipo.CPF) {
+                                            val cpfDigits = query.filter(Char::isDigit)
+                                            if (cpfDigits.length != 11) {
+                                                localError = "Informe um CPF valido com 11 digitos."
+                                                return@launch
+                                            }
+                                        }
                                         if (profile?.role != "VENDEDOR" && state.vendedores.isEmpty()) {
                                             localError = "Nenhum vendedor disponível. Entre em contato com o administrador."
                                             return@launch
@@ -536,7 +850,12 @@ fun InclusaoDependenteDialog(
                                                 resultados.addAll(lista)
                                                 if (lista.isEmpty()) localError = "Nenhum associado encontrado."
                                             }
-                                            .onFailure { throwable -> localError = throwable.message ?: "Falha na busca." }
+                                            .onFailure { throwable ->
+                                                localError = CadastroApiErrorMapper.mapUserMessage(
+                                                    throwable.message,
+                                                    "Falha na busca.",
+                                                )
+                                            }
                                         loadingBusca = false
                                     }
                                 },
@@ -555,16 +874,52 @@ fun InclusaoDependenteDialog(
                             responsavelSelecionado = item
                             empresaCodigo = item.codigoEmpresa
                             empresaNome = item.empresa
+                            empresaPlanosRaw = null
                             localError = null
+                            cpfValidationErrors.clear()
+                            consultedCpfByIndex.clear()
+                            if (!isContinuacao) {
+                                dependentes.clear()
+                            }
                             scope.launch {
                                 runCatching {
                                     viewModel.searchEmpresaDirect(item.codigoEmpresa.toString(), br.com.vendamais.mobile.data.models.EmpresaSearchType.CODIGO).firstOrNull()
                                 }.onSuccess { empresa ->
                                     if (empresa != null) {
+                                        val invalidCodes = state.cadastroWorkspace.config?.codigosEmpresaInvalidos.orEmpty()
+                                        val situacaoCode = empresa.codigoSituacao?.toString()
+                                        if (!situacaoCode.isNullOrBlank() && invalidCodes.contains(situacaoCode)) {
+                                            empresaRaw = null
+                                            empresaPlanosRaw = null
+                                            viewModel.resolveCadastroOverlay(
+                                                CadastroModalSignal(
+                                                    empresaCanceladaNome = empresa.nomeFantasia.ifBlank {
+                                                        empresa.razaoSocial.ifBlank { item.empresa }
+                                                    },
+                                                ),
+                                            )
+                                            localError = "A empresa selecionada esta bloqueada para cadastro."
+                                            return@onSuccess
+                                        }
+
                                         empresaRaw = empresa.raw
+                                        empresaPlanosRaw = empresa.precoPlano ?: extractPlanosRawFromEmpresa(empresa.raw)
                                         empresaNome = empresa.nomeFantasia.ifBlank { empresa.razaoSocial.ifBlank { item.empresa } }
                                         empresaCodigo = empresa.codigo ?: empresa.id
+                                        empresa.observacoesResolvidas
+                                            ?.takeIf { it.isNotBlank() }
+                                            ?.let { observacoes ->
+                                                viewModel.resolveCadastroOverlay(
+                                                    CadastroModalSignal(
+                                                        empresaObservacaoNome = empresa.nomeFantasia.ifBlank {
+                                                            empresa.razaoSocial.ifBlank { item.empresa }
+                                                        },
+                                                        empresaObservacaoTexto = observacoes,
+                                                    ),
+                                                )
+                                            }
                                     } else {
+                                        empresaPlanosRaw = null
                                         viewModel.resolveCadastroOverlay(
                                             CadastroModalSignal(
                                                 empresaNaoIdentificada = true,
@@ -573,6 +928,7 @@ fun InclusaoDependenteDialog(
                                         )
                                     }
                                 }.onFailure {
+                                    empresaPlanosRaw = null
                                     viewModel.resolveCadastroOverlay(
                                         CadastroModalSignal(
                                             empresaNaoIdentificada = true,
@@ -603,7 +959,7 @@ fun InclusaoDependenteDialog(
                         onSelected = { selectedAdesionistaId = it },
                     )
                     SelectionField(
-                        label = "Status da Adesao (opcional)",
+                        label = "Status da Adesao",
                         value = state.statusAdesoes.firstOrNull { it.id == selectedStatusId }?.nome ?: "Nenhum",
                         options = listOf("" to "Selecione") + state.statusAdesoes.map { it.id to it.nome },
                         onSelected = { selectedStatusId = it },
@@ -667,10 +1023,19 @@ fun InclusaoDependenteDialog(
                                             enabled = !salvando && !enviando,
                                         ) { Text("Adicionar dependente") }
                                     }
-                                    TextButton(
-                                        onClick = { dependentes.removeAt(index) },
+                                    IconButton(
+                                        onClick = {
+                                            dependentes.removeAt(index)
+                                            cpfValidationErrors.clear()
+                                            consultedCpfByIndex.clear()
+                                        },
                                         enabled = !enviando && !salvando,
-                                    ) { Text("Remover") }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Delete,
+                                            contentDescription = "Remover",
+                                        )
+                                    }
                                 }
                             } else {
                                 OutlinedTextField(
@@ -686,8 +1051,30 @@ fun InclusaoDependenteDialog(
                                 OutlinedTextField(
                                     value = dep.cpf,
                                     onValueChange = { value ->
+                                        val sanitized = sanitizeDigitsInput(value, 11)
                                         updateDependente(dependentes, index) { current ->
-                                            current.copy(cpf = sanitizeDigitsInput(value, 11), saved = false)
+                                            current.copy(cpf = sanitized, saved = false)
+                                        }
+
+                                        val cpfDigits = sanitized.text
+                                        when {
+                                            cpfDigits.isBlank() || cpfDigits.length < 11 -> {
+                                                cpfValidationErrors.remove(index)
+                                                consultedCpfByIndex.remove(index)
+                                            }
+                                            !validateCpf(cpfDigits) -> {
+                                                cpfValidationErrors[index] = "CPF invalido."
+                                                consultedCpfByIndex.remove(index)
+                                            }
+                                            else -> {
+                                                cpfValidationErrors.remove(index)
+                                                if (consultedCpfByIndex[index] != cpfDigits) {
+                                                    consultedCpfByIndex[index] = cpfDigits
+                                                    scope.launch {
+                                                        consultarLemmitDependente(index, cpfDigits)
+                                                    }
+                                                }
+                                            }
                                         }
                                     },
                                     modifier = Modifier.fillMaxWidth(),
@@ -695,6 +1082,20 @@ fun InclusaoDependenteDialog(
                                     visualTransformation = DependenteCpfVisualTransformation(),
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 )
+                                cpfValidationErrors[index]?.let { cpfError ->
+                                    Text(
+                                        text = cpfError,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                }
+                                if (consultingLemmitIndex == index) {
+                                    Text(
+                                        text = "Consultando Lemmit...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                                 OutlinedTextField(
                                     value = dep.dataNascimento,
                                     onValueChange = { value ->
@@ -718,7 +1119,7 @@ fun InclusaoDependenteDialog(
                                         updateDependente(dependentes, index) { current ->
                                             val selectedOption = planoOptions.firstOrNull { it.codigo == v }
                                             val planoValor = selectedOption
-                                                ?.valorDependente
+                                                ?.resolveValorPorRegra()
                                                 ?.let(::formatPlanoValorDot)
                                                 ?: current.planoValor
                                             current.copy(
@@ -740,30 +1141,71 @@ fun InclusaoDependenteDialog(
                                     label = { Text("Nome da mae") },
                                 )
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Button(onClick = { targetUploadIndex = index; filePicker.launch("*/*") }, enabled = !dep.uploading && !enviando && !salvando) {
+                                    Button(onClick = { targetUploadIndex = index; showArquivoSourceModal = true }, enabled = !dep.uploading && !enviando && !salvando) {
                                         if (dep.uploading) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp) else Text(if (dep.arquivo == null) "Arquivo" else "Trocar arquivo")
                                     }
                                     if (dep.arquivo != null) {
-                                        TextButton(onClick = { scope.launch { runCatching { viewModel.deleteTempFile(dep.arquivo.path) }; updateDependente(dependentes, index) { it.copy(arquivo = null, saved = false) } } }) { Text("Remover arquivo") }
+                                        TextButton(
+                                            onClick = { scope.launch { openDependenteArquivoPreview(index) } },
+                                            enabled = previewingArquivoIndex != index,
+                                        ) {
+                                            Text(
+                                                if (previewingArquivoIndex == index) {
+                                                    "Abrindo..."
+                                                } else {
+                                                    dep.arquivo.nome
+                                                },
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                scope.launch {
+                                                    runCatching { viewModel.deleteTempFile(dep.arquivo.path) }
+                                                    updateDependente(dependentes, index) { it.copy(arquivo = null, saved = false) }
+                                                }
+                                            },
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Delete,
+                                                contentDescription = "Remover arquivo",
+                                            )
+                                        }
                                     }
-                                    TextButton(onClick = { dependentes.removeAt(index) }, enabled = !enviando && !salvando) { Text("Remover") }
+                                    IconButton(
+                                        onClick = {
+                                            dependentes.removeAt(index)
+                                            cpfValidationErrors.clear()
+                                            consultedCpfByIndex.clear()
+                                        },
+                                        enabled = !enviando && !salvando,
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Delete,
+                                            contentDescription = "Remover",
+                                        )
+                                    }
                                 }
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
                                     if (!isContinuacao) {
                                         Button(
+                                            modifier = Modifier.weight(1f),
                                             onClick = {
                                                 validateDependente(dep, index)?.let { localError = it }
                                                     ?: updateDependente(dependentes, index) {
                                                         it.copy(saved = true, expanded = false)
                                                     }
                                             },
-                                        ) { Text("Salvar dependente") }
+                                        ) { Text("Salvar") }
                                     }
                                     if (index == dependentes.lastIndex) {
                                         TextButton(
+                                            modifier = Modifier.weight(1f),
                                             onClick = { dependentes.add(DependenteFormState()) },
                                             enabled = !salvando && !enviando,
-                                        ) { Text("Adicionar dependente") }
+                                        ) { Text("Adicionar") }
                                     }
                                 }
                             }
@@ -787,21 +1229,69 @@ fun InclusaoDependenteDialog(
                         }
                     }
                 }
+                }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = onDismiss, enabled = !salvando && !enviando) { Text("Cancelar") }
-                    Button(onClick = { scope.launch { salvando = true; runCatching { salvarPendente() }.onFailure { localError = it.message }; salvando = false } }, enabled = !salvando && !enviando && responsavelSelecionado != null) { Text(if (salvando) "Salvando..." else if (isContinuacao) "Salvar rascunho" else "Salvar pendente") }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                        .navigationBarsPadding()
+                        .padding(bottom = footerSafeBottomPadding),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(
+                        modifier = Modifier.weight(0.9f),
+                        onClick = onDismiss,
+                        enabled = !salvando && !enviando,
+                    ) {
+                        Text("Cancelar")
+                    }
                     Button(
+                        modifier = Modifier.weight(1f),
                         onClick = {
+                            if (salvando || enviando) return@Button
+                            salvando = true
                             scope.launch {
-                                enviando = true
+                                runCatching { salvarPendente() }
+                                    .onFailure {
+                                        localError = CadastroApiErrorMapper.mapUserMessage(
+                                            it.message,
+                                            "Falha ao salvar pendente.",
+                                        )
+                                    }
+                                salvando = false
+                            }
+                        },
+                        enabled = !salvando && !enviando && responsavelSelecionado != null,
+                    ) {
+                        if (salvando) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        } else {
+                            Text(
+                                text = "Salvar",
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    Button(
+                        modifier = Modifier.weight(1.1f),
+                        onClick = {
+                            if (salvando || enviando) return@Button
+                            enviando = true
+                            scope.launch {
                                 runCatching { enviarDependentes() }
                                     .onFailure { throwable ->
                                         val mapped = CadastroApiErrorMapper.mapErpError(throwable.message)
                                         if (mapped != null) {
                                             viewModel.resolveCadastroOverlay(CadastroModalSignal(erpError = mapped))
                                         } else {
-                                            localError = throwable.message
+                                            localError = CadastroApiErrorMapper.mapUserMessage(
+                                                throwable.message,
+                                                "Falha ao incluir dependentes.",
+                                            )
                                         }
                                     }
                                 enviando = false
@@ -809,20 +1299,141 @@ fun InclusaoDependenteDialog(
                         },
                         enabled = !salvando && !enviando && responsavelSelecionado != null,
                     ) {
-                        Text(if (enviando) "Enviando..." else "Incluir dependentes")
+                        if (enviando) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = null)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Incluir",
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
             }
         }
     }
 
+    if (showArquivoSourceModal) {
+        AlertDialog(
+            onDismissRequest = {
+                showArquivoSourceModal = false
+                targetUploadIndex = null
+            },
+            title = { Text("Anexar arquivo") },
+            text = { Text("Escolha a origem do arquivo.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showArquivoSourceModal = false
+                        filePicker.launch("*/*")
+                    },
+                ) {
+                    Text("Documentos")
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TextButton(
+                        onClick = {
+                            showArquivoSourceModal = false
+                            runCatching {
+                                val (uri, path) = createCameraCaptureUri(context)
+                                cameraCapturePath = path
+                                cameraLauncher.launch(uri)
+                            }.onFailure { throwable ->
+                                targetUploadIndex = null
+                                localError = CadastroApiErrorMapper.mapUserMessage(
+                                    throwable.message,
+                                    "Nao foi possivel iniciar a camera.",
+                                )
+                            }
+                        },
+                    ) {
+                        Text("Camera")
+                    }
+                    TextButton(
+                        onClick = {
+                            showArquivoSourceModal = false
+                            targetUploadIndex = null
+                        },
+                    ) {
+                        Text("Cancelar")
+                    }
+                }
+            },
+        )
+    }
+
+    if (showSelectStatusDialog) {
+        AlertDialog(
+            onDismissRequest = { showSelectStatusDialog = false },
+            title = { Text("Selecionar status") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Antes de continuar, selecione o status da adesao.")
+                    SelectionField(
+                        label = "Status da Adesao",
+                        value = state.statusAdesoes.firstOrNull { it.id == selectedStatusId }?.nome ?: "Selecione",
+                        options = listOf("" to "Selecione") + state.statusAdesoes.map { it.id to it.nome },
+                        onSelected = { selectedStatusId = it },
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (selectedStatusId.isBlank()) {
+                            localError = "Selecione o status da adesao antes de continuar."
+                            return@TextButton
+                        }
+                        showSelectStatusDialog = false
+                    },
+                ) {
+                    Text("Aplicar status")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSelectStatusDialog = false }) {
+                    Text("Continuar editando")
+                }
+            },
+        )
+    }
+
     localError?.let { message ->
         val tone = resolveInclusaoMessageTone(message)
-        val (_, textColor) = inclusaoMessageToneColors(tone)
+        val (container, textColor) = inclusaoMessageToneColors(tone)
+        val title = when (tone) {
+            InclusaoMessageTone.ERROR -> "Erro"
+            InclusaoMessageTone.ALERT -> "Atencao"
+            InclusaoMessageTone.WARNING -> "Aviso"
+            InclusaoMessageTone.SUCCESS -> "Sucesso"
+        }
         AlertDialog(
             onDismissRequest = { localError = null },
-            title = { Text("Erro", color = if (tone == InclusaoMessageTone.ERROR) Red500 else BrandOrange) },
-            text = { Text(message, color = textColor) },
+            title = {
+                Text(
+                    title,
+                    color = if (tone == InclusaoMessageTone.ERROR) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary,
+                )
+            },
+            text = {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = container,
+                    shape = MaterialTheme.shapes.medium,
+                ) {
+                    Text(
+                        text = message,
+                        color = textColor,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    )
+                }
+            },
             confirmButton = { TextButton(onClick = { localError = null }) { Text("OK") } },
         )
     }
@@ -832,10 +1443,10 @@ fun InclusaoDependenteDialog(
         AlertDialog(
             onDismissRequest = {
                 successDialogMessage = null
-                onSuccess()
                 onDismiss()
+                onCompleted()
             },
-            title = { Text("Sucesso", color = EmeraldDark) },
+            title = { Text("Sucesso", color = textColor) },
             text = {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -853,8 +1464,8 @@ fun InclusaoDependenteDialog(
                 TextButton(
                     onClick = {
                         successDialogMessage = null
-                        onSuccess()
                         onDismiss()
+                        onCompleted()
                     },
                 ) {
                     Text("OK")
@@ -903,6 +1514,68 @@ private fun toIsoDateOrNull(rawDigits: String): String? {
     return "%04d-%02d-%02d".format(year, month, day)
 }
 
+private fun shouldRetryLemmitRequest(message: String?): Boolean {
+    val normalized = message
+        ?.lowercase(Locale.ROOT)
+        ?.trim()
+        .orEmpty()
+    if (normalized.isBlank()) return true
+    if (normalized.contains("cpf invalido")) return false
+    if (normalized.contains("nao encontrado")) return false
+    if (normalized.contains("não encontrado")) return false
+    if (normalized.contains("forbidden") || normalized.contains("unauthorized")) return false
+
+    return listOf(
+        "timeout",
+        "timed out",
+        "tempo limite",
+        "indisponivel",
+        "indisponível",
+        "temporar",
+        "service unavailable",
+        "bad gateway",
+        "gateway timeout",
+        "failed to connect",
+        "connection reset",
+        "network",
+        "socket",
+        "i/o",
+        "status: 5",
+        "status 5",
+        "429",
+    ).any { normalized.contains(it) }
+}
+
+private fun resolveLemmitDateDigits(rawValue: String?): String? {
+    val iso = rawValue
+        ?.trim()
+        ?.substringBefore('T')
+        ?.takeIf { Regex("""\d{4}-\d{2}-\d{2}""").matches(it) }
+        ?: return null
+    val parts = iso.split("-")
+    if (parts.size != 3) return null
+    return "${parts[2]}${parts[1]}${parts[0]}"
+}
+
+private fun resolveLemmitSexoCodigo(rawValue: String?): Int? {
+    val normalized = rawValue
+        ?.trim()
+        ?.lowercase(Locale.ROOT)
+        ?.normalizeForComparison()
+        ?: return null
+    return when {
+        normalized.contains("masculino") || normalized == "m" || normalized == "1" -> 1
+        normalized.contains("feminino") || normalized == "f" || normalized == "0" || normalized == "2" -> 0
+        else -> null
+    }
+}
+
+private fun String.normalizeForComparison(): String {
+    return java.text.Normalizer
+        .normalize(this, java.text.Normalizer.Form.NFD)
+        .replace(Regex("\\p{M}+"), "")
+}
+
 private fun isUnder18(isoDate: String): Boolean {
     val date = runCatching { LocalDate.parse(isoDate) }.getOrNull() ?: return false
     return Period.between(date, LocalDate.now()).years < 18
@@ -948,12 +1621,14 @@ private fun buildCadastroPayload(
     empresaCodigo: Int,
     empresaNome: String,
     empresaRaw: JsonElement?,
+    planosRaw: JsonElement?,
     status: String,
     statusAdesaoId: String?,
     vendedor: TeamMemberOption,
     adesionista: TeamMemberOption?,
     dependentes: List<DependenteFormState>,
 ): JsonObject {
+    val responsavelCpfDigits = responsavel.cpf.filter(Char::isDigit).take(11)
     val dependentesDb = buildJsonArray {
         dependentes.forEach { dep ->
             val dataIso = toIsoDateOrNull(dep.dataNascimento.text).orEmpty()
@@ -979,13 +1654,16 @@ private fun buildCadastroPayload(
         put("status", status)
         statusAdesaoId?.takeIf { it.isNotBlank() }?.let { put("status_adesao_id", it) }
         put("tipo_cadastro", "inclusao_dependente")
+        put("nome", responsavel.nome.trim())
+        put("cpf", responsavelCpfDigits)
         put("responsavel_financeiro_codigo", responsavel.codigo)
         put("responsavel_financeiro_nome", responsavel.nome)
-        put("responsavel_financeiro_cpf", responsavel.cpf)
+        put("responsavel_financeiro_cpf", responsavelCpfDigits)
         put("empresa_id", empresaCodigo)
         put("empresa_codigo", empresaCodigo)
         put("empresa_nome", empresaNome)
         if (empresaRaw != null) put("empresa_raw", empresaRaw)
+        if (planosRaw != null) put("planos_raw", planosRaw)
         put("dependentes", dependentesDb)
         if (vendedor.id.isNotBlank()) put("vendedor_id", vendedor.id)
         if (!vendedor.externalId.isNullOrBlank()) put("vendedor_codigo", vendedor.externalId)
@@ -1126,9 +1804,11 @@ private fun extractDependenteCodes(response: JsonElement): List<Int> {
     val root = response.jsonObject
     if (root["success"]?.jsonPrimitive?.booleanOrNull != true) {
         throw IllegalStateException(
-            root["error"]?.jsonPrimitive?.contentOrNull
-                ?: root["message"]?.jsonPrimitive?.contentOrNull
-                ?: "Erro ao incluir dependentes.",
+            CadastroApiErrorMapper.mapUserMessage(
+                root["error"]?.jsonPrimitive?.contentOrNull
+                    ?: root["message"]?.jsonPrimitive?.contentOrNull,
+                "Erro ao incluir dependentes.",
+            ),
         )
     }
     val dados = root["data"]?.jsonObject?.get("dados")?.jsonObject
@@ -1138,44 +1818,68 @@ private fun extractDependenteCodes(response: JsonElement): List<Int> {
     } ?: emptyList()
 }
 
-private fun extractPlanosFromEmpresa(raw: JsonElement?, planosMap: List<br.com.vendamais.mobile.data.models.PlanoMap>): List<PlanoOption> {
-    val source = when (raw) {
-        is JsonObject -> raw["precoPlano"]?.jsonArray
+private fun extractPlanosRawFromEmpresa(raw: JsonElement?): JsonElement? {
+    return when (raw) {
         is JsonArray -> raw
+        is JsonObject -> raw["precoPlano"] ?: raw["planos"] ?: raw["planosRaw"]
         else -> null
     }
-    if (source == null) {
-        return planosMap
+}
+
+private fun extractPlanosFromEmpresa(
+    raw: JsonElement?,
+    planosMap: List<br.com.vendamais.mobile.data.models.PlanoMap>,
+    planosOcultos: List<String>,
+): List<PlanoOption> {
+    val ocultos = planosOcultos.mapNotNull { it.trim().toIntOrNull() }.toSet()
+    val planosById = planosMap.associateBy { it.planoId }
+    val source = runCatching { extractPlanosRawFromEmpresa(raw)?.jsonArray }.getOrNull()
+
+    val options = if (source.isNullOrEmpty()) {
+        planosMap
             .filter { it.ativo }
             .map {
                 PlanoOption(
                     codigo = it.planoId,
                     nome = it.nomeExibicao,
+                    regraValor = it.regraValor,
                     label = it.nomeExibicao,
                 )
             }
-    }
-    return source.mapNotNull { item ->
-        val obj = item.jsonObject
-        val codigo = extractPlanoCodigo(obj) ?: return@mapNotNull null
-        val nome = planosMap.firstOrNull { it.planoId == codigo }?.nomeExibicao
-            ?: obj.jsonString("NomeANS", "nomeANS", "nome", "nomeExibicao")
-            ?: "Plano $codigo"
-        val valorTitular = obj.jsonMoney("ValorTitular", "valorTitular", "valor_titular")
-        val valorDependente = obj.jsonMoney("ValorDependente", "valorDependente", "valor_dependente")
+    } else {
+        source.mapNotNull { item ->
+            val obj = runCatching { item.jsonObject }.getOrNull() ?: return@mapNotNull null
+            val codigo = extractPlanoCodigo(obj) ?: return@mapNotNull null
+            val planoMap = planosById[codigo]
+            val nome = planoMap?.nomeExibicao
+                ?: obj.jsonString("NomeANS", "nomeANS", "nome", "nomeExibicao")
+                ?: "Plano $codigo"
+            val valorTitular = obj.jsonMoney("ValorTitular", "valorTitular", "valor_titular")
+            val valorAgregado = obj.jsonMoney("ValorAgregado", "valorAgregado", "valor_agregado")
+            val valorDependente = obj.jsonMoney("ValorDependente", "valorDependente", "valor_dependente")
+            val regraValor = planoMap?.regraValor ?: "dependente"
 
-        PlanoOption(
-            codigo = codigo,
-            nome = nome,
-            valorTitular = valorTitular,
-            valorDependente = valorDependente,
-            label = buildPlanoLabel(
+            PlanoOption(
+                codigo = codigo,
                 nome = nome,
                 valorTitular = valorTitular,
+                valorAgregado = valorAgregado,
                 valorDependente = valorDependente,
-            ),
-        )
+                regraValor = regraValor,
+                label = buildPlanoLabel(
+                    nome = nome,
+                    valorTitular = valorTitular,
+                    valorAgregado = valorAgregado,
+                    valorDependente = valorDependente,
+                ),
+            )
+        }
     }
+
+    return options
+        .filter { option -> option.codigo !in ocultos }
+        .distinctBy { it.codigo }
+        .sortedBy { it.codigo }
 }
 
 private fun extractPlanoCodigo(obj: JsonObject): Int? {
@@ -1223,13 +1927,15 @@ private fun JsonObject.jsonMoney(vararg keys: String): Double? {
 private fun buildPlanoLabel(
     nome: String,
     valorTitular: Double?,
+    valorAgregado: Double?,
     valorDependente: Double?,
 ): String {
-    if (valorTitular == null && valorDependente == null) return nome
+    if (valorTitular == null && valorAgregado == null && valorDependente == null) return nome
 
     val titular = valorTitular?.let(::formatCurrencyBr) ?: "-"
+    val agregado = valorAgregado?.let(::formatCurrencyBr) ?: "-"
     val dependente = valorDependente?.let(::formatCurrencyBr) ?: "-"
-    return "$nome | Titular: $titular | Dependente: $dependente"
+    return "$nome | Titular: $titular | Agregado: $agregado | Dependente: $dependente"
 }
 
 private fun formatCurrencyBr(value: Double): String {
@@ -1252,12 +1958,22 @@ private fun resolveInclusaoMessageTone(message: String): InclusaoMessageTone {
     }
 }
 
+@Composable
 private fun inclusaoMessageToneColors(tone: InclusaoMessageTone): Pair<androidx.compose.ui.graphics.Color, androidx.compose.ui.graphics.Color> {
+    val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
     return when (tone) {
-        InclusaoMessageTone.SUCCESS -> EmeraldSoft to EmeraldDark
-        InclusaoMessageTone.WARNING -> Amber100 to Amber500
-        InclusaoMessageTone.ALERT -> BrandOrange.copy(alpha = 0.18f) to BrandOrange
-        InclusaoMessageTone.ERROR -> Red100 to Red500
+        InclusaoMessageTone.SUCCESS ->
+            if (darkTheme) MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+            else EmeraldSoft to EmeraldDark
+        InclusaoMessageTone.WARNING ->
+            if (darkTheme) androidx.compose.ui.graphics.Color(0xFF4A3A1E) to androidx.compose.ui.graphics.Color(0xFFFFDE9E)
+            else Amber100 to Amber500
+        InclusaoMessageTone.ALERT ->
+            if (darkTheme) androidx.compose.ui.graphics.Color(0xFF4B2F1F) to androidx.compose.ui.graphics.Color(0xFFFFC39A)
+            else BrandOrange.copy(alpha = 0.18f) to BrandOrange
+        InclusaoMessageTone.ERROR ->
+            if (darkTheme) MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+            else Red100 to Red500
     }
 }
 
@@ -1269,12 +1985,46 @@ private fun validateUpload(fileName: String, mimeType: String, size: Long) {
     if (size > MAX_UPLOAD_BYTES) throw IllegalStateException("Arquivo excede 10MB.")
 }
 
+private fun createCameraCaptureUri(context: Context): Pair<Uri, String> {
+    val directory = File(context.cacheDir, "camera_uploads").apply { mkdirs() }
+    val file = File.createTempFile("dependente_", ".jpg", directory)
+    val uri = FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        file,
+    )
+    return uri to file.absolutePath
+}
+
 private fun resolveFileName(context: Context, uri: Uri): String {
     context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
         val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
         if (cursor.moveToFirst() && index >= 0) return cursor.getString(index)
     }
     return uri.lastPathSegment ?: "arquivo"
+}
+
+private fun writePreviewFile(
+    context: Context,
+    fileName: String,
+    bytes: ByteArray,
+): Uri {
+    val directory = File(context.cacheDir, "shared_qrcodes").apply { mkdirs() }
+    val safeName = fileName
+        .ifBlank { "arquivo" }
+        .replace(Regex("[^a-zA-Z0-9._-]"), "_")
+    val file = File(directory, "preview_${System.currentTimeMillis()}_$safeName")
+    file.writeBytes(bytes)
+    return FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        file,
+    )
+}
+
+private fun resolvePreviewMimeType(fileName: String): String {
+    val extension = fileName.substringAfterLast('.', "").lowercase(Locale.ROOT)
+    return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "*/*"
 }
 
 private class DependenteCpfVisualTransformation : VisualTransformation {

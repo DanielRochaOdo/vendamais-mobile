@@ -5,16 +5,26 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -24,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -32,47 +43,48 @@ import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.components.OdontoartBadge
 import br.com.vendamais.mobile.ui.components.VendaBrandWordmark
-import br.com.vendamais.mobile.ui.theme.BrandGreen
+import br.com.vendamais.mobile.ui.theme.BrandLime
 import br.com.vendamais.mobile.ui.theme.BrandOrange
-import br.com.vendamais.mobile.ui.theme.Red100
-import br.com.vendamais.mobile.ui.theme.Red500
-import br.com.vendamais.mobile.ui.theme.Slate200
-import br.com.vendamais.mobile.ui.theme.Slate500
-import br.com.vendamais.mobile.ui.theme.White
-import androidx.compose.foundation.text.KeyboardOptions
 
 @Composable
 fun LoginScreen(
     state: AppUiState,
     onEmailChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
+    rememberConnected: Boolean,
+    onRememberConnectedChange: (Boolean) -> Unit,
     onLogin: () -> Unit,
 ) {
+    val isDarkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val screenBackground = if (isDarkTheme) MaterialTheme.colorScheme.background else BrandLime
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BrandGreen),
+            .background(screenBackground),
         contentAlignment = Alignment.Center,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
                 .verticalScroll(rememberScrollState())
+                .imePadding()
                 .padding(horizontal = 24.dp, vertical = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            VendaBrandWordmark(subtitle = "Sistema de Gestão ERP")
+            VendaBrandWordmark(subtitle = "Sistema de Gestao ERP")
 
             Spacer(modifier = Modifier.height(28.dp))
 
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(30.dp),
-                color = White,
+                color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 2.dp,
                 shadowElevation = 10.dp,
-                border = BorderStroke(1.dp, Slate200),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
             ) {
                 Column(
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 26.dp),
@@ -88,7 +100,7 @@ fun LoginScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
                             text = "Email *",
-                            color = Slate500,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -109,7 +121,7 @@ fun LoginScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
                             text = "Senha *",
-                            color = Slate500,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -117,14 +129,33 @@ fun LoginScreen(
                             value = state.password,
                             onValueChange = onPasswordChange,
                             modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("••••••••") },
+                            placeholder = { Text("********") },
                             visualTransformation = PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(
                                 keyboardType = KeyboardType.Password,
                                 imeAction = ImeAction.Done,
                             ),
+                            keyboardActions = KeyboardActions(
+                                onDone = {
+                                    if (!state.loading) onLogin()
+                                },
+                            ),
                             singleLine = true,
                             shape = RoundedCornerShape(14.dp),
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(
+                            checked = rememberConnected,
+                            onCheckedChange = if (state.loading) null else onRememberConnectedChange,
+                        )
+                        Text(
+                            text = "Manter conectado",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
 
@@ -133,12 +164,12 @@ fun LoginScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(Red100)
+                                .background(MaterialTheme.colorScheme.errorContainer)
                                 .padding(horizontal = 14.dp, vertical = 12.dp),
                         ) {
-                        Text(
-                            text = message,
-                                color = Red500,
+                            Text(
+                                text = message,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
@@ -152,20 +183,20 @@ fun LoginScreen(
                         enabled = !state.loading,
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = BrandOrange,
-                            contentColor = White,
+                            containerColor = if (isDarkTheme) MaterialTheme.colorScheme.primary else BrandOrange,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
                         ),
                     ) {
                         if (state.loading) {
                             CircularProgressIndicator(
                                 strokeWidth = 2.dp,
-                                color = White,
+                                color = MaterialTheme.colorScheme.onPrimary,
                                 modifier = Modifier.height(22.dp),
                             )
                         } else {
                             Text(
                                 text = "Entrar",
-                                color = White,
+                                color = MaterialTheme.colorScheme.onPrimary,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                             )
@@ -183,12 +214,12 @@ fun LoginScreen(
             }
 
             Spacer(modifier = Modifier.height(26.dp))
-            OdontoartBadge()
+            OdontoartBadge(modifier = Modifier.fillMaxWidth())
             Spacer(modifier = Modifier.height(18.dp))
             Text(
-                text = "Acesso restrito a usuários autorizados",
+                text = "Acesso restrito a usuarios autorizados",
                 style = MaterialTheme.typography.bodySmall,
-                color = White.copy(alpha = 0.88f),
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.88f),
             )
         }
     }
