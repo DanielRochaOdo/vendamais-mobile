@@ -17,9 +17,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -58,6 +63,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.AppConfig
+import br.com.vendamais.mobile.domain.cadastro.isPendingCadastroStatus
 import br.com.vendamais.mobile.ui.components.ScreenBackground
 import br.com.vendamais.mobile.ui.components.VendaBrandIcon
 import br.com.vendamais.mobile.ui.screens.AdesoesExcluidasScreen
@@ -146,6 +152,8 @@ fun VendaMaisApp(
             state = state,
             onEmailChange = viewModel::updateEmail,
             onPasswordChange = viewModel::updatePassword,
+            rememberConnected = state.rememberConnected,
+            onRememberConnectedChange = viewModel::setRememberConnected,
             onLogin = viewModel::login,
         )
         return
@@ -176,7 +184,8 @@ fun VendaMaisApp(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)),
             ) {
                 when (state.activeTab) {
                     MainTab.DASHBOARD -> DashboardScreen(
@@ -321,6 +330,7 @@ fun VendaMaisApp(
 
     state.noticeMessage?.let { message ->
         val severity = resolveGlobalMessageSeverity(message)
+        val dismissNotice: () -> Unit = viewModel::clearNotice
         val (container, textColor) = globalMessageSeverityColors(severity)
         val title = when (severity) {
             GlobalMessageSeverity.SUCCESS -> "Sucesso"
@@ -334,7 +344,7 @@ fun VendaMaisApp(
             else -> BrandOrange
         }
         AlertDialog(
-            onDismissRequest = viewModel::clearNotice,
+            onDismissRequest = dismissNotice,
             title = { Text(title, color = titleColor) },
             text = {
                 Surface(
@@ -350,7 +360,7 @@ fun VendaMaisApp(
                 }
             },
             confirmButton = {
-                TextButton(onClick = viewModel::clearNotice) {
+                TextButton(onClick = dismissNotice) {
                     Text("OK")
                 }
             },
@@ -359,24 +369,53 @@ fun VendaMaisApp(
 
     state.pendingCadastroPrompt?.let { prompt ->
         AlertDialog(
-            onDismissRequest = viewModel::dismissPendingCadastroPrompt,
+            onDismissRequest = {
+                if (!state.pendingCadastroActionLoading) {
+                    viewModel.dismissPendingCadastroPrompt()
+                }
+            },
             title = { Text("Cadastro pendente encontrado") },
             text = {
-                Text(
-                    buildString {
-                        append("Ja existe um cadastro para este CPF")
-                        prompt.empresaNome?.takeIf { it.isNotBlank() }?.let { append(" em $it") }
-                        append(". Deseja continuar o rascunho existente?")
-                    },
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        buildString {
+                            append("Ja existe um cadastro pendente para este CPF")
+                            prompt.empresaNome?.takeIf { it.isNotBlank() }?.let { append(" em $it") }
+                            append(".")
+                        },
+                    )
+                    Text("Voce pode continuar o rascunho atual ou apagar e recomecar.")
+                    Text("Se apagar e recomecar, o pendente atual sera excluido para evitar conflito.")
+                }
             },
             dismissButton = {
-                TextButton(onClick = viewModel::dismissPendingCadastroPrompt) {
-                    Text("Cancelar")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = viewModel::dismissPendingCadastroPrompt,
+                        enabled = !state.pendingCadastroActionLoading,
+                    ) {
+                        Text("Cancelar")
+                    }
+                    TextButton(
+                        onClick = viewModel::restartPendingCadastro,
+                        enabled = !state.pendingCadastroActionLoading,
+                    ) {
+                        if (state.pendingCadastroActionLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Text("Apagar e recomecar")
+                        }
+                    }
                 }
             },
             confirmButton = {
-                TextButton(onClick = viewModel::continuePendingCadastro) {
+                TextButton(
+                    onClick = viewModel::continuePendingCadastro,
+                    enabled = !state.pendingCadastroActionLoading,
+                ) {
                     Text("Continuar")
                 }
             },
@@ -384,14 +423,14 @@ fun VendaMaisApp(
     }
 
     state.selectedCadastro?.let { cadastro ->
-        if (cadastro.tipoCadastro == "cadastro") {
+        if (cadastro.tipoCadastro == "cadastro" && isPendingCadastroStatus(cadastro.status)) {
             CadastroEditorDialog(
                 state = state,
                 viewModel = viewModel,
                 cadastro = cadastro,
                 onDismiss = viewModel::closeCadastro,
             )
-        } else if (cadastro.tipoCadastro == "inclusao_dependente" && cadastro.status == "incompleto") {
+        } else if (cadastro.tipoCadastro == "inclusao_dependente" && isPendingCadastroStatus(cadastro.status)) {
             InclusaoDependenteDialog(
                 state = state,
                 viewModel = viewModel,
@@ -400,6 +439,10 @@ fun VendaMaisApp(
                 onSuccess = {
                     viewModel.selectTab(MainTab.CADASTROS)
                     viewModel.selectCadastroAreaTab(CadastroAreaTab.DEPENDENTE)
+                },
+                onCompleted = {
+                    viewModel.selectTab(MainTab.CADASTROS)
+                    viewModel.selectCadastroAreaTab(CadastroAreaTab.COMPLETOS)
                 },
             )
         } else {

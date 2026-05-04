@@ -7,6 +7,7 @@ import br.com.vendamais.mobile.data.models.CadastroBaseData
 import br.com.vendamais.mobile.data.models.CadastroConfig
 import br.com.vendamais.mobile.data.models.CadastroContato
 import br.com.vendamais.mobile.data.models.CadastroDetalhe
+import br.com.vendamais.mobile.data.models.CadastroEndereco
 import br.com.vendamais.mobile.data.models.CadastroLinkItem
 import br.com.vendamais.mobile.data.models.PublicCadastroCheckCpfResponse
 import br.com.vendamais.mobile.data.models.PublicCadastroLinkResolveResponse
@@ -27,6 +28,9 @@ import br.com.vendamais.mobile.data.models.LemmitResponse
 import br.com.vendamais.mobile.data.models.MobileProfile
 import br.com.vendamais.mobile.data.models.StatusAdesao
 import br.com.vendamais.mobile.data.models.TeamMemberOption
+import br.com.vendamais.mobile.domain.cadastro.CadastroApiErrorMapper
+import br.com.vendamais.mobile.domain.cadastro.isPendingCadastroStatus
+import br.com.vendamais.mobile.domain.cadastro.pendingCadastroStatusQueryValue
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.header
@@ -43,6 +47,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
@@ -53,6 +58,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.put
 import java.util.Locale
+import java.security.MessageDigest
 
 class CadastroWorkflowRepository(
     private val client: HttpClient,
@@ -61,12 +67,20 @@ class CadastroWorkflowRepository(
     private val logTag = "CadastroWorkflowRepository"
 
     private fun isDuplicateDraftConstraintError(throwable: Throwable): Boolean {
-        val message = throwable.message?.lowercase(Locale.ROOT).orEmpty()
-        return message.contains("duplicate key") ||
-            message.contains("unique constraint") ||
-            message.contains("23505") ||
-            message.contains("cadastros_cadastro_incompleto_cpf_unique_idx")
+        val raw = throwable.message.orEmpty()
+        val normalized = raw.lowercase(Locale.ROOT)
+        val isGenericUniqueViolation =
+            normalized.contains("duplicate key") ||
+                normalized.contains("unique constraint") ||
+                normalized.contains("23505")
+
+        return CadastroApiErrorMapper.isPendingCadastroConstraintViolation(raw) || isGenericUniqueViolation
     }
+
+    @kotlinx.serialization.Serializable
+    private data class CadastroStatusRow(
+        val status: String? = null,
+    )
     suspend fun fetchCadastroConfig(session: SavedSession): CadastroConfig? {
         return getList<CadastroConfig>(
             path = "cadastro_config",
@@ -279,31 +293,38 @@ class CadastroWorkflowRepository(
                 ?.trim()
                 ?.lowercase(Locale.ROOT)
                 .orEmpty()
-            val statusPermiteContinuar = statusNormalizado in setOf("incompleto", "adesoes_pendentes", "pendente")
-            val canContinue = existing.canContinue && statusPermiteContinuar && !existing.cadastroId.isNullOrBlank()
-            throw CadastroExistenteException(
-                cadastroId = existing.cadastroId.takeIf { canContinue },
-                empresaNome = existing.empresaNome,
-                canContinue = canContinue,
-                buildString {
-                    append("Ja existe um cadastro para este CPF")
-                    existing.empresaNome?.let { append(" em $it") }
-                    when {
-                        canContinue -> {
-                            append(". Abra o rascunho existente para continuar.")
+            val statusPermiteContinuar = isPendingCadastroStatus(statusNormalizado)
+            if (!statusPermiteContinuar) {
+                Log.i(
+                    logTag,
+                    "createDraftFromCpf ignorando cadastro historico id=${existing.cadastroId ?: "-"} status=${existing.status ?: "-"} cpf=$cpf",
+                )
+            } else {
+                val canContinue = existing.canContinue && statusPermiteContinuar && !existing.cadastroId.isNullOrBlank()
+                throw CadastroExistenteException(
+                    cadastroId = existing.cadastroId.takeIf { canContinue },
+                    empresaNome = existing.empresaNome,
+                    canContinue = canContinue,
+                    buildString {
+                        append("Ja existe um cadastro para este CPF")
+                        existing.empresaNome?.let { append(" em $it") }
+                        when {
+                            canContinue -> {
+                                append(". Abra o rascunho existente para continuar.")
+                            }
+                            statusNormalizado == "enviado" -> {
+                                append(". Este cadastro ja foi concluido e enviado.")
+                            }
+                            existing.status != null -> {
+                                append(". Status atual: ${existing.status}.")
+                            }
+                            else -> {
+                                append(".")
+                            }
                         }
-                        statusNormalizado == "enviado" -> {
-                            append(". Este cadastro ja foi concluido e enviado.")
-                        }
-                        existing.status != null -> {
-                            append(". Status atual: ${existing.status}.")
-                        }
-                        else -> {
-                            append(".")
-                        }
-                    }
-                },
-            )
+                    },
+                )
+            }
         }
 
         var warningMessage: String? = null
@@ -379,6 +400,7 @@ class CadastroWorkflowRepository(
                 session = session,
                 profile = profile,
                 payload = buildJsonObject {
+                    put("tipo_cadastro", "cadastro")
                     put("cpf", cpf)
                     put("nome", cadastroBase.nome)
                     cadastroBase.nomeMae?.let { put("nome_mae", it) }
@@ -425,14 +447,14 @@ class CadastroWorkflowRepository(
     ): CadastroDetalhe {
         return runCatching {
             val cadastroOriginal = cadastroPrefetched ?: fetchCadastroDetalhe(session, cadastroId)
-            val cadastroCore = ensureCadastroCoreFields(session, cadastroOriginal)
             val cadastroComCoreHints = withCoreFieldHints(
-                cadastro = cadastroCore,
+                cadastro = cadastroOriginal,
                 nomeHint = nomeHint,
                 dataNascimentoHint = dataNascimentoHint,
                 nomeMaeHint = nomeMaeHint,
             )
-            val cadastroComDependentes = withDependentesHint(cadastroComCoreHints, dependentesHint)
+            val cadastroCore = ensureCadastroCoreFields(session, cadastroComCoreHints)
+            val cadastroComDependentes = withDependentesHint(cadastroCore, dependentesHint)
             val cadastro = withArquivoPathHint(cadastroComDependentes, arquivoPathHint)
             validateCadastroReady(cadastro, config)
 
@@ -556,15 +578,32 @@ class CadastroWorkflowRepository(
             return cadastro
         }
 
-        return updateCadastro(
-            session = session,
-            id = cadastro.id,
-            payload = buildJsonObject {
-                nomeRecuperado?.let { put("nome", it) }
-                dataRecuperada?.let { put("data_nascimento", it) }
-                nomeMaeRecuperado?.let { put("nome_mae", it) }
-            },
-        )
+        return runCatching {
+            updateCadastro(
+                session = session,
+                id = cadastro.id,
+                payload = buildJsonObject {
+                    nomeRecuperado?.let { put("nome", it) }
+                    dataRecuperada?.let { put("data_nascimento", it) }
+                    nomeMaeRecuperado?.let { put("nome_mae", it) }
+                },
+            )
+        }.getOrElse { throwable ->
+            if (isDuplicateDraftConstraintError(throwable)) {
+                Log.w(
+                    logTag,
+                    "ensureCadastroCoreFields ignorando conflito de unicidade ao persistir core fields id=${cadastro.id}",
+                    throwable,
+                )
+                cadastro.copy(
+                    nome = nomeRecuperado ?: cadastro.nome,
+                    dataNascimento = dataRecuperada ?: cadastro.dataNascimento,
+                    nomeMae = nomeMaeRecuperado ?: cadastro.nomeMae,
+                )
+            } else {
+                throw throwable
+            }
+        }
     }
 
     suspend fun fetchCadastroDetalhe(session: SavedSession, id: String): CadastroDetalhe {
@@ -575,11 +614,60 @@ class CadastroWorkflowRepository(
                 parameter("id", "eq.$id")
                 parameter(
                     "select",
-                    "id,status,tipo_cadastro,nome,cpf,data_nascimento,sexo_codigo,nome_mae,contatos,endereco,dependentes,empresa_id,empresa_codigo,empresa_nome,empresa_cnpj,empresa_exige_matricula,empresa_raw,planos_raw,numero_matricula,status_adesao_id,vendedor_nome,vendedor_codigo,adesionista_nome,adesionista_codigo,responsavel_financeiro_codigo,responsavel_financeiro_nome,responsavel_financeiro_cpf,contatos_responsavel_financeiro,motivo_bloqueio,erp_response,arquivo_path,plano_codigo,created_at,updated_at"
+                    "id,status,tipo_cadastro,nome,cpf,data_nascimento,sexo_codigo,nome_mae,contatos,endereco,dependentes,empresa_id,empresa_codigo,empresa_nome,empresa_cnpj,empresa_exige_matricula,empresa_raw,planos_raw,numero_matricula,status_adesao_id,vendedor_nome,vendedor_codigo,adesionista_nome,adesionista_codigo,responsavel_financeiro_codigo,responsavel_financeiro_nome,responsavel_financeiro_cpf,contatos_responsavel_financeiro,motivo_bloqueio,erp_dados_associado,erp_response,arquivo_path,plano_codigo,created_at,updated_at"
                 )
                 parameter("limit", 1)
             },
         ).firstOrNull() ?: throw IllegalStateException("Cadastro nao encontrado.")
+    }
+
+    suspend fun backfillCadastroMissingDataByCpf(
+        session: SavedSession,
+        cadastro: CadastroDetalhe,
+    ): CadastroDetalhe {
+        val cpf = CadastroPayloadBuilder.normalizeDigits(cadastro.cpf)
+        if (cpf.length != 11) return cadastro
+
+        val enderecoAtual = parseCadastroEnderecoFlex(cadastro.endereco)
+        val contatosAtuais = parseCadastroContatosFlex(cadastro.contatos)
+        val precisaEndereco = !hasEnderecoData(enderecoAtual)
+        val precisaContatos = contatosAtuais.isEmpty()
+        if (!precisaEndereco && !precisaContatos) return cadastro
+
+        var enderecoCandidato = parseEnderecoFromErpAssociado(cadastro.erpDadosAssociado)
+        var contatosCandidatos = parseContatoFromErpAssociado(cadastro.erpDadosAssociado)
+
+        if ((precisaEndereco && !hasEnderecoData(enderecoCandidato)) || (precisaContatos && contatosCandidatos.isEmpty())) {
+            val anterior = runCatching { findClienteByCpf(session, cpf) }.getOrNull()
+            if (precisaEndereco && !hasEnderecoData(enderecoCandidato)) {
+                enderecoCandidato = anterior?.endereco
+            }
+            if (precisaContatos && contatosCandidatos.isEmpty()) {
+                contatosCandidatos = anterior?.contatos.orEmpty()
+            }
+        }
+
+        val contatosNormalizados = normalizeContatosForPersist(contatosCandidatos)
+        val payload = buildJsonObject {
+            if (precisaEndereco && hasEnderecoData(enderecoCandidato)) {
+                put("endereco", json.encodeToJsonElement(CadastroEnderecoSerializerCache.serializer, enderecoCandidato!!))
+            }
+            if (precisaContatos && contatosNormalizados.isNotEmpty()) {
+                put("contatos", json.encodeToJsonElement(ListSerializerCache.contatos, contatosNormalizados))
+            }
+        }
+        if (payload.isEmpty()) return cadastro
+
+        val payloadComAuditoria = buildJsonObject {
+            payload.forEach { (key, value) -> put(key, value) }
+            put("created_by", session.userId)
+        }
+        return runCatching {
+            patchCadastroById(session, cadastro.id, payloadComAuditoria)
+            fetchCadastroDetalhe(session, cadastro.id)
+        }.onFailure { throwable ->
+            Log.w(logTag, "Falha ao preencher dados faltantes por CPF para cadastro ${cadastro.id}", throwable)
+        }.getOrDefault(cadastro)
     }
 
     suspend fun updateCadastro(session: SavedSession, id: String, payload: JsonObject): CadastroDetalhe {
@@ -593,10 +681,101 @@ class CadastroWorkflowRepository(
                 put("created_by", session.userId)
             }
         }
+        try {
+            patchCadastroById(session, id, payloadComCreatedBy)
+        } catch (throwable: Throwable) {
+            if (!isDuplicateDraftConstraintError(throwable)) throw throwable
+
+            val profileId = payloadComCreatedBy["created_by"]
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?.trim()
+                ?.ifBlank { null }
+                ?: session.userId
+            val tipoCadastro = payloadComCreatedBy["tipo_cadastro"]
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?.trim()
+                .orEmpty()
+            val cpfLookupFromPayload = extractCadastroCpfFromPayload(payloadComCreatedBy)
+            val cpfLookup = if (cpfLookupFromPayload.isNotBlank()) {
+                cpfLookupFromPayload
+            } else {
+                runCatching {
+                    fetchCadastroDetalhe(session, id).cpf
+                        ?.filter(Char::isDigit)
+                        ?.takeIf { it.length == 11 }
+                        .orEmpty()
+                }.getOrDefault("")
+            }
+            val responsavelCpfLookup = payloadComCreatedBy["responsavel_financeiro_cpf"]
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?.filter(Char::isDigit)
+                .orEmpty()
+            val existingAfterConflict = when {
+                tipoCadastro == "inclusao_dependente" && responsavelCpfLookup.isNotBlank() -> {
+                    findPendingInclusaoByResponsavelCpf(
+                        session = session,
+                        profileId = profileId,
+                        responsavelCpfDigits = responsavelCpfLookup,
+                        excludeCadastroId = id,
+                    )
+                }
+                cpfLookup.isNotBlank() -> {
+                    getList<CadastroIdRow>(
+                        path = "cadastros",
+                        session = session,
+                        query = {
+                            parameter("id", "neq.$id")
+                            parameter("tipo_cadastro", "eq.cadastro")
+                            parameter("status", pendingCadastroStatusQueryValue())
+                            parameter("cpf", "eq.$cpfLookup")
+                            parameter("created_by", "eq.$profileId")
+                            parameter("select", "id")
+                            parameter("order", "updated_at.desc")
+                            parameter("limit", 1)
+                        },
+                    ).firstOrNull()
+                }
+                else -> null
+            }
+
+            if (existingAfterConflict != null) {
+                if (existingAfterConflict.id == id) {
+                    Log.w(
+                        logTag,
+                        "updateCadastro encontrou conflito pendente com o mesmo id=$id; retornando detalhe atual sem reaplicar patch.",
+                    )
+                    return fetchCadastroDetalhe(session, id)
+                }
+                Log.w(
+                    logTag,
+                    "updateCadastro detectou conflito de pendente duplicado para id=$id; reaplicando no pendente existente id=${existingAfterConflict.id}.",
+                    throwable,
+                )
+                patchCadastroById(session, existingAfterConflict.id, payloadComCreatedBy)
+                return fetchCadastroDetalhe(session, existingAfterConflict.id)
+            }
+            Log.w(
+                logTag,
+                "updateCadastro recebeu violacao de unicidade mas nao encontrou pendente para reconciliar id=$id tipoCadastro=$tipoCadastro cpfLookup=$cpfLookup msg=${throwable.message}",
+            )
+            throw throwable
+        }
+
+        return fetchCadastroDetalhe(session, id)
+    }
+
+    private suspend fun patchCadastroById(
+        session: SavedSession,
+        id: String,
+        payload: JsonObject,
+    ) {
         client.safePost<JsonElement>(
             url = "${AppConfig.supabaseUrl}/rest/v1/cadastros?id=eq.$id",
             json = json,
-            body = payloadComCreatedBy,
+            body = payload,
         ) {
             applyAuthHeaders(session)
             header("Prefer", "return=representation")
@@ -605,8 +784,48 @@ class CadastroWorkflowRepository(
             method = io.ktor.http.HttpMethod.Patch
             contentType(ContentType.Application.Json)
         }
+    }
 
-        return fetchCadastroDetalhe(session, id)
+    private fun extractCadastroCpfFromPayload(payload: JsonObject): String {
+        val fromRoot = payload["cpf"]?.jsonPrimitive?.contentOrNull?.filter(Char::isDigit).orEmpty()
+        if (fromRoot.length == 11) return fromRoot
+
+        val dependentes = runCatching { payload["dependentes"]?.jsonArray }.getOrNull() ?: return ""
+        val titular = dependentes.firstOrNull() ?: return ""
+        val titularObj = runCatching { titular.jsonObject }.getOrNull() ?: return ""
+        val fromTitular = titularObj["cpf"]?.jsonPrimitive?.contentOrNull?.filter(Char::isDigit).orEmpty()
+        return if (fromTitular.length == 11) fromTitular else ""
+    }
+
+    private suspend fun findPendingInclusaoByResponsavelCpf(
+        session: SavedSession,
+        profileId: String,
+        responsavelCpfDigits: String,
+        excludeCadastroId: String? = null,
+    ): CadastroIdRow? {
+        if (responsavelCpfDigits.isBlank()) return null
+        val pendentes = getList<CadastroInclusaoLookupRow>(
+            path = "cadastros",
+            session = session,
+            query = {
+                parameter("tipo_cadastro", "eq.inclusao_dependente")
+                parameter("status", pendingCadastroStatusQueryValue())
+                parameter("created_by", "eq.$profileId")
+                parameter("select", "id,responsavel_financeiro_cpf")
+                parameter("order", "updated_at.desc")
+                parameter("limit", 50)
+            },
+        )
+        return pendentes
+            .firstOrNull { item ->
+                if (!excludeCadastroId.isNullOrBlank() && item.id == excludeCadastroId) {
+                    return@firstOrNull false
+                }
+                item.responsavelFinanceiroCpf
+                    ?.filter(Char::isDigit)
+                    .orEmpty() == responsavelCpfDigits
+            }
+            ?.let { CadastroIdRow(id = it.id) }
     }
 
     suspend fun createCadastroDraft(
@@ -618,21 +837,20 @@ class CadastroWorkflowRepository(
         val tipoCadastro = payload["tipo_cadastro"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
         val cpf = payload["cpf"]?.jsonPrimitive?.contentOrNull?.filter(Char::isDigit).orEmpty()
         val responsavelCpf = payload["responsavel_financeiro_cpf"]?.jsonPrimitive?.contentOrNull?.filter(Char::isDigit).orEmpty()
+        val statusToPersist = payload["status"]
+            ?.jsonPrimitive
+            ?.contentOrNull
+            ?.trim()
+            ?.lowercase(Locale.ROOT)
+            ?.takeIf { it.isNotBlank() }
+            ?: "incompleto"
         val existing = when {
             tipoCadastro == "inclusao_dependente" && responsavelCpf.isNotBlank() -> {
-                getList<CadastroIdRow>(
-                    path = "cadastros",
+                findPendingInclusaoByResponsavelCpf(
                     session = session,
-                    query = {
-                        parameter("tipo_cadastro", "eq.inclusao_dependente")
-                        parameter("status", "eq.incompleto")
-                        parameter("responsavel_financeiro_cpf", "eq.$responsavelCpf")
-                        parameter("created_by", "eq.$profileId")
-                        parameter("select", "id")
-                        parameter("order", "updated_at.desc")
-                        parameter("limit", 1)
-                    },
-                ).firstOrNull()
+                    profileId = profileId,
+                    responsavelCpfDigits = responsavelCpf,
+                )
             }
             cpf.isNotBlank() -> {
                 getList<CadastroIdRow>(
@@ -640,7 +858,7 @@ class CadastroWorkflowRepository(
                     session = session,
                     query = {
                         parameter("tipo_cadastro", "eq.cadastro")
-                        parameter("status", "eq.incompleto")
+                        parameter("status", pendingCadastroStatusQueryValue())
                         parameter("cpf", "eq.$cpf")
                         parameter("created_by", "eq.$profileId")
                         parameter("select", "id")
@@ -658,7 +876,7 @@ class CadastroWorkflowRepository(
                 put("created_by", profileId)
                 profile.teamId?.let { put("team_id", it) }
             }
-            client.safePost<List<CadastroDetalhe>>(
+            val updatedRows = client.safePost<List<CadastroDetalhe>>(
                 url = "${AppConfig.supabaseUrl}/rest/v1/cadastros?id=eq.${existing.id}",
                 json = json,
                 body = updatePayload,
@@ -667,13 +885,14 @@ class CadastroWorkflowRepository(
                 header("Prefer", "return=representation")
                 method = io.ktor.http.HttpMethod.Patch
                 contentType(ContentType.Application.Json)
-            }.firstOrNull() ?: fetchCadastroDetalhe(session, existing.id)
+            }
+            fetchCadastroDetalhe(session, updatedRows.firstOrNull()?.id ?: existing.id)
         } else {
             val insertPayload = buildJsonObject {
                 payload.forEach { (key, value) -> put(key, value) }
                 put("created_by", profileId)
                 profile.teamId?.let { put("team_id", it) }
-                put("status", "incompleto")
+                put("status", statusToPersist)
             }
 
             val insertedRows = try {
@@ -690,19 +909,11 @@ class CadastroWorkflowRepository(
 
                 val existingAfterConflict = when {
                     tipoCadastro == "inclusao_dependente" && responsavelCpf.isNotBlank() -> {
-                        getList<CadastroIdRow>(
-                            path = "cadastros",
+                        findPendingInclusaoByResponsavelCpf(
                             session = session,
-                            query = {
-                                parameter("tipo_cadastro", "eq.inclusao_dependente")
-                                parameter("status", "eq.incompleto")
-                                parameter("responsavel_financeiro_cpf", "eq.$responsavelCpf")
-                                parameter("created_by", "eq.$profileId")
-                                parameter("select", "id")
-                                parameter("order", "updated_at.desc")
-                                parameter("limit", 1)
-                            },
-                        ).firstOrNull()
+                            profileId = profileId,
+                            responsavelCpfDigits = responsavelCpf,
+                        )
                     }
                     cpf.isNotBlank() -> {
                         getList<CadastroIdRow>(
@@ -710,7 +921,7 @@ class CadastroWorkflowRepository(
                             session = session,
                             query = {
                                 parameter("tipo_cadastro", "eq.cadastro")
-                                parameter("status", "eq.incompleto")
+                                parameter("status", pendingCadastroStatusQueryValue())
                                 parameter("cpf", "eq.$cpf")
                                 parameter("created_by", "eq.$profileId")
                                 parameter("select", "id")
@@ -728,7 +939,9 @@ class CadastroWorkflowRepository(
                 throw throwable
             }
 
-            insertedRows.firstOrNull() ?: throw IllegalStateException("Falha ao criar rascunho.")
+            val insertedId = insertedRows.firstOrNull()?.id
+                ?: throw IllegalStateException("Falha ao criar rascunho.")
+            fetchCadastroDetalhe(session, insertedId)
         }
     }
 
@@ -815,6 +1028,9 @@ class CadastroWorkflowRepository(
         if (cadastro.nome.isNullOrBlank()) throw IllegalStateException("Cadastro sem nome.")
         if (cadastro.dataNascimento.isNullOrBlank()) throw IllegalStateException("Cadastro sem data de nascimento.")
         if ((cadastro.empresaId ?: cadastro.empresaCodigo) == null) throw IllegalStateException("Selecione uma empresa antes de enviar.")
+        if (cadastro.empresaExigeMatricula == 1 && cadastro.numeroMatricula.isNullOrBlank()) {
+            throw IllegalStateException("Matricula obrigatoria para esta empresa.")
+        }
         val dependentes = CadastroPayloadBuilder.detailDependentes(json, cadastro, 0)
         if (dependentes.isEmpty()) {
             throw IllegalStateException("Cadastro sem dependentes validos para envio.")
@@ -884,13 +1100,14 @@ class CadastroWorkflowRepository(
         cadastroId: String,
         payload: JsonObject,
     ): JsonElement {
+        val idempotencyKey = buildCadastroSendIdempotencyKey(cadastroId, payload)
         val response: JsonElement = client.safePost(
             url = "${AppConfig.supabaseUrl}/functions/v1/erp-novo-usuario2",
             json = json,
             body = payload,
         ) {
             applyAuthHeaders(session)
-            header("X-Idempotency-Key", "cadastro:$cadastroId")
+            header("X-Idempotency-Key", idempotencyKey)
             header("X-Cadastro-Id", cadastroId)
         }
 
@@ -911,6 +1128,17 @@ class CadastroWorkflowRepository(
         return response
     }
 
+    private fun buildCadastroSendIdempotencyKey(
+        cadastroId: String,
+        payload: JsonObject,
+    ): String {
+        val hashBytes = MessageDigest
+            .getInstance("SHA-256")
+            .digest(payload.toString().toByteArray(Charsets.UTF_8))
+        val hashHex = hashBytes.joinToString("") { byte -> "%02x".format(byte) }
+        return "cadastro:$cadastroId:$hashHex"
+    }
+
     private suspend fun syncCadastroAfterSend(
         session: SavedSession,
         cadastroId: String,
@@ -918,10 +1146,39 @@ class CadastroWorkflowRepository(
         response: JsonElement,
         success: Boolean,
     ) {
+        val statusPersistido = if (success) {
+            "enviado"
+        } else {
+            val statusAtual = runCatching {
+                getList<CadastroStatusRow>(
+                    path = "cadastros",
+                    session = session,
+                    query = {
+                        parameter("id", "eq.$cadastroId")
+                        parameter("select", "status")
+                        parameter("limit", 1)
+                    },
+                ).firstOrNull()?.status?.trim()?.lowercase(Locale.ROOT)
+            }.getOrNull()
+
+            // Evita rebaixar para "incompleto" um cadastro que já foi enviado com sucesso.
+            if (statusAtual == "enviado") "enviado" else "incompleto"
+        }
+
+        val cpfFromPayload = extractCpfFromErpPayload(payload)
+        val cpfFromCadastro = runCatching {
+            fetchCadastroDetalhe(session, cadastroId).cpf
+                ?.filter(Char::isDigit)
+                ?.takeIf { it.length == 11 }
+        }.getOrNull()
+        val cpfForSync = cpfFromPayload ?: cpfFromCadastro
+
         val body = buildJsonObject {
-            put("status", if (success) "enviado" else "incompleto")
+            put("status", statusPersistido)
             put("payload_erp", payload)
             put("erp_response", response)
+            put("tipo_cadastro", "cadastro")
+            cpfForSync?.let { put("cpf", it) }
             put("created_by", session.userId)
         }
 
@@ -939,6 +1196,38 @@ class CadastroWorkflowRepository(
         }
     }
 
+    private fun extractCpfFromErpPayload(payload: JsonElement): String? {
+        val root = runCatching { payload.jsonObject }.getOrNull() ?: return null
+        val dados = runCatching { root["dados"]?.jsonObject }.getOrNull()
+
+        val cpfResponsavel = runCatching {
+            dados
+                ?.get("responsavelFinanceiro")
+                ?.jsonObject
+                ?.get("cpf")
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?.filter(Char::isDigit)
+                ?.takeIf { it.length == 11 }
+        }.getOrNull()
+        if (!cpfResponsavel.isNullOrBlank()) return cpfResponsavel
+
+        val cpfDependente = runCatching {
+            dados
+                ?.get("dependente")
+                ?.jsonArray
+                ?.firstOrNull()
+                ?.jsonObject
+                ?.get("cpf")
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?.filter(Char::isDigit)
+                ?.takeIf { it.length == 11 }
+        }.getOrNull()
+
+        return cpfDependente
+    }
+
     private suspend fun createOrUpdateRascunho(
         session: SavedSession,
         profile: MobileProfile,
@@ -949,8 +1238,9 @@ class CadastroWorkflowRepository(
             path = "cadastros",
             session = session,
             query = {
+                parameter("tipo_cadastro", "eq.cadastro")
                 parameter("cpf", "eq.${payload["cpf"]?.jsonPrimitive?.content}")
-                parameter("status", "eq.incompleto")
+                parameter("status", pendingCadastroStatusQueryValue())
                 parameter("created_by", "eq.$profileId")
                 parameter("select", "id")
                 parameter("order", "updated_at.desc")
@@ -961,6 +1251,7 @@ class CadastroWorkflowRepository(
         return if (existing != null) {
             val updatePayload = buildJsonObject {
                 payload.forEach { (key, value) -> put(key, value) }
+                put("tipo_cadastro", "cadastro")
                 put("created_by", profileId)
                 profile.teamId?.let { put("team_id", it) }
             }
@@ -977,6 +1268,7 @@ class CadastroWorkflowRepository(
         } else {
             val insertPayload = buildJsonObject {
                 payload.forEach { (key, value) -> put(key, value) }
+                put("tipo_cadastro", "cadastro")
                 put("created_by", profileId)
                 profile.teamId?.let { put("team_id", it) }
                 put("status", "incompleto")
@@ -998,8 +1290,9 @@ class CadastroWorkflowRepository(
                     path = "cadastros",
                     session = session,
                     query = {
+                        parameter("tipo_cadastro", "eq.cadastro")
                         parameter("cpf", "eq.${payload["cpf"]?.jsonPrimitive?.content}")
-                        parameter("status", "eq.incompleto")
+                        parameter("status", pendingCadastroStatusQueryValue())
                         parameter("created_by", "eq.$profileId")
                         parameter("select", "id")
                         parameter("order", "updated_at.desc")
@@ -1059,7 +1352,7 @@ class CadastroWorkflowRepository(
         }
     }
 
-    private suspend fun canUseLemmit(session: SavedSession, userId: String): Boolean {
+    suspend fun canUseLemmit(session: SavedSession, userId: String): Boolean {
         return client.safePost(
             url = "${AppConfig.supabaseUrl}/rest/v1/rpc/can_use_lemmit",
             json = json,
@@ -1069,7 +1362,7 @@ class CadastroWorkflowRepository(
         }
     }
 
-    private suspend fun fetchLemmitLimitInfo(session: SavedSession, userId: String): List<LemmitLimitInfo> {
+    suspend fun fetchLemmitLimitInfo(session: SavedSession, userId: String): List<LemmitLimitInfo> {
         return client.safePost(
             url = "${AppConfig.supabaseUrl}/rest/v1/rpc/get_lemmit_limit_info",
             json = json,
@@ -1079,7 +1372,7 @@ class CadastroWorkflowRepository(
         }
     }
 
-    private suspend fun consultarCpfLemmit(session: SavedSession, cpf: String): LemmitResponse {
+    suspend fun consultarCpfLemmit(session: SavedSession, cpf: String): LemmitResponse {
         return client.safePost(
             url = "${AppConfig.supabaseUrl}/functions/v1/lemit-consulta-pessoa",
             json = json,
@@ -1097,6 +1390,30 @@ class CadastroWorkflowRepository(
         ) {
             applyAuthHeaders(session)
         }
+    }
+
+    suspend fun consultarEnderecoPorCep(session: SavedSession, cep: String): CadastroEndereco {
+        val cepNormalizado = CadastroPayloadBuilder.normalizeDigits(cep).take(8)
+        if (cepNormalizado.length != 8) {
+            throw IllegalStateException("CEP invalido. Informe os 8 digitos.")
+        }
+
+        val response = consultarEnderecoCep(session, cepNormalizado)
+        val root = runCatching { response.jsonObject }.getOrNull()
+        val explicitError = root?.get("error")?.jsonPrimitive?.contentOrNull
+            ?: root?.get("message")?.jsonPrimitive?.contentOrNull
+        if (!explicitError.isNullOrBlank()) {
+            throw IllegalStateException(explicitError)
+        }
+
+        val enderecoParseado = parseCadastroEnderecoFlex(response)
+        val endereco = enderecoParseado?.copy(
+            cep = enderecoParseado.cep.ifBlank { cepNormalizado },
+        )
+        if (!hasEnderecoData(endereco)) {
+            throw IllegalStateException("CEP nao encontrado.")
+        }
+        return endereco ?: throw IllegalStateException("CEP nao encontrado.")
     }
 
     suspend fun buscarResponsaveisFinanceiros(
@@ -1126,7 +1443,21 @@ class CadastroWorkflowRepository(
             throw IllegalStateException(explicitError)
         }
 
-        val dados = root["dados"]?.jsonArray ?: emptyList<JsonElement>()
+        val dados = extractAssociadosArray(root)
+        if (dados.isEmpty()) {
+            val dadosObj = runCatching { root["dados"]?.jsonObject }.getOrNull()
+            val nestedError = dadosObj
+                ?.get("error")
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?: dadosObj
+                    ?.get("message")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+            if (!nestedError.isNullOrBlank()) {
+                throw IllegalStateException(nestedError)
+            }
+        }
         return dados.map { item ->
             val associado = item.jsonObject
             val dependentesRaw = associado["dependentes"]?.jsonArray ?: emptyList<JsonElement>()
@@ -1148,6 +1479,24 @@ class CadastroWorkflowRepository(
                 },
             )
         }
+    }
+
+    private fun extractAssociadosArray(root: JsonObject): JsonArray {
+        val dadosElement = root["dados"] ?: return buildJsonArray {}
+        if (dadosElement is JsonArray) return dadosElement
+
+        val dadosObject = runCatching { dadosElement.jsonObject }.getOrNull() ?: return buildJsonArray {}
+        dadosObject["dados"]?.let { nested ->
+            if (nested is JsonArray) return nested
+        }
+        dadosObject["associados"]?.let { nested ->
+            if (nested is JsonArray) return nested
+        }
+        dadosObject["items"]?.let { nested ->
+            if (nested is JsonArray) return nested
+        }
+
+        return buildJsonArray { add(dadosObject) }
     }
 
     suspend fun uploadDependenteDocumento(
@@ -1214,13 +1563,78 @@ class CadastroWorkflowRepository(
             ?.booleanOrNull == true
     }
 
-    suspend fun enviarInclusaoDependente(session: SavedSession, payload: JsonObject): JsonElement {
+    suspend fun enviarInclusaoDependente(
+        session: SavedSession,
+        payload: JsonObject,
+        cadastroId: String? = null,
+    ): JsonElement {
+        val idempotencyKey = buildInclusaoDependenteIdempotencyKey(cadastroId, payload)
         return client.safePost(
             url = "${AppConfig.supabaseUrl}/functions/v1/erp-novo-dependente",
             json = json,
             body = payload,
         ) {
             applyAuthHeaders(session)
+            header("X-Idempotency-Key", idempotencyKey)
+            if (!cadastroId.isNullOrBlank()) {
+                header("X-Cadastro-Id", cadastroId)
+            }
+        }
+    }
+
+    private fun buildInclusaoDependenteIdempotencyKey(
+        cadastroId: String?,
+        payload: JsonObject,
+    ): String {
+        val cadastroPart = cadastroId?.trim()?.ifBlank { "sem-cadastro" } ?: "sem-cadastro"
+        val hashBytes = MessageDigest
+            .getInstance("SHA-256")
+            .digest(payload.toString().toByteArray(Charsets.UTF_8))
+        val hashHex = hashBytes.joinToString("") { byte -> "%02x".format(byte) }
+        return "inclusao-dependente:$cadastroPart:$hashHex"
+    }
+
+    suspend fun closeDuplicateInclusaoPendentes(
+        session: SavedSession,
+        profileId: String,
+        responsavelCpf: String,
+        keepCadastroId: String,
+        erpResponse: JsonElement,
+    ) {
+        val cpfDigits = responsavelCpf.filter(Char::isDigit).take(11)
+        if (cpfDigits.length != 11) return
+
+        val pendentes = getList<CadastroInclusaoLookupRow>(
+            path = "cadastros",
+            session = session,
+            query = {
+                parameter("tipo_cadastro", "eq.inclusao_dependente")
+                parameter("status", pendingCadastroStatusQueryValue())
+                parameter("created_by", "eq.$profileId")
+                parameter("select", "id,responsavel_financeiro_cpf")
+                parameter("order", "updated_at.desc")
+                parameter("limit", 100)
+            },
+        )
+
+        pendentes.forEach { item ->
+            if (item.id == keepCadastroId) return@forEach
+            val itemCpf = item.responsavelFinanceiroCpf?.filter(Char::isDigit).orEmpty()
+            if (itemCpf != cpfDigits) return@forEach
+
+            runCatching {
+                patchCadastroById(
+                    session = session,
+                    id = item.id,
+                    payload = buildJsonObject {
+                        put("status", "enviado")
+                        put("tipo_cadastro", "inclusao_dependente")
+                        put("erp_response", erpResponse)
+                    },
+                )
+            }.onFailure { throwable ->
+                Log.w(logTag, "Falha ao encerrar pendente duplicado de inclusao id=${item.id}", throwable)
+            }
         }
     }
 
@@ -1248,6 +1662,7 @@ class CadastroWorkflowRepository(
     suspend fun submitPublicCadastro(
         token: String,
         cadastro: PublicCadastroPayload,
+        idempotencyKey: String? = null,
     ): PublicCadastroSubmitResponse {
         return client.safePost(
             url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-public-submit",
@@ -1256,7 +1671,12 @@ class CadastroWorkflowRepository(
                 put("token", token.trim())
                 put("cadastro", json.encodeToJsonElement(PublicCadastroPayload.serializer(), cadastro))
             },
-        )
+        ) {
+            idempotencyKey
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?.let { header("X-Idempotency-Key", it) }
+        }
     }
 
     private suspend fun checkErpAssociado(session: SavedSession, cpf: String): ErpAssociadoResponse {
@@ -1298,9 +1718,7 @@ class CadastroWorkflowRepository(
                     contatosList
                 }
             }
-        val endereco = runCatching {
-            cadastro.endereco?.let { json.decodeFromJsonElement(CadastroEnderecoSerializerCache.serializer, it) }
-        }.getOrNull()
+        val endereco = parseCadastroEnderecoFlex(cadastro.endereco)
 
         val erpDados = cadastro.erpDadosAssociado?.jsonObject?.get("dados")?.jsonArray ?: return null
         val associados = runCatching {
@@ -1455,6 +1873,13 @@ private data class CadastroIdRow(
 )
 
 @kotlinx.serialization.Serializable
+private data class CadastroInclusaoLookupRow(
+    val id: String,
+    @kotlinx.serialization.SerialName("responsavel_financeiro_cpf")
+    val responsavelFinanceiroCpf: String? = null,
+)
+
+@kotlinx.serialization.Serializable
 private data class ClienteLookupRow(
     val id: String,
     val nome: String? = null,
@@ -1481,18 +1906,19 @@ private object ListSerializerCache {
 }
 
 private fun parseCadastroContatosFlex(raw: JsonElement?): List<CadastroContato> {
-    val contatosArray = when (raw) {
-        is kotlinx.serialization.json.JsonArray -> raw
+    val normalized = decodeEmbeddedJsonElement(raw)
+    val contatosArray = when (normalized) {
+        is kotlinx.serialization.json.JsonArray -> normalized
         is JsonObject -> {
-            raw["contatos"]?.let { runCatching { it.jsonArray }.getOrNull() }
-                ?: raw["telefones"]?.let { runCatching { it.jsonArray }.getOrNull() }
-                ?: raw["items"]?.let { runCatching { it.jsonArray }.getOrNull() }
+            normalized.jsonArrayFlexible("contatos", "telefones", "items")
+                ?: normalized.jsonObjectFlexible("dados", "data")
+                    ?.jsonArrayFlexible("contatos", "telefones", "items")
         }
-        else -> raw?.let { runCatching { it.jsonArray }.getOrNull() }
+        else -> normalized.asJsonArrayFlexible()
     } ?: return emptyList()
 
     return contatosArray.mapNotNull { item ->
-        val obj = runCatching { item.jsonObject }.getOrNull() ?: return@mapNotNull null
+        val obj = item.asJsonObjectFlexible() ?: return@mapNotNull null
         val tipoRaw = obj.readString("tipo", "tipoContato", "tipo_contato", "kind")
             ?.lowercase(Locale.ROOT)
             ?.trim()
@@ -1522,12 +1948,48 @@ private fun parseCadastroContatosFlex(raw: JsonElement?): List<CadastroContato> 
     }.distinctBy { "${it.tipo}:${it.valor}" }
 }
 
+private fun normalizeContatosForPersist(contatos: List<CadastroContato>): List<CadastroContato> {
+    val filtered = contatos.mapNotNull { contato ->
+        val tipo = contato.tipo.trim().lowercase(Locale.ROOT)
+        val tipoNormalizado = when (tipo) {
+            "cel", "cell", "celular" -> "celular"
+            "fixo", "telefone", "residencial" -> "fixo"
+            "whatsapp", "zap" -> "whatsapp"
+            "email", "e-mail" -> "email"
+            else -> if (contato.valor.contains('@')) "email" else "celular"
+        }
+        val valor = if (tipoNormalizado == "email") {
+            contato.valor.trim()
+        } else {
+            contato.valor.filter(Char::isDigit)
+        }
+        if (valor.isBlank()) return@mapNotNull null
+        CadastroContato(
+            tipo = tipoNormalizado,
+            valor = valor,
+            principal = contato.principal,
+        )
+    }.distinctBy { "${it.tipo}:${it.valor}" }
+
+    if (filtered.isEmpty()) return emptyList()
+    return if (filtered.any { it.principal }) {
+        filtered
+    } else {
+        filtered.mapIndexed { index, contato -> contato.copy(principal = index == 0) }
+    }
+}
+
 private fun parseContatoFromErpAssociado(raw: JsonElement?): List<CadastroContato> {
-    val dados = raw?.jsonObject?.get("dados")?.jsonArray ?: return emptyList()
+    val dados = raw.asJsonObjectFlexible()
+        ?.jsonArrayFlexible("dados", "data")
+        ?: raw.asJsonObjectFlexible()
+            ?.jsonObjectFlexible("data", "dados")
+            ?.jsonArrayFlexible("dados", "data")
+        ?: return emptyList()
     val contatos = mutableListOf<CadastroContato>()
 
     dados.forEach { item ->
-        val obj = runCatching { item.jsonObject }.getOrNull() ?: return@forEach
+        val obj = item.asJsonObjectFlexible() ?: return@forEach
 
         contatos += parseCadastroContatosFlex(obj["contatos"])
 
@@ -1553,10 +2015,170 @@ private fun addContatoIfPresent(
     contatos += CadastroContato(tipo = tipo, valor = normalized, principal = false)
 }
 
+private val cadastroRepositoryJsonParser = Json {
+    ignoreUnknownKeys = true
+    isLenient = true
+}
+
+private fun decodeEmbeddedJsonElement(value: JsonElement?): JsonElement? {
+    val current = value ?: return null
+    if (current is JsonNull) return null
+    if (current !is JsonPrimitive) return current
+    val raw = current.contentOrNull?.trim().orEmpty()
+    if (raw.isBlank()) return null
+    if (!raw.startsWith("{") && !raw.startsWith("[")) return current
+    return runCatching { cadastroRepositoryJsonParser.parseToJsonElement(raw) }.getOrNull() ?: current
+}
+
+private fun JsonElement?.asJsonObjectFlexible(): JsonObject? {
+    val normalized = decodeEmbeddedJsonElement(this)
+    return when (normalized) {
+        is JsonObject -> normalized
+        else -> runCatching { normalized?.jsonObject }.getOrNull()
+    }
+}
+
+private fun JsonElement?.asJsonArrayFlexible(): kotlinx.serialization.json.JsonArray? {
+    val normalized = decodeEmbeddedJsonElement(this)
+    return when (normalized) {
+        is kotlinx.serialization.json.JsonArray -> normalized
+        else -> runCatching { normalized?.jsonArray }.getOrNull()
+    }
+}
+
+private fun JsonObject.jsonObjectFlexible(vararg keys: String): JsonObject? {
+    keys.forEach { key ->
+        this[key].asJsonObjectFlexible()?.let { return it }
+    }
+    return null
+}
+
+private fun JsonObject.jsonArrayFlexible(vararg keys: String): kotlinx.serialization.json.JsonArray? {
+    keys.forEach { key ->
+        this[key].asJsonArrayFlexible()?.let { return it }
+    }
+    return null
+}
+
+private fun JsonObject.hasEnderecoHints(): Boolean {
+    return containsKey("cep") ||
+        containsKey("CEP") ||
+        containsKey("logradouro") ||
+        containsKey("Logradouro") ||
+        containsKey("bairro") ||
+        containsKey("Bairro") ||
+        containsKey("cidade") ||
+        containsKey("Cidade") ||
+        containsKey("municipio") ||
+        containsKey("Municipio") ||
+        containsKey("uf") ||
+        containsKey("Uf") ||
+        containsKey("ufSigla") ||
+        containsKey("UfSigla")
+}
+
+private fun parseCadastroEnderecoFlex(raw: JsonElement?): CadastroEndereco? {
+    val root = raw.asJsonObjectFlexible() ?: return null
+    val data = root.jsonObjectFlexible("data", "Data")
+    val dados = root.jsonObjectFlexible("dados", "Dados")
+    val responsavel = root.jsonObjectFlexible("responsavelFinanceiro", "responsavel_financeiro", "ResponsavelFinanceiro")
+    val nestedResponsavel = data?.jsonObjectFlexible("responsavelFinanceiro", "responsavel_financeiro", "ResponsavelFinanceiro")
+    val target = listOfNotNull(
+        root,
+        root.jsonObjectFlexible("endereco", "Endereco"),
+        data,
+        data?.jsonObjectFlexible("endereco", "Endereco"),
+        dados,
+        dados?.jsonObjectFlexible("endereco", "Endereco"),
+        responsavel,
+        responsavel?.jsonObjectFlexible("endereco", "Endereco"),
+        nestedResponsavel,
+        nestedResponsavel?.jsonObjectFlexible("endereco", "Endereco"),
+    ).firstOrNull { it.hasEnderecoHints() } ?: return null
+
+    val municipioObj = target.jsonObjectFlexible("municipio", "Municipio")
+    val bairroObj = target.jsonObjectFlexible("bairro", "Bairro")
+    val tipoLogradouroObj = target.jsonObjectFlexible("tipoLogradouro", "TipoLogradouro")
+    val ufObj = target.jsonObjectFlexible("uf", "Uf", "estado", "Estado")
+    val uf = target.readString("uf", "Uf", "descricaoUf", "ufSigla", "UfSigla")
+        ?: ufObj?.readString("sigla", "uf", "descricao", "nome")
+        ?: municipioObj?.readString("uf", "Uf", "ufSigla", "UfSigla")
+
+    return CadastroEndereco(
+        cep = target.readString("cep", "CEP", "codigoPostal", "postalCode")
+            ?.filter(Char::isDigit)
+            .orEmpty()
+            .take(8),
+        tipoLogradouro = target.readString("tipoLogradouro", "tipo_logradouro", "TipoLogradouro")
+            ?: tipoLogradouroObj?.readString("nome", "descricao", "tipo")
+            ?: "",
+        logradouro = target.readString("logradouro", "Logradouro", "endereco", "Endereco").orEmpty(),
+        numero = target.readString("numero", "Numero", "numeroLogradouro").orEmpty(),
+        complemento = target.readString("complemento", "Complemento").orEmpty(),
+        bairro = target.readString("bairro", "Bairro")
+            ?: bairroObj?.readString("nome", "descricao")
+            ?: "",
+        cidade = target.readString("cidade", "Cidade", "municipio", "Municipio")
+            ?: municipioObj?.readString("nome", "descricao", "municipio", "cidade")
+            ?: "",
+        uf = uf.orEmpty().uppercase(Locale.ROOT).take(2),
+        idTipoLogradouro = target.readInt("idTipoLogradouro", "IdTipoLogradouro")
+            ?: tipoLogradouroObj?.readInt("id", "Id", "codigo"),
+        idBairro = target.readInt("idBairro", "IdBairro")
+            ?: bairroObj?.readInt("id", "Id", "codigo"),
+        idMunicipio = target.readInt("idMunicipio", "IdMunicipio")
+            ?: municipioObj?.readInt("id", "Id", "codigo", "codigoMunicipio"),
+        idUf = target.readInt("idUf", "IdUf")
+            ?: ufObj?.readInt("id", "Id", "codigo", "codigoUf"),
+        ufSigla = target.readString("ufSigla", "UfSigla", "descricaoUf")
+            ?: ufObj?.readString("sigla", "uf"),
+    )
+}
+
+private fun hasEnderecoData(endereco: CadastroEndereco?): Boolean {
+    if (endereco == null) return false
+    return endereco.cep.isNotBlank() ||
+        endereco.logradouro.isNotBlank() ||
+        endereco.numero.isNotBlank() ||
+        endereco.bairro.isNotBlank() ||
+        endereco.cidade.isNotBlank() ||
+        endereco.uf.isNotBlank()
+}
+
+private fun parseEnderecoFromErpAssociado(raw: JsonElement?): CadastroEndereco? {
+    val root = raw.asJsonObjectFlexible() ?: return null
+    val dados = root.jsonArrayFlexible("dados", "data")
+        ?: root.jsonObjectFlexible("data", "dados")?.jsonArrayFlexible("dados", "data")
+        ?: return null
+
+    dados.forEach { item ->
+        val obj = item.asJsonObjectFlexible() ?: return@forEach
+        val enderecoDireto = parseCadastroEnderecoFlex(obj["endereco"] ?: obj)
+        if (hasEnderecoData(enderecoDireto)) return enderecoDireto
+
+        val responsavel = obj.jsonObjectFlexible("responsavelFinanceiro", "responsavel_financeiro", "ResponsavelFinanceiro")
+        val enderecoResponsavel = parseCadastroEnderecoFlex(responsavel?.get("endereco") ?: responsavel)
+        if (hasEnderecoData(enderecoResponsavel)) return enderecoResponsavel
+    }
+    return null
+}
+
 private fun JsonObject.readString(vararg keys: String): String? {
     keys.forEach { key ->
         val value = this[key]?.jsonPrimitive?.contentOrNull?.trim()
         if (!value.isNullOrBlank()) return value
+    }
+    return null
+}
+
+private fun JsonObject.readInt(vararg keys: String): Int? {
+    keys.forEach { key ->
+        val primitive = this[key]?.jsonPrimitive ?: return@forEach
+        primitive.intOrNull?.let { return it }
+        primitive.contentOrNull
+            ?.trim()
+            ?.toIntOrNull()
+            ?.let { return it }
     }
     return null
 }

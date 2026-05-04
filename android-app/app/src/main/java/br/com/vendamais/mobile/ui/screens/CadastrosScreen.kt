@@ -2,9 +2,11 @@
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -13,21 +15,32 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.DateRange
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,10 +55,14 @@ import br.com.vendamais.mobile.data.models.CadastroDetalhe
 import br.com.vendamais.mobile.data.models.CadastroResumo
 import br.com.vendamais.mobile.data.models.EmpresaResumo
 import br.com.vendamais.mobile.data.models.EmpresaSearchType
+import br.com.vendamais.mobile.domain.cadastro.CadastroApiErrorMapper
+import br.com.vendamais.mobile.domain.cadastro.CadastroModalSignal
+import br.com.vendamais.mobile.domain.cadastro.isPendingCadastroStatus
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
 import br.com.vendamais.mobile.ui.CadastroAreaTab
 import br.com.vendamais.mobile.ui.CadastroFiltro
+import br.com.vendamais.mobile.ui.MainTab
 import br.com.vendamais.mobile.ui.components.ScreenHeading
 import br.com.vendamais.mobile.ui.components.WebCard
 import br.com.vendamais.mobile.ui.theme.Amber100
@@ -62,8 +79,10 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 private enum class TipoBuscaFiltro {
@@ -142,7 +161,7 @@ fun CadastrosScreen(
 
     val baseCadastros = state.cadastros.filter {
         when (state.cadastroFiltro) {
-            CadastroFiltro.PENDENTES -> it.status == "incompleto"
+            CadastroFiltro.PENDENTES -> isPendingCadastroStatus(it.status)
             CadastroFiltro.ENVIADOS -> it.status == "enviado"
         }
     }
@@ -258,7 +277,9 @@ fun CadastrosScreen(
     val useGerenteGroupedView = state.cadastroTab == CadastroAreaTab.INCOMPLETOS && profileRole == "GERENTE"
 
     LazyColumn(
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
+        modifier = Modifier
+            .imePadding()
+            .padding(horizontal = 16.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
@@ -467,7 +488,10 @@ fun CadastrosScreen(
             onDismiss = { showInclusaoDialog = false },
             onSuccess = {
                 showInclusaoDialog = false
-                onTabChange(CadastroAreaTab.DEPENDENTE)
+            },
+            onCompleted = {
+                viewModel.selectTab(MainTab.CADASTROS)
+                viewModel.selectCadastroAreaTab(CadastroAreaTab.COMPLETOS)
             },
         )
     }
@@ -1016,19 +1040,15 @@ private fun CadastrosFilterPanel(
                     )
                 }
 
-                OutlinedTextField(
+                DateFilterField(
+                    label = "Data inicio",
                     value = dataInicioFiltro,
                     onValueChange = onDataInicioFiltroChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Data inicio (AAAA-MM-DD)") },
-                    singleLine = true,
                 )
-                OutlinedTextField(
+                DateFilterField(
+                    label = "Data fim",
                     value = dataFimFiltro,
                     onValueChange = onDataFimFiltroChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Data fim (AAAA-MM-DD)") },
-                    singleLine = true,
                 )
 
                 Row(
@@ -1200,7 +1220,7 @@ fun CadastroDetailDialog(
                 DetailLine("Empresa", cadastro.empresaNome ?: "-")
                 DetailLine("Vendedor", cadastro.vendedorNome ?: "-")
                 DetailLine("Adesionista", cadastro.adesionistaNome ?: "-")
-                DetailLine("MatrÃ­cula", cadastro.numeroMatricula ?: "-")
+                DetailLine("Matricula", cadastro.numeroMatricula ?: "-")
                 DetailLine("Arquivo", cadastro.arquivoPath ?: "-")
                 DetailLine("Data de envio", cadastro.dataEnvio?.let(::formatDateTime) ?: "-")
                 DetailLine("Atualizado", formatDateTime(cadastro.updatedAt))
@@ -1226,6 +1246,8 @@ private fun CadastroCard(
     var updatingStatus by rememberSaveable(cadastro.id) { mutableStateOf(false) }
     var statusError by rememberSaveable(cadastro.id) { mutableStateOf<String?>(null) }
     val statusNome = state.statusAdesoes.firstOrNull { it.id == selectedStatusId }?.nome ?: "Selecione"
+    val isPendingCadastro = isPendingCadastroStatus(cadastro.status)
+    val canDeleteCadastro = isPendingCadastro && canDeleteCadastroByRole(state.profile?.role)
 
     WebCard(
         modifier = Modifier
@@ -1239,21 +1261,58 @@ private fun CadastroCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = cadastro.nome ?: "Sem nome",
+                    text = truncateLabelWithEllipsis(cadastro.nome, 25),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                if (cadastro.status == "incompleto") {
-                    TextButton(
-                        onClick = onClick,
-                        enabled = !updatingStatus,
+                if (isPendingCadastro) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Continuar")
+                        if (canDeleteCadastro) {
+                            IconButton(
+                                onClick = {
+                                    val titularNome = cadastro.nome.orEmpty().ifBlank {
+                                        cadastro.cpf
+                                            .filter(Char::isDigit)
+                                            .takeIf { it.isNotBlank() }
+                                            ?.let(::formatCpf)
+                                            ?: "Cadastro ${cadastro.id.take(8)}"
+                                    }
+                                    viewModel.resolveCadastroOverlay(
+                                        CadastroModalSignal(
+                                            excluirCadastroId = cadastro.id,
+                                            excluirCadastroTitular = titularNome,
+                                        ),
+                                    )
+                                },
+                                enabled = !updatingStatus,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Delete,
+                                    contentDescription = "Excluir adesao pendente",
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
+                        IconButton(
+                            onClick = onClick,
+                            enabled = !updatingStatus,
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                contentDescription = "Continuar adesao pendente",
+                            )
+                        }
                     }
                 }
             }
             Text(
-                text = "${tipoCadastroLabel(cadastro.tipoCadastro)} â€¢ ${statusLabel(cadastro.status)}",
+                text = "${tipoCadastroLabel(cadastro.tipoCadastro)} - ${statusLabel(cadastro.status)}",
                 style = MaterialTheme.typography.labelLarge,
                 color = if (cadastro.status == "enviado") Emerald else Amber500,
             )
@@ -1264,7 +1323,7 @@ private fun CadastroCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (cadastro.status == "incompleto") {
+            if (isPendingCadastro) {
                 SelectionField(
                     label = "Status da adesao",
                     value = statusNome,
@@ -1283,7 +1342,10 @@ private fun CadastroCard(
                                     },
                                 )
                             }.onFailure { throwable ->
-                                statusError = throwable.message ?: "Falha ao atualizar status da adesao."
+                                statusError = CadastroApiErrorMapper.mapUserMessage(
+                                    throwable.message,
+                                    "Falha ao atualizar status da adesao.",
+                                )
                             }
                             updatingStatus = false
                         }
@@ -1317,7 +1379,7 @@ private fun formatDateTime(value: String): String {
 
 private fun tipoCadastroLabel(value: String): String {
     return when (value) {
-        "inclusao_dependente" -> "InclusÃ£o de Dependente"
+        "inclusao_dependente" -> "Inclusao de Dependente"
         else -> "Cadastro"
     }
 }
@@ -1325,8 +1387,7 @@ private fun tipoCadastroLabel(value: String): String {
 private fun statusLabel(value: String): String {
     return when (value) {
         "enviado" -> "Cadastrado"
-        "incompleto" -> "Pendente"
-        else -> value
+        else -> if (isPendingCadastroStatus(value)) "Pendente" else value
     }
 }
 
@@ -1353,6 +1414,76 @@ private fun searchInDependentes(cadastro: CadastroResumo, nome: String, cpfDigit
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DateFilterField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+) {
+    var showDatePicker by rememberSaveable { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+
+    OutlinedTextField(
+        value = value,
+        onValueChange = {},
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+            ) { showDatePicker = true },
+        label = { Text(label) },
+        readOnly = true,
+        singleLine = true,
+        trailingIcon = {
+            IconButton(onClick = { showDatePicker = true }) {
+                Icon(
+                    imageVector = Icons.Rounded.DateRange,
+                    contentDescription = "Selecionar data",
+                )
+            }
+        },
+    )
+
+    if (showDatePicker) {
+        val pickerState = rememberDatePickerState(initialSelectedDateMillis = isoDateToUtcMillis(value))
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val selected = pickerState.selectedDateMillis
+                        if (selected != null) {
+                            onValueChange(utcMillisToIsoDate(selected))
+                        }
+                        showDatePicker = false
+                    },
+                ) {
+                    Text("Selecionar")
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = {
+                            onValueChange("")
+                            showDatePicker = false
+                        },
+                    ) {
+                        Text("Limpar")
+                    }
+                    TextButton(onClick = { showDatePicker = false }) {
+                        Text("Cancelar")
+                    }
+                }
+            },
+        ) {
+            DatePicker(state = pickerState)
+        }
+    }
+}
+
 private fun parseFilterDate(value: String): LocalDate? {
     val normalized = value.trim()
     if (normalized.isBlank()) return null
@@ -1361,5 +1492,30 @@ private fun parseFilterDate(value: String): LocalDate? {
 
 private fun parseCadastroDate(value: String): LocalDate? {
     return runCatching { OffsetDateTime.parse(value).toLocalDate() }.getOrNull()
+}
+
+private fun canDeleteCadastroByRole(role: String?): Boolean {
+    return role in setOf("ADMINISTRADOR", "ADMIN", "VENDEDOR")
+}
+
+private fun truncateLabelWithEllipsis(value: String?, maxChars: Int): String {
+    val normalized = value?.trim().orEmpty().ifBlank { "Sem nome" }
+    if (normalized.length <= maxChars) return normalized
+    if (maxChars <= 3) return normalized.take(maxChars)
+    return normalized.take(maxChars - 3) + "..."
+}
+
+private fun isoDateToUtcMillis(value: String): Long? {
+    val date = parseFilterDate(value) ?: return null
+    return runCatching {
+        date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+    }.getOrNull()
+}
+
+private fun utcMillisToIsoDate(value: Long): String {
+    return Instant.ofEpochMilli(value)
+        .atZone(ZoneOffset.UTC)
+        .toLocalDate()
+        .toString()
 }
 

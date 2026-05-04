@@ -98,6 +98,19 @@ fun CadastroOverlayDialogs(
             )
         }
 
+        is CadastroOverlayIntent.LemmitError -> {
+            AlertDialog(
+                onDismissRequest = viewModel::dismissCadastroOverlay,
+                title = { Text("Falha na consulta Lemmit") },
+                text = { Text(overlay.message) },
+                confirmButton = {
+                    TextButton(onClick = viewModel::dismissCadastroOverlay) {
+                        Text("Continuar")
+                    }
+                },
+            )
+        }
+
         is CadastroOverlayIntent.ParceiroInvalido -> {
             var vendedorCodigo by remember { mutableStateOf("") }
             var vendedorNome by remember { mutableStateOf("") }

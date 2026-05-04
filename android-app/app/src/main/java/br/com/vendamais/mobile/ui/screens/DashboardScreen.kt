@@ -351,7 +351,7 @@ private fun StatsByVendedorDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (sortedStats.isEmpty()) {
-                    Text("Nenhum dado disponÃ­vel.")
+                    Text("Nenhum dado disponivel.")
                 } else {
                     sortedStats.forEach { stat ->
                         WebCard {
@@ -363,7 +363,7 @@ private fun StatsByVendedorDialog(
                                 Column {
                                     Text(stat.vendedorNome, fontWeight = FontWeight.SemiBold)
                                     Text(
-                                        "Total ${stat.total} â€¢ Pendentes ${stat.incompletos} â€¢ Enviados ${stat.enviados}",
+                                        "Total ${stat.total} | Pendentes ${stat.incompletos} | Enviados ${stat.enviados}",
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         style = MaterialTheme.typography.bodySmall,
                                     )

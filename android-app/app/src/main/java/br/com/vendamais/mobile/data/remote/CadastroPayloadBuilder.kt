@@ -391,22 +391,106 @@ internal object CadastroPayloadBuilder {
     }
 
     private fun decodeEndereco(json: Json, value: JsonElement?): CadastroEndereco? {
-        if (value == null) return null
-        return runCatching { json.decodeFromJsonElement(CadastroEndereco.serializer(), value) }.getOrNull()
+        val normalized = decodeEmbeddedJsonElement(value) ?: return null
+        runCatching { json.decodeFromJsonElement(CadastroEndereco.serializer(), normalized) }
+            .getOrNull()
+            ?.let { return it }
+
+        val obj = resolveEnderecoObject(normalized) ?: return null
+        val municipioObj = obj.readObject("municipio", "Municipio")
+        val bairroObj = obj.readObject("bairro", "Bairro")
+        val tipoLogradouroObj = obj.readObject("tipoLogradouro", "TipoLogradouro")
+        val ufObj = obj.readObject("uf", "Uf", "estado", "Estado")
+        val uf = obj.readString("uf", "Uf", "descricaoUf", "ufSigla", "UfSigla")
+            ?: ufObj?.readString("sigla", "uf", "descricao", "nome")
+            ?: municipioObj?.readString("uf", "Uf", "ufSigla", "UfSigla")
+
+        return CadastroEndereco(
+            cep = obj.readString("cep", "CEP", "codigoPostal", "postalCode")
+                ?.filter(Char::isDigit)
+                .orEmpty()
+                .take(8),
+            tipoLogradouro = obj.readString("tipoLogradouro", "tipo_logradouro", "TipoLogradouro")
+                ?: tipoLogradouroObj?.readString("nome", "descricao", "tipo")
+                ?: "",
+            logradouro = obj.readString("logradouro", "Logradouro", "endereco", "Endereco").orEmpty(),
+            numero = obj.readString("numero", "Numero", "numeroLogradouro").orEmpty(),
+            complemento = obj.readString("complemento", "Complemento").orEmpty(),
+            bairro = obj.readString("bairro", "Bairro")
+                ?: bairroObj?.readString("nome", "descricao")
+                ?: "",
+            cidade = obj.readString("cidade", "Cidade", "municipio", "Municipio")
+                ?: municipioObj?.readString("nome", "descricao", "municipio", "cidade")
+                ?: "",
+            uf = uf.orEmpty().uppercase().take(2),
+            idTipoLogradouro = obj.readInt("idTipoLogradouro", "IdTipoLogradouro")
+                ?: tipoLogradouroObj?.readInt("id", "Id", "codigo"),
+            idBairro = obj.readInt("idBairro", "IdBairro")
+                ?: bairroObj?.readInt("id", "Id", "codigo"),
+            idMunicipio = obj.readInt("idMunicipio", "IdMunicipio")
+                ?: municipioObj?.readInt("id", "Id", "codigo", "codigoMunicipio"),
+            idUf = obj.readInt("idUf", "IdUf")
+                ?: ufObj?.readInt("id", "Id", "codigo", "codigoUf"),
+            ufSigla = obj.readString("ufSigla", "UfSigla", "descricaoUf")
+                ?: ufObj?.readString("sigla", "uf"),
+        )
     }
 
     private fun decodeContatos(json: Json, value: JsonElement?): List<CadastroContato> {
-        if (value == null || value !is JsonArray) return emptyList()
-        return runCatching {
-            json.decodeFromJsonElement(ListSerializer(CadastroContato.serializer()), value)
+        val normalized = decodeEmbeddedJsonElement(value) ?: return emptyList()
+        val contatosArray = when (normalized) {
+            is JsonArray -> normalized
+            is JsonObject -> {
+                normalized.readArray("contatos", "telefones", "items")
+                    ?: normalized.readObject("dados", "data")?.readArray("contatos", "telefones", "items")
+            }
+            else -> null
+        } ?: return emptyList()
+
+        val decoded = runCatching {
+            json.decodeFromJsonElement(ListSerializer(CadastroContato.serializer()), contatosArray)
         }.getOrDefault(emptyList())
+        if (decoded.isNotEmpty()) return decoded
+
+        return contatosArray.mapNotNull { item ->
+            val obj = item.readObject() ?: return@mapNotNull null
+            val tipoRaw = obj.readString("tipo", "tipoContato", "tipo_contato", "kind")
+                ?.lowercase()
+                ?.trim()
+                .orEmpty()
+            val valorRaw = obj.readString("valor", "telefone", "numero", "contato", "email", "value")
+                ?.trim()
+                .orEmpty()
+            if (valorRaw.isBlank()) return@mapNotNull null
+
+            val tipo = when (tipoRaw) {
+                "cel", "cell", "celular" -> "celular"
+                "fixo", "telefone", "residencial" -> "fixo"
+                "whatsapp", "zap" -> "whatsapp"
+                "email", "e-mail" -> "email"
+                else -> if (valorRaw.contains('@')) "email" else "celular"
+            }
+            val valor = if (tipo == "email") valorRaw else valorRaw.filter(Char::isDigit)
+            if (valor.isBlank()) return@mapNotNull null
+            val principal = obj["principal"]?.jsonPrimitive?.contentOrNull?.equals("true", ignoreCase = true)
+                ?: false
+            CadastroContato(tipo = tipo, valor = valor, principal = principal)
+        }.distinctBy { "${it.tipo}:${it.valor}" }
     }
 
     private fun decodeDependentes(value: JsonElement?): List<DependenteCadastro> {
-        if (value == null || value !is JsonArray) return emptyList()
+        val normalized = decodeEmbeddedJsonElement(value) ?: return emptyList()
+        val dependentes = when (normalized) {
+            is JsonArray -> normalized
+            is JsonObject -> {
+                normalized.readArray("dependentes", "items")
+                    ?: normalized.readObject("dados", "data")?.readArray("dependentes", "items")
+            }
+            else -> null
+        } ?: return emptyList()
 
-        return value.mapNotNull { item ->
-            val obj = runCatching { item.jsonObject }.getOrNull() ?: return@mapNotNull null
+        return dependentes.mapNotNull { item ->
+            val obj = item.readObject() ?: return@mapNotNull null
             val nome = obj.readString("nome").orEmpty().trim()
             if (nome.isBlank()) return@mapNotNull null
 
@@ -436,6 +520,52 @@ internal object CadastroPayloadBuilder {
             )
         }
     }
+
+    private fun decodeEmbeddedJsonElement(value: JsonElement?): JsonElement? {
+        val element = value ?: return null
+        if (element is JsonPrimitive) {
+            val raw = element.contentOrNull?.trim().orEmpty()
+            if (raw.isBlank()) return null
+            if (raw.startsWith("{") || raw.startsWith("[")) {
+                return runCatching { Json.parseToJsonElement(raw) }.getOrNull() ?: element
+            }
+        }
+        return element
+    }
+
+    private fun resolveEnderecoObject(value: JsonElement?): JsonObject? {
+        val root = value?.readObject() ?: return null
+        val data = root.readObject("data", "Data")
+        val dados = root.readObject("dados", "Dados")
+        val responsavel = root.readObject("responsavelFinanceiro", "responsavel_financeiro", "ResponsavelFinanceiro")
+        val nestedResponsavel = data?.readObject("responsavelFinanceiro", "responsavel_financeiro", "ResponsavelFinanceiro")
+        val candidates = listOfNotNull(
+            root,
+            root.readObject("endereco", "Endereco"),
+            data,
+            data?.readObject("endereco", "Endereco"),
+            dados,
+            dados?.readObject("endereco", "Endereco"),
+            responsavel,
+            responsavel?.readObject("endereco", "Endereco"),
+            nestedResponsavel,
+            nestedResponsavel?.readObject("endereco", "Endereco"),
+        )
+        return candidates.firstOrNull { candidate ->
+            candidate.containsKey("cep") ||
+                candidate.containsKey("CEP") ||
+                candidate.containsKey("logradouro") ||
+                candidate.containsKey("Logradouro") ||
+                candidate.containsKey("bairro") ||
+                candidate.containsKey("Bairro") ||
+                candidate.containsKey("cidade") ||
+                candidate.containsKey("Cidade") ||
+                candidate.containsKey("municipio") ||
+                candidate.containsKey("Municipio") ||
+                candidate.containsKey("uf") ||
+                candidate.containsKey("Uf")
+        } ?: candidates.firstOrNull()
+    }
 }
 
 private fun JsonObject.readString(vararg keys: String): String? {
@@ -456,6 +586,44 @@ private fun JsonObject.readInt(vararg keys: String): Int? {
             ?.let { return it }
     }
     return null
+}
+
+private fun JsonObject.readObject(vararg keys: String): JsonObject? {
+    if (keys.isEmpty()) return runCatching { this }.getOrNull()
+    keys.forEach { key ->
+        runCatching { this[key]?.jsonObject }.getOrNull()?.let { return it }
+        val embedded = runCatching { this[key] as? JsonPrimitive }.getOrNull()?.contentOrNull?.trim().orEmpty()
+        if (embedded.startsWith("{")) {
+            runCatching { Json.parseToJsonElement(embedded).jsonObject }.getOrNull()?.let { return it }
+        }
+    }
+    return null
+}
+
+private fun JsonObject.readArray(vararg keys: String): JsonArray? {
+    keys.forEach { key ->
+        runCatching { this[key]?.jsonArray }.getOrNull()?.let { return it }
+        val embedded = runCatching { this[key] as? JsonPrimitive }.getOrNull()?.contentOrNull?.trim().orEmpty()
+        if (embedded.startsWith("[")) {
+            runCatching { Json.parseToJsonElement(embedded).jsonArray }.getOrNull()?.let { return it }
+        }
+    }
+    return null
+}
+
+private fun JsonElement.readObject(): JsonObject? {
+    return when (this) {
+        is JsonObject -> this
+        is JsonPrimitive -> {
+            val raw = contentOrNull?.trim().orEmpty()
+            if (raw.startsWith("{")) {
+                runCatching { Json.parseToJsonElement(raw).jsonObject }.getOrNull()
+            } else {
+                null
+            }
+        }
+        else -> null
+    }
 }
 
 private val JsonPrimitive.contentOrNull: String?

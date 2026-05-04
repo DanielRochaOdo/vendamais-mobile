@@ -29,6 +29,10 @@ sealed interface CadastroOverlayIntent {
         val isUnlimited: Boolean = false,
     ) : CadastroOverlayIntent
 
+    data class LemmitError(
+        val message: String,
+    ) : CadastroOverlayIntent
+
     data object SelectStatus : CadastroOverlayIntent
 
     data class ParceiroInvalido(
@@ -77,6 +81,7 @@ data class CadastroModalSignal(
     val empresaObservacaoTexto: String? = null,
     val empresaCanceladaNome: String? = null,
     val lemmitLimit: CadastroOverlayIntent.LemmitLimit? = null,
+    val lemmitErrorMessage: String? = null,
     val mustSelectStatus: Boolean = false,
     val erpError: CadastroErpError? = null,
     val excluirCadastroId: String? = null,
@@ -115,6 +120,11 @@ object CadastroModalStateMachine {
         }
 
         signal.lemmitLimit?.let { return it }
+
+        val lemmitErrorMessage = signal.lemmitErrorMessage?.trim().orEmpty()
+        if (lemmitErrorMessage.isNotBlank()) {
+            return CadastroOverlayIntent.LemmitError(lemmitErrorMessage)
+        }
 
         if (signal.mustSelectStatus) {
             return CadastroOverlayIntent.SelectStatus

@@ -49,8 +49,8 @@ fun SettingsScreen(
     ) {
         item {
             ScreenHeading(
-                title = "Configurações",
-                subtitle = "Gerencie correspondências e regras do cadastro",
+                title = "Configuracoes",
+                subtitle = "Gerencie correspondencias e regras do cadastro",
             )
         }
 
@@ -86,7 +86,7 @@ fun SettingsScreen(
             item {
                 ConfigSwitchCard(
                     title = "Lemmit no Dependente",
-                    description = "Ativa preenchimento automático no dependente do novo cadastro.",
+                    description = "Ativa preenchimento automatico no dependente do novo cadastro.",
                     checked = config.lemmitDependente,
                     onCheckedChange = { value ->
                         scope.launch {
@@ -99,7 +99,7 @@ fun SettingsScreen(
             item {
                 ConfigSwitchCard(
                     title = "Lemmit Incluir Dep.",
-                    description = "Ativa preenchimento automático no fluxo de inclusão de dependente.",
+                    description = "Ativa preenchimento automatico no fluxo de inclusao de dependente.",
                     checked = config.lemmitInclusaoDependente,
                     onCheckedChange = { value ->
                         scope.launch {
@@ -111,8 +111,8 @@ fun SettingsScreen(
 
             item {
                 ConfigListEditorCard(
-                    title = "Situações que Barram Cadastro",
-                    description = "Códigos de situação que impedem recadastro.",
+                    title = "Situacoes que Barram Cadastro",
+                    description = "Codigos de situacao que impedem recadastro.",
                     value = config.situacoesQueBarram.joinToString(", "),
                     onSave = { text ->
                         val values = text.split(",").mapNotNull { it.trim().toIntOrNull() }
@@ -129,8 +129,8 @@ fun SettingsScreen(
 
             item {
                 ConfigListEditorCard(
-                    title = "Planos Válidos",
-                    description = "Códigos de planos permitidos para recadastro.",
+                    title = "Planos Validos",
+                    description = "Codigos de planos permitidos para recadastro.",
                     value = config.planosValidos.joinToString(", "),
                     onSave = { text ->
                         val values = text.split(",").mapNotNull { it.trim().toIntOrNull() }
@@ -148,7 +148,7 @@ fun SettingsScreen(
             item {
                 ConfigListEditorCard(
                     title = "Planos Ocultos",
-                    description = "Códigos que não aparecem na seleção de planos.",
+                    description = "Codigos que nao aparecem na selecao de planos.",
                     value = config.planosOcultos.joinToString(", "),
                     onSave = { text ->
                         val values = text.split(",").map { it.trim() }.filter { it.isNotBlank() }
@@ -165,8 +165,8 @@ fun SettingsScreen(
 
             item {
                 ConfigListEditorCard(
-                    title = "Códigos de Empresa Inválidos",
-                    description = "Empresas inválidas para novos cadastros.",
+                    title = "Codigos de Empresa Invalidos",
+                    description = "Empresas invalidas para novos cadastros.",
                     value = config.codigosEmpresaInvalidos.joinToString(", "),
                     onSave = { text ->
                         val values = text.split(",").map { it.trim() }.filter { it.isNotBlank() }
@@ -185,7 +185,7 @@ fun SettingsScreen(
                 MappingCard(
                     title = "Planos",
                     lines = state.planosMap.map { plano ->
-                        "${plano.planoId} • ${plano.nomeExibicao} • ${plano.regraValor}"
+                        "${plano.planoId} - ${plano.nomeExibicao} - ${plano.regraValor}"
                     },
                     emptyMessage = "Nenhum plano configurado.",
                 )
@@ -195,7 +195,7 @@ fun SettingsScreen(
                 MappingCard(
                     title = "Parentesco",
                     lines = state.parentescosMap.map { parentesco ->
-                        "${parentesco.parentescoId} • ${parentesco.label}"
+                        "${parentesco.parentescoId} - ${parentesco.label}"
                     },
                     emptyMessage = "Nenhum parentesco configurado.",
                 )
@@ -268,7 +268,7 @@ private fun ConfigListEditorCard(
                     }
                 }
             } else {
-                Text(if (value.isBlank()) "Não configurado" else value)
+                Text(if (value.isBlank()) "Nao configurado" else value)
                 TextButton(onClick = { editing = true }) {
                     Text("Editar")
                 }
@@ -301,7 +301,7 @@ private fun MappingCard(
 private fun StatusAdesoesCard(items: List<StatusAdesao>) {
     WebCard {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Status de Adesão", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("Status de Adesao", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             if (items.isEmpty()) {
                 Text("Nenhum status cadastrado.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {

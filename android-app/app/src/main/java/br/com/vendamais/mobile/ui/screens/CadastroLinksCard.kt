@@ -20,20 +20,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.QrCode
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,7 +43,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -128,18 +129,29 @@ fun CadastroLinksCard(
                         },
                         imeAction = ImeAction.Search,
                     ),
+                    keyboardActions = KeyboardActions(
+                        onSearch = { onSearchEmpresa() },
+                        onDone = { onSearchEmpresa() },
+                    ),
                     singleLine = true,
                 )
 
-                Button(
-                    onClick = onSearchEmpresa,
-                    enabled = !workspace.operationLoading && workspace.empresaSearchValue.isNotBlank(),
+                Row(
                     modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
                 ) {
-                    if (workspace.operationLoading) {
-                        CircularProgressIndicator(strokeWidth = 2.dp)
-                    } else {
-                        Text("Buscar empresa")
+                    IconButton(
+                        onClick = onSearchEmpresa,
+                        enabled = !workspace.operationLoading && workspace.empresaSearchValue.isNotBlank(),
+                    ) {
+                        if (workspace.operationLoading) {
+                            CircularProgressIndicator(strokeWidth = 2.dp)
+                        } else {
+                            Icon(
+                                imageVector = Icons.Rounded.Search,
+                                contentDescription = "Buscar empresa",
+                            )
+                        }
                     }
                 }
 
@@ -175,19 +187,28 @@ fun CadastroLinksCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall,
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                        ) {
+                            IconButton(
                                 onClick = onGenerateLink,
                                 enabled = !workspace.operationLoading,
                             ) {
                                 if (workspace.operationLoading) {
                                     CircularProgressIndicator(strokeWidth = 2.dp)
                                 } else {
-                                    Text("Gerar link")
+                                    Icon(
+                                        imageVector = Icons.Rounded.Share,
+                                        contentDescription = "Gerar link",
+                                    )
                                 }
                             }
-                            TextButton(onClick = onClearEmpresa) {
-                                Text("Alterar empresa")
+                            IconButton(onClick = onClearEmpresa) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Edit,
+                                    contentDescription = "Alterar empresa",
+                                )
                             }
                         }
                     }

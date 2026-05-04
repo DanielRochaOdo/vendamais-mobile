@@ -9,20 +9,24 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
@@ -136,21 +140,32 @@ fun CadastroOperationsCard(
                             },
                             imeAction = ImeAction.Search,
                         ),
+                        keyboardActions = KeyboardActions(
+                            onSearch = { onSearchEmpresa() },
+                            onDone = { onSearchEmpresa() },
+                        ),
                         singleLine = true,
                     )
 
-                    Button(
-                        onClick = onSearchEmpresa,
-                        enabled = !workspace.operationLoading && workspace.empresaSearchValue.isNotBlank(),
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
                     ) {
-                        if (workspace.operationLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                            )
-                        } else {
-                            Text("Buscar empresa")
+                        IconButton(
+                            onClick = onSearchEmpresa,
+                            enabled = !workspace.operationLoading && workspace.empresaSearchValue.isNotBlank(),
+                        ) {
+                            if (workspace.operationLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Rounded.Search,
+                                    contentDescription = "Buscar empresa",
+                                )
+                            }
                         }
                     }
 
@@ -228,8 +243,11 @@ fun CadastroOperationsCard(
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                             }
-                        TextButton(onClick = onClearEmpresa) {
-                            Text("Alterar empresa")
+                        IconButton(onClick = onClearEmpresa) {
+                            Icon(
+                                imageVector = Icons.Rounded.Edit,
+                                contentDescription = "Alterar empresa",
+                            )
                         }
                     }
                 }
@@ -304,18 +322,25 @@ fun CadastroOperationsCard(
                     singleLine = true,
                 )
 
-                Button(
-                    onClick = onConsultarCpf,
-                    enabled = !workspace.operationLoading && workspace.cpfValue.isNotBlank(),
+                Row(
                     modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
                 ) {
-                    if (workspace.operationLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Text("Consultar CPF")
+                    IconButton(
+                        onClick = onConsultarCpf,
+                        enabled = !workspace.operationLoading && workspace.cpfValue.isNotBlank(),
+                    ) {
+                        if (workspace.operationLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Rounded.Search,
+                                contentDescription = "Consultar CPF",
+                            )
+                        }
                     }
                 }
             }

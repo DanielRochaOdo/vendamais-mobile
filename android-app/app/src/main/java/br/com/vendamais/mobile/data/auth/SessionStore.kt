@@ -21,6 +21,7 @@ class SessionStore(private val context: Context) {
     private val emailKey = stringPreferencesKey("email")
     private val expiresAtKey = longPreferencesKey("expires_at")
     private val darkModeKey = booleanPreferencesKey("dark_mode")
+    private val rememberConnectedKey = booleanPreferencesKey("remember_connected")
 
     val sessionFlow: Flow<SavedSession?> =
         context.authDataStore.data
@@ -67,6 +68,17 @@ class SessionStore(private val context: Context) {
             }
             .map { preferences -> preferences[darkModeKey] ?: false }
 
+    val rememberConnectedFlow: Flow<Boolean> =
+        context.authDataStore.data
+            .catch { throwable ->
+                if (throwable is IOException) {
+                    emit(emptyPreferences())
+                } else {
+                    throw throwable
+                }
+            }
+            .map { preferences -> preferences[rememberConnectedKey] ?: true }
+
     suspend fun save(session: SavedSession) {
         context.authDataStore.edit { preferences ->
             preferences[userIdKey] = session.userId
@@ -80,14 +92,32 @@ class SessionStore(private val context: Context) {
     suspend fun clear() {
         context.authDataStore.edit { preferences ->
             val darkMode = preferences[darkModeKey] ?: false
+            val rememberConnected = preferences[rememberConnectedKey] ?: true
             preferences.clear()
             preferences[darkModeKey] = darkMode
+            preferences[rememberConnectedKey] = rememberConnected
+        }
+    }
+
+    suspend fun clearSavedSession() {
+        context.authDataStore.edit { preferences ->
+            preferences.remove(userIdKey)
+            preferences.remove(accessTokenKey)
+            preferences.remove(refreshTokenKey)
+            preferences.remove(emailKey)
+            preferences.remove(expiresAtKey)
         }
     }
 
     suspend fun setDarkMode(enabled: Boolean) {
         context.authDataStore.edit { preferences ->
             preferences[darkModeKey] = enabled
+        }
+    }
+
+    suspend fun setRememberConnected(enabled: Boolean) {
+        context.authDataStore.edit { preferences ->
+            preferences[rememberConnectedKey] = enabled
         }
     }
 }

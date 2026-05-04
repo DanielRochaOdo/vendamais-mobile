@@ -1,4 +1,4 @@
-package br.com.vendamais.mobile.data.remote
+﻿package br.com.vendamais.mobile.data.remote
 
 import br.com.vendamais.mobile.AppConfig
 import br.com.vendamais.mobile.data.auth.SavedSession
@@ -49,7 +49,7 @@ class SupabaseRepository(
                 parameter("id", "eq.${session.userId}")
                 parameter("select", "id,name,email,telefone,role,external_id,team_id,is_active,created_at,lemmit_limite_consultas")
             },
-        ).firstOrNull() ?: throw IllegalStateException("Perfil não encontrado para o usuário autenticado.")
+        ).firstOrNull() ?: throw IllegalStateException("Perfil nao encontrado para o usuario autenticado.")
     }
 
     suspend fun fetchTeam(session: SavedSession, teamId: String): MobileTeam? {
@@ -146,7 +146,7 @@ class SupabaseRepository(
                 )
                 parameter("limit", 1)
             },
-        ).firstOrNull() ?: throw IllegalStateException("Cadastro não encontrado.")
+        ).firstOrNull() ?: throw IllegalStateException("Cadastro nao encontrado.")
     }
 
     suspend fun fetchStatsByVendedor(
@@ -202,12 +202,12 @@ class SupabaseRepository(
             applyAuthHeaders(session)
             contentType(ContentType.Application.Json)
             setBody(
-                mapOf(
-                    "p_start" to startIso,
-                    "p_end" to endIso,
-                    "p_limit" to limit,
-                    "p_offset" to offset,
-                ),
+                buildJsonObject {
+                    put("p_start", startIso)
+                    put("p_end", endIso)
+                    put("p_limit", limit)
+                    put("p_offset", offset)
+                },
             )
         }.body()
     }
@@ -293,22 +293,20 @@ class SupabaseRepository(
                 ?.let { it as? JsonPrimitive }
                 ?.content
                 ?.takeIf { it.isNotBlank() }
-                ?: "Falha ao criar usuÃ¡rio."
+                ?: "Falha ao criar usuario."
             throw IllegalStateException(message)
         }
     }
 
     suspend fun updateUser(session: SavedSession, id: String, payload: JsonObject): AdminUser {
-        return client.safePost<List<AdminUser>>(
+        return client.safePatch<List<AdminUser>>(
             url = "${AppConfig.supabaseUrl}/rest/v1/profiles?id=eq.$id",
             json = json,
             body = payload,
         ) {
             applyAuthHeaders(session)
             header("Prefer", "return=representation")
-            method = HttpMethod.Patch
-            contentType(ContentType.Application.Json)
-        }.firstOrNull() ?: throw IllegalStateException("Falha ao atualizar usuÃ¡rio.")
+        }.firstOrNull() ?: throw IllegalStateException("Falha ao atualizar usuario.")
     }
 
     suspend fun createTeam(session: SavedSession, name: String): AdminTeam {
@@ -324,29 +322,26 @@ class SupabaseRepository(
     }
 
     suspend fun updateTeam(session: SavedSession, id: String, payload: JsonObject): AdminTeam {
-        return client.safePost<List<AdminTeam>>(
+        return client.safePatch<List<AdminTeam>>(
             url = "${AppConfig.supabaseUrl}/rest/v1/teams?id=eq.$id",
             json = json,
             body = payload,
         ) {
             applyAuthHeaders(session)
             header("Prefer", "return=representation")
-            method = HttpMethod.Patch
-            contentType(ContentType.Application.Json)
         }.firstOrNull() ?: throw IllegalStateException("Falha ao atualizar equipe.")
     }
 
     suspend fun updateCadastroConfig(session: SavedSession, payload: JsonObject): CadastroConfig {
-        return client.safePost<List<CadastroConfig>>(
+        return client.safePatch<List<CadastroConfig>>(
             url = "${AppConfig.supabaseUrl}/rest/v1/cadastro_config?id=eq.1",
             json = json,
             body = payload,
         ) {
             applyAuthHeaders(session)
             header("Prefer", "return=representation")
-            method = HttpMethod.Patch
             contentType(ContentType.Application.Json)
-        }.firstOrNull() ?: throw IllegalStateException("Falha ao atualizar configuraÃ§Ãµes.")
+        }.firstOrNull() ?: throw IllegalStateException("Falha ao atualizar configuracoes.")
     }
 
     private suspend inline fun <reified T> getList(
