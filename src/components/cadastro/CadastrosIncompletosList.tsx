@@ -1,6 +1,7 @@
-import { FileText, Clock, AlertCircle, CheckCircle2, Eye, Ban, User, Search, X, Filter, Tag, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { FileText, Eye, Ban, User, Search, X, Filter, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { Cadastro } from '../../hooks/useCadastros';
+import { usePagination } from '../../hooks/usePagination';
 import { formatCPF, formatDate } from '../../lib/cpf';
 import { AlreadyExistsModal } from './AlreadyExistsModal';
 import { ExcluirCadastroModal } from './ExcluirCadastroModal';
@@ -125,13 +126,6 @@ export function CadastrosIncompletosList({ cadastros, onSelect, onRefresh }: Cad
     }
   };
 
-  const contarPessoas = (cadastros: Cadastro[]) => {
-    return cadastros.reduce((total, cadastro) => {
-      const dependentesArray = Array.isArray(cadastro.dependentes) ? cadastro.dependentes : [];
-      return total + 1 + dependentesArray.length;
-    }, 0);
-  };
-
   const handleAplicarFiltros = () => {
     setTipoBuscaAplicada(tipoBusca);
     setBuscaNomeAplicada(buscaNome);
@@ -197,14 +191,6 @@ export function CadastrosIncompletosList({ cadastros, onSelect, onRefresh }: Cad
     }
   };
 
-  if (profile?.role === 'SUPERVISOR') {
-    return <CadastrosSupervisorView cadastros={cadastros} onSelect={onSelect} statusFilter="incompleto" />;
-  }
-
-  if (profile?.role === 'GERENTE') {
-    return <CadastrosGerenteView cadastros={cadastros} onSelect={onSelect} statusFilter="incompleto" />;
-  }
-
   // Total apenas com filtro de data (para o denominador do contador)
   const cadastrosPorPeriodo = useMemo(() => {
     return incompletos.filter((cadastro) => {
@@ -224,8 +210,8 @@ export function CadastrosIncompletosList({ cadastros, onSelect, onRefresh }: Cad
           const nomeLower = buscaNomeAplicada.toLowerCase().trim();
           const cpfNumeros = buscaCPFAplicada.replace(/\D/g, '');
 
-          let matchNome = !buscaNomeAplicada || cadastro.nome?.toLowerCase().includes(nomeLower) || false;
-          let matchCPF = !buscaCPFAplicada || (cadastro.cpf && cadastro.cpf.includes(cpfNumeros)) || false;
+          const matchNome = !buscaNomeAplicada || cadastro.nome?.toLowerCase().includes(nomeLower) || false;
+          const matchCPF = !buscaCPFAplicada || (cadastro.cpf && cadastro.cpf.includes(cpfNumeros)) || false;
 
           matchBusca = matchNome && matchCPF;
 
@@ -303,33 +289,24 @@ export function CadastrosIncompletosList({ cadastros, onSelect, onRefresh }: Cad
       return nomeA.localeCompare(nomeB);
     });
   }, [cadastrosFiltrados]);
+  // Paginacao
+  const {
+    totalPages,
+    paginatedItems: clientesPaginados,
+    visiblePages,
+  } = usePagination({
+    items: clientesGrouped,
+    currentPage,
+    itemsPerPage: ITEMS_PER_PAGE,
+  });
 
-  // Paginação
-  const totalPages = Math.ceil(clientesGrouped.length / ITEMS_PER_PAGE);
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const endIndex = startIndex + ITEMS_PER_PAGE;
-  const clientesPaginados = clientesGrouped.slice(startIndex, endIndex);
+  if (profile?.role === 'SUPERVISOR') {
+    return <CadastrosSupervisorView cadastros={cadastros} onSelect={onSelect} statusFilter="incompleto" />;
+  }
 
-  // Calcular quais páginas mostrar (máximo 10 páginas visíveis)
-  const getVisiblePages = () => {
-    const maxVisible = 10;
-    if (totalPages <= maxVisible) {
-      return Array.from({ length: totalPages }, (_, i) => i + 1);
-    }
-
-    const halfVisible = Math.floor(maxVisible / 2);
-    let startPage = Math.max(1, currentPage - halfVisible);
-    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
-
-    // Ajustar se chegou no fim
-    if (endPage - startPage < maxVisible - 1) {
-      startPage = Math.max(1, endPage - maxVisible + 1);
-    }
-
-    return Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
-  };
-
-  const visiblePages = getVisiblePages();
+  if (profile?.role === 'GERENTE') {
+    return <CadastrosGerenteView cadastros={cadastros} onSelect={onSelect} statusFilter="incompleto" />;
+  }
 
   if (incompletos.length === 0) {
     return (
@@ -805,3 +782,4 @@ export function CadastrosIncompletosList({ cadastros, onSelect, onRefresh }: Cad
     </>
   );
 }
+

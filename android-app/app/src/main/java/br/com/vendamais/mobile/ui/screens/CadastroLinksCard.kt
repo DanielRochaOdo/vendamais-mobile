@@ -72,6 +72,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
+import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 
 @Composable
 fun CadastroLinksCard(
@@ -111,7 +112,7 @@ fun CadastroLinksCard(
                 OutlinedTextField(
                     value = workspace.empresaSearchValue,
                     onValueChange = onSearchValueChange,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                     label = {
                         Text(
                             when (workspace.empresaSearchType) {

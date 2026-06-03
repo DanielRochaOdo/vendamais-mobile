@@ -415,7 +415,8 @@ export function NovoCadastroCard({ onSuccess }: NovoCadastroCardProps) {
               ...(dados.UfSigla && { ufSigla: dados.UfSigla }),
             };
           }
-        } catch (cepError) {
+        } catch {
+          // Melhor esforço: falha no enriquecimento de CEP não bloqueia o fluxo.
         }
       }
 
@@ -556,7 +557,8 @@ export function NovoCadastroCard({ onSuccess }: NovoCadastroCardProps) {
               ...(dados.UfSigla && { ufSigla: dados.UfSigla }),
             };
           }
-        } catch (cepError) {
+        } catch {
+          // Melhor esforço: falha no enriquecimento de CEP não bloqueia o fluxo.
         }
       }
 
@@ -668,7 +670,8 @@ export function NovoCadastroCard({ onSuccess }: NovoCadastroCardProps) {
               ...(dados.UfSigla && { ufSigla: dados.UfSigla }),
             };
           }
-        } catch (cepError) {
+        } catch {
+          // Melhor esforço: falha no enriquecimento de CEP não bloqueia o fluxo.
         }
       }
 

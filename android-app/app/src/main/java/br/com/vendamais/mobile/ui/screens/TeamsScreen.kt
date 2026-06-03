@@ -43,6 +43,7 @@ import br.com.vendamais.mobile.ui.theme.Slate500
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -221,7 +222,7 @@ private fun TeamEditorDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                     label = { Text("Nome da Equipe") },
                 )
                 if (team != null) {
@@ -276,7 +277,7 @@ private fun TeamEditorDialog(
                     )
                 },
             ) {
-                Text("Salvar")
+                Text("Salvar", maxLines = 1, softWrap = false)
             }
         },
         dismissButton = {

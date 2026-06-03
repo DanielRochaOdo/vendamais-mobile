@@ -8,11 +8,10 @@ import android.webkit.MimeTypeMap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,8 +19,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -77,6 +76,7 @@ import br.com.vendamais.mobile.domain.cadastro.CadastroOverlayIntent
 import br.com.vendamais.mobile.domain.cadastro.CadastroModalSignal
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
+import br.com.vendamais.mobile.ui.components.rememberKeyboardAwareFooterState
 import br.com.vendamais.mobile.ui.components.WebCard
 import br.com.vendamais.mobile.ui.theme.Amber100
 import br.com.vendamais.mobile.ui.theme.Amber500
@@ -107,6 +107,7 @@ import java.time.LocalDate
 import java.time.Period
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 
 private const val MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 private const val LEMMIT_MAX_ATTEMPTS = 3
@@ -166,8 +167,6 @@ fun InclusaoDependenteDialog(
     val scope = rememberCoroutineScope()
     val profile = state.profile
     val isContinuacao = cadastro != null
-    val navigationBottomInset = WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding()
-    val footerSafeBottomPadding = maxOf(navigationBottomInset, 56.dp)
 
     var tipoBusca by rememberSaveable { mutableStateOf(InclusaoBuscaTipo.CODIGO) }
     var valorBusca by rememberSaveable(stateSaver = textFieldValueSaver()) { mutableStateOf(TextFieldValue("")) }
@@ -178,6 +177,7 @@ fun InclusaoDependenteDialog(
     var localNotice by rememberSaveable { mutableStateOf<String?>(null) }
     var successDialogMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var previewingArquivoIndex by rememberSaveable { mutableStateOf<Int?>(null) }
+    val keyboardAwareFooter = rememberKeyboardAwareFooterState()
 
     var selectedVendedorId by rememberSaveable {
         mutableStateOf(
@@ -479,13 +479,25 @@ fun InclusaoDependenteDialog(
                         return
                     }
 
-                    val dataNascimentoDigits = resolveLemmitDateDigits(pessoa.dataNascimento)
+                    val dataNascimentoRaw = pessoa.dataNascimento
+                        ?.trim()
+                        ?.takeIf { it.isNotBlank() }
+                        ?: pessoa.dataNascimentoAlternativa
+                            ?.trim()
+                            ?.takeIf { it.isNotBlank() }
+                    val dataNascimentoDigits = resolveLemmitDateDigits(dataNascimentoRaw)
                     val sexoCodigo = resolveLemmitSexoCodigo(pessoa.sexo)
+                    val nomeMaeLemmit = pessoa.nomeMae
+                        ?.trim()
+                        ?.takeIf { it.isNotBlank() }
+                        ?: pessoa.nomeMaeAlternativa
+                            ?.trim()
+                            ?.takeIf { it.isNotBlank() }
 
                     updateDependente(dependentes, index) { current ->
                         current.copy(
                             nome = pessoa.nome?.trim().takeIf { !it.isNullOrBlank() } ?: current.nome,
-                            nomeMae = pessoa.nomeMae?.trim().takeIf { !it.isNullOrBlank() } ?: current.nomeMae,
+                            nomeMae = nomeMaeLemmit ?: current.nomeMae,
                             dataNascimento = dataNascimentoDigits?.let { TextFieldValue(it, TextRange(it.length)) }
                                 ?: current.dataNascimento,
                             sexo = sexoCodigo ?: current.sexo,
@@ -763,15 +775,13 @@ fun InclusaoDependenteDialog(
                 modifier = Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
-                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
-                    .navigationBarsPadding()
-                    .padding(16.dp)
-                    .imePadding(),
+                    .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Column(
                     modifier = Modifier
                         .weight(1f)
+                        .padding(bottom = keyboardAwareFooter.contentBottomPadding)
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
@@ -798,7 +808,7 @@ fun InclusaoDependenteDialog(
                     OutlinedTextField(
                         value = "${profile.name} - ${profile.externalId ?: "-"}",
                         onValueChange = {},
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Vendedor") },
                         enabled = false,
                     )
@@ -814,7 +824,7 @@ fun InclusaoDependenteDialog(
                             OutlinedTextField(
                                 value = valorBusca,
                                 onValueChange = { valorBusca = if (tipoBusca == InclusaoBuscaTipo.CPF) sanitizeDigitsInput(it, 11) else it.copy(text = it.text.filter(Char::isDigit).take(20)) },
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                                 label = { Text(if (tipoBusca == InclusaoBuscaTipo.CODIGO) "Codigo associado" else "CPF associado") },
                                 visualTransformation = if (tipoBusca == InclusaoBuscaTipo.CPF) DependenteCpfVisualTransformation() else VisualTransformation.None,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -1045,7 +1055,7 @@ fun InclusaoDependenteDialog(
                                             current.copy(nome = value, saved = false)
                                         }
                                     },
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                                     label = { Text("Nome") },
                                 )
                                 OutlinedTextField(
@@ -1077,7 +1087,7 @@ fun InclusaoDependenteDialog(
                                             }
                                         }
                                     },
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                                     label = { Text("CPF") },
                                     visualTransformation = DependenteCpfVisualTransformation(),
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -1103,7 +1113,7 @@ fun InclusaoDependenteDialog(
                                             current.copy(dataNascimento = sanitizeDigitsInput(value, 8), saved = false)
                                         }
                                     },
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                                     label = { Text("Data nascimento") },
                                     visualTransformation = DependenteDateVisualTransformation(),
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -1137,7 +1147,7 @@ fun InclusaoDependenteDialog(
                                             current.copy(nomeMae = value, saved = false)
                                         }
                                     },
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                                     label = { Text("Nome da mae") },
                                 )
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1198,7 +1208,9 @@ fun InclusaoDependenteDialog(
                                                         it.copy(saved = true, expanded = false)
                                                     }
                                             },
-                                        ) { Text("Salvar") }
+                                        ) {
+                                            Text("Salvar", maxLines = 1, softWrap = false)
+                                        }
                                     }
                                     if (index == dependentes.lastIndex) {
                                         TextButton(
@@ -1231,15 +1243,14 @@ fun InclusaoDependenteDialog(
                 }
                 }
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
-                        .navigationBarsPadding()
-                        .padding(bottom = footerSafeBottomPadding),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                Box(
+                    modifier = keyboardAwareFooter.containerModifier.fillMaxWidth(),
                 ) {
+                    Row(
+                        modifier = keyboardAwareFooter.footerModifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                     TextButton(
                         modifier = Modifier.weight(0.9f),
                         onClick = onDismiss,
@@ -1312,6 +1323,7 @@ fun InclusaoDependenteDialog(
                             )
                         }
                     }
+                }
                 }
             }
         }

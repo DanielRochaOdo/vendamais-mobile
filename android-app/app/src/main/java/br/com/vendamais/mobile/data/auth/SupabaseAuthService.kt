@@ -35,9 +35,15 @@ class SupabaseAuthService(
             }.body<TokenResponse>()
         } catch (exception: ClientRequestException) {
             throw exception.toSupabaseException()
+        } catch (exception: Throwable) {
+            throw IllegalStateException("Falha ao interpretar resposta de autenticacao do Supabase.")
         }
 
-        return response.toSavedSession(email)
+        return response.toSavedSession(
+            fallbackEmail = email,
+            fallbackUserId = null,
+            isRefreshFlow = false,
+        )
     }
 
     suspend fun refreshIfNeeded(session: SavedSession): SavedSession {
@@ -62,9 +68,15 @@ class SupabaseAuthService(
             }.body<TokenResponse>()
         } catch (exception: ClientRequestException) {
             throw exception.toSupabaseException()
+        } catch (exception: Throwable) {
+            throw IllegalStateException("Refresh token invalido ou sessao expirada. Faca login novamente.")
         }
 
-        return response.toSavedSession(session.email)
+        return response.toSavedSession(
+            fallbackEmail = session.email,
+            fallbackUserId = session.userId,
+            isRefreshFlow = true,
+        )
     }
 
     private suspend fun ClientRequestException.toSupabaseException(): IllegalStateException {
@@ -76,14 +88,46 @@ class SupabaseAuthService(
         return IllegalStateException(parsed?.message ?: parsed?.error ?: "Falha ao autenticar no Supabase")
     }
 
-    private fun TokenResponse.toSavedSession(fallbackEmail: String): SavedSession {
-        return SavedSession(
-            userId = user.id,
-            accessToken = accessToken,
-            refreshToken = refreshToken,
-            email = user.email ?: fallbackEmail,
-            expiresAt = expiresAt,
+    private fun TokenResponse.toSavedSession(
+        fallbackEmail: String,
+        fallbackUserId: String?,
+        isRefreshFlow: Boolean,
+    ): SavedSession {
+        val source = session
+        val resolvedAccessToken = accessToken ?: source?.accessToken
+        val resolvedRefreshToken = refreshToken ?: source?.refreshToken
+        val resolvedUser = user ?: source?.user
+        val resolvedUserId = resolvedUser?.id?.trim().takeUnless { it.isNullOrBlank() } ?: fallbackUserId
+        val resolvedEmail = resolvedUser?.email?.takeIf { it.isNotBlank() } ?: fallbackEmail
+        val resolvedExpiresAt = resolveExpiresAt(
+            expiresAt = expiresAt ?: source?.expiresAt,
+            expiresIn = expiresIn ?: source?.expiresIn,
         )
+
+        if (resolvedAccessToken.isNullOrBlank() || resolvedRefreshToken.isNullOrBlank() || resolvedUserId.isNullOrBlank()) {
+            val backendMessage = message?.takeIf { it.isNotBlank() } ?: error?.takeIf { it.isNotBlank() }
+            val fallbackMessage = if (isRefreshFlow) {
+                "Refresh token invalido ou sessao expirada. Faca login novamente."
+            } else {
+                "Falha ao autenticar no Supabase."
+            }
+            throw IllegalStateException(backendMessage ?: fallbackMessage)
+        }
+
+        return SavedSession(
+            userId = resolvedUserId,
+            accessToken = resolvedAccessToken,
+            refreshToken = resolvedRefreshToken,
+            email = resolvedEmail,
+            expiresAt = resolvedExpiresAt,
+        )
+    }
+
+    private fun resolveExpiresAt(expiresAt: Long?, expiresIn: Long?): Long? {
+        if (expiresAt != null) return expiresAt
+        val ttlSeconds = expiresIn ?: return null
+        val nowSeconds = System.currentTimeMillis() / 1000
+        return nowSeconds + ttlSeconds
     }
 }
 

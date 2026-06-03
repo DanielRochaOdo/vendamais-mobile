@@ -94,12 +94,12 @@ export function CadastrosGerenteView({ cadastros, onSelect, statusFilter }: Prop
       const equipe = teams.find((t) => t.id === equipeId);
       const usersArray: UserGroup[] = [];
 
-      usersMap.forEach((empresasMap, userKey) => {
+      usersMap.forEach((empresasMap) => {
         const firstCadastro = Array.from(empresasMap.values())[0][0];
         const vendedor = users.find((u) => u.id === firstCadastro.vendedor_id);
         const empresas: EmpresaGroup[] = [];
 
-        empresasMap.forEach((cads, empresaKey) => {
+        empresasMap.forEach((cads) => {
           empresas.push({
             empresaId: cads[0].empresa_id,
             empresaNome: cads[0].empresa_nome || 'Empresa não informada',

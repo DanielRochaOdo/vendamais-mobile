@@ -1,10 +1,17 @@
 package br.com.vendamais.mobile.data.remote
 
 import com.google.common.truth.Truth.assertThat
+import br.com.vendamais.mobile.data.models.CadastroBaseData
+import br.com.vendamais.mobile.data.models.CadastroContato
 import br.com.vendamais.mobile.data.models.CadastroDetalhe
+import br.com.vendamais.mobile.data.models.CadastroEndereco
+import br.com.vendamais.mobile.data.models.DependenteCadastro
 import org.junit.Test
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 class CadastroPayloadBuilderTest {
 
@@ -59,6 +66,79 @@ class CadastroPayloadBuilderTest {
         assertThat(base.contatos.first().tipo).isEqualTo("celular")
         assertThat(base.contatos.first().valor).isEqualTo("85999999999")
         assertThat(base.contatos.first().principal).isTrue()
+    }
+
+    @Test
+    fun `detailToBaseData should carry numero matricula when present`() {
+        val cadastro = cadastroDetalheBase()
+            .copy(numeroMatricula = "  MAT-123  ")
+
+        val base = CadastroPayloadBuilder.detailToBaseData(JSON, cadastro)
+
+        assertThat(base.numeroMatricula).isEqualTo("MAT-123")
+    }
+
+    @Test
+    fun `buildErpPayload should include Matricula and dataApresentacao`() {
+        val base = CadastroBaseData(
+            cpf = "52998224725",
+            nome = "Cliente Teste",
+            dataNascimento = "1990-01-01",
+            sexo = "M",
+            sexoCodigo = 1,
+            contatos = listOf(
+                CadastroContato(
+                    tipo = "celular",
+                    valor = "85999999999",
+                    principal = true,
+                ),
+            ),
+            endereco = CadastroEndereco(
+                cep = "60110140",
+                logradouro = "Rua A",
+                numero = "123",
+                bairro = "Centro",
+                cidade = "Fortaleza",
+                uf = "CE",
+                ufSigla = "CE",
+            ),
+            nomeMae = "Mae Teste",
+            numeroMatricula = "MAT-123",
+        )
+        val dependentes = listOf(
+            DependenteCadastro(
+                tipo = 1,
+                nome = "Cliente Teste",
+                dataNascimento = "1990-01-01",
+                cpf = "52998224725",
+                sexo = 1,
+                sexoDescricao = "Masculino",
+                plano = 468945133,
+                planoValor = "13,00",
+                nomeMae = "Mae Teste",
+                carenciaAtendimento = 0,
+                funcionarioCadastro = 123,
+            ),
+        )
+
+        val payload = CadastroPayloadBuilder.buildErpPayload(
+            cadastro = base,
+            dependentes = dependentes,
+            empresaId = 1,
+            vendedorCodigo = "10",
+            funcionarioCadastroId = 123,
+            userRole = "CADASTRO",
+            userExternalId = "123",
+            adesionistaCodigo = null,
+        )
+
+        val responsavel = payload["dados"]
+            ?.jsonObject
+            ?.get("responsavelFinanceiro")
+            ?.jsonObject
+        assertThat(responsavel).isNotNull()
+        assertThat(responsavel?.get("Matricula")?.jsonPrimitive?.contentOrNull).isEqualTo("MAT-123")
+        assertThat(responsavel?.get("dataApresentacao")?.jsonPrimitive?.contentOrNull).isNotEmpty()
     }
 
     private fun cadastroDetalheBase(

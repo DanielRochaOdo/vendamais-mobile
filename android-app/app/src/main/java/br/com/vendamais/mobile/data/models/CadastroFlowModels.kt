@@ -12,6 +12,7 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
 @Serializable
@@ -190,25 +191,35 @@ data class ErpAssociadoResponse(
 
 @Serializable
 data class LemmitCelular(
+    @Serializable(with = FlexibleNullableIntSerializer::class)
     val ddd: Int? = null,
+    @Serializable(with = FlexibleNullableStringSerializer::class)
     val numero: String? = null,
+    @Serializable(with = FlexibleNullableBooleanSerializer::class)
     val plus: Boolean? = null,
+    @Serializable(with = FlexibleNullableIntSerializer::class)
     val ranking: Int? = null,
+    @Serializable(with = FlexibleNullableBooleanSerializer::class)
     val whatsapp: Boolean? = null,
 )
 
 @Serializable
 data class LemmitFixo(
+    @Serializable(with = FlexibleNullableIntSerializer::class)
     val ddd: Int? = null,
+    @Serializable(with = FlexibleNullableStringSerializer::class)
     val numero: String? = null,
+    @Serializable(with = FlexibleNullableIntSerializer::class)
     val ranking: Int? = null,
 )
 
 @Serializable
 data class LemmitEmail(
     val email: String? = null,
+    @Serializable(with = FlexibleNullableIntSerializer::class)
     val ranking: Int? = null,
     @SerialName("possui_cookie")
+    @Serializable(with = FlexibleNullableBooleanSerializer::class)
     val possuiCookie: Boolean? = null,
 )
 
@@ -220,6 +231,7 @@ data class LemmitEndereco(
     @SerialName("titulo_logradouro")
     val tituloLogradouro: String? = null,
     val logradouro: String? = null,
+    @Serializable(with = FlexibleNullableStringSerializer::class)
     val numero: String? = null,
     val complemento: String? = null,
     val bairro: String? = null,
@@ -227,6 +239,7 @@ data class LemmitEndereco(
     val uf: String? = null,
     val cep: String? = null,
     val tipo: String? = null,
+    @Serializable(with = FlexibleNullableIntSerializer::class)
     val ranking: Int? = null,
 )
 
@@ -236,9 +249,13 @@ data class LemmitPessoa(
     val nome: String? = null,
     @SerialName("data_nascimento")
     val dataNascimento: String? = null,
+    @SerialName("dataNascimento")
+    val dataNascimentoAlternativa: String? = null,
     val sexo: String? = null,
     @SerialName("nome_mae")
     val nomeMae: String? = null,
+    @SerialName("nomeMae")
+    val nomeMaeAlternativa: String? = null,
     val celulares: List<LemmitCelular> = emptyList(),
     val fixos: List<LemmitFixo> = emptyList(),
     val emails: List<LemmitEmail> = emptyList(),
@@ -322,6 +339,7 @@ data class CadastroBaseData(
     val contatos: List<CadastroContato> = emptyList(),
     val endereco: CadastroEndereco? = null,
     val nomeMae: String? = null,
+    val numeroMatricula: String? = null,
 )
 
 data class CpfConsultInput(
@@ -394,5 +412,56 @@ object FlexibleNullableIntSerializer : KSerializer<Int?> {
         if (element is JsonNull) return null
         val primitive = element as? JsonPrimitive ?: return null
         return primitive.content.trim().toIntOrNull()
+    }
+}
+
+@OptIn(ExperimentalSerializationApi::class)
+object FlexibleNullableStringSerializer : KSerializer<String?> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("FlexibleNullableString", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: String?) {
+        if (value == null) {
+            encoder.encodeNull()
+        } else {
+            encoder.encodeString(value)
+        }
+    }
+
+    override fun deserialize(decoder: Decoder): String? {
+        val jsonDecoder = decoder as? kotlinx.serialization.json.JsonDecoder
+            ?: return decoder.decodeString()
+        val element = jsonDecoder.decodeJsonElement()
+        if (element is JsonNull) return null
+        val primitive = element as? JsonPrimitive ?: return null
+        return primitive.contentOrNull?.trim()
+    }
+}
+
+@OptIn(ExperimentalSerializationApi::class)
+object FlexibleNullableBooleanSerializer : KSerializer<Boolean?> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("FlexibleNullableBoolean", PrimitiveKind.BOOLEAN)
+
+    override fun serialize(encoder: Encoder, value: Boolean?) {
+        if (value == null) {
+            encoder.encodeNull()
+        } else {
+            encoder.encodeBoolean(value)
+        }
+    }
+
+    override fun deserialize(decoder: Decoder): Boolean? {
+        val jsonDecoder = decoder as? kotlinx.serialization.json.JsonDecoder
+            ?: return decoder.decodeBoolean()
+        val element = jsonDecoder.decodeJsonElement()
+        if (element is JsonNull) return null
+        val primitive = element as? JsonPrimitive ?: return null
+        val normalized = primitive.contentOrNull?.trim()?.lowercase().orEmpty()
+        return when (normalized) {
+            "true", "1", "sim", "yes", "y" -> true
+            "false", "0", "nao", "não", "no", "n" -> false
+            else -> null
+        }
     }
 }

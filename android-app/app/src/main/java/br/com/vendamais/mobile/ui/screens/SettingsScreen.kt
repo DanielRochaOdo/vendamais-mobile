@@ -34,6 +34,7 @@ import br.com.vendamais.mobile.ui.components.WebCard
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 
 @Composable
 fun SettingsScreen(
@@ -251,7 +252,7 @@ private fun ConfigListEditorCard(
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -261,7 +262,7 @@ private fun ConfigListEditorCard(
                             editing = false
                         },
                     ) {
-                        Text("Salvar")
+                        Text("Salvar", maxLines = 1, softWrap = false)
                     }
                     TextButton(onClick = { editing = false }) {
                         Text("Cancelar")

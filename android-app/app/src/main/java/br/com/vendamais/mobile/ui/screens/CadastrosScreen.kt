@@ -84,6 +84,7 @@ import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 
 private enum class TipoBuscaFiltro {
     ASSOCIADO,
@@ -971,14 +972,14 @@ private fun CadastrosFilterPanel(
                     OutlinedTextField(
                         value = buscaNome,
                         onValueChange = onBuscaNomeChange,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Nome") },
                         singleLine = true,
                     )
                     OutlinedTextField(
                         value = buscaCpf,
                         onValueChange = onBuscaCpfChange,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("CPF") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
@@ -987,14 +988,14 @@ private fun CadastrosFilterPanel(
                     OutlinedTextField(
                         value = buscaNome,
                         onValueChange = onBuscaNomeChange,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Nome da empresa") },
                         singleLine = true,
                     )
                     OutlinedTextField(
                         value = buscaCnpj,
                         onValueChange = onBuscaCnpjChange,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("CNPJ") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
@@ -1002,7 +1003,7 @@ private fun CadastrosFilterPanel(
                     OutlinedTextField(
                         value = buscaCodigo,
                         onValueChange = onBuscaCodigoChange,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Codigo da empresa") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
@@ -1429,6 +1430,7 @@ private fun DateFilterField(
         onValueChange = {},
         modifier = Modifier
             .fillMaxWidth()
+            .bringIntoViewOnFocus()
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

@@ -1,6 +1,7 @@
 import { FileText, CheckCircle2, Eye, Building2, Search, X, Filter, ChevronLeft, ChevronRight, User } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { Cadastro } from '../../hooks/useCadastros';
+import { usePagination } from '../../hooks/usePagination';
 import { formatCPF, formatDate } from '../../lib/cpf';
 import { Input } from '../Input';
 import { Select } from '../Select';
@@ -59,13 +60,6 @@ export function CadastrosCompletosList({ cadastros }: CadastrosCompletosListProp
     setDataInicioAplicada(firstDayStr);
   };
 
-  const contarPessoas = (cadastros: Cadastro[]) => {
-    return cadastros.reduce((total, cadastro) => {
-      const dependentesArray = Array.isArray(cadastro.dependentes) ? cadastro.dependentes : [];
-      return total + 1 + dependentesArray.length;
-    }, 0);
-  };
-
   const handleAplicarFiltros = () => {
     setTipoBuscaAplicada(tipoBusca);
     setBuscaNomeAplicada(buscaNome);
@@ -77,14 +71,6 @@ export function CadastrosCompletosList({ cadastros }: CadastrosCompletosListProp
     setTipoFiltroAplicado(tipoFiltro);
     setCurrentPage(1);
   };
-
-  if (profile?.role === 'SUPERVISOR') {
-    return <CadastrosSupervisorView cadastros={cadastros} statusFilter="enviado" />;
-  }
-
-  if (profile?.role === 'GERENTE') {
-    return <CadastrosGerenteView cadastros={cadastros} statusFilter="enviado" />;
-  }
 
   // Total apenas com filtro de data (para o denominador do contador)
   const cadastrosPorPeriodo = useMemo(() => {
@@ -105,8 +91,8 @@ export function CadastrosCompletosList({ cadastros }: CadastrosCompletosListProp
           const nomeLower = buscaNomeAplicada.toLowerCase().trim();
           const cpfNumeros = buscaCPFAplicada.replace(/\D/g, '');
 
-          let matchNome = !buscaNomeAplicada || cadastro.nome?.toLowerCase().includes(nomeLower) || false;
-          let matchCPF = !buscaCPFAplicada || (cadastro.cpf && cadastro.cpf.includes(cpfNumeros)) || false;
+          const matchNome = !buscaNomeAplicada || cadastro.nome?.toLowerCase().includes(nomeLower) || false;
+          const matchCPF = !buscaCPFAplicada || (cadastro.cpf && cadastro.cpf.includes(cpfNumeros)) || false;
 
           matchBusca = matchNome && matchCPF;
 
@@ -158,7 +144,7 @@ export function CadastrosCompletosList({ cadastros }: CadastrosCompletosListProp
     });
 
     const groups: EmpresaGroup[] = [];
-    cadastrosMap.forEach((cads, key) => {
+    cadastrosMap.forEach((cads) => {
       const firstCadastro = cads[0];
       groups.push({
         empresaId: firstCadastro.empresa_id,
@@ -174,32 +160,23 @@ export function CadastrosCompletosList({ cadastros }: CadastrosCompletosListProp
       return a.empresaNome.localeCompare(b.empresaNome);
     });
   }, [cadastrosFiltrados]);
+  const {
+    totalPages,
+    paginatedItems: empresasPaginadas,
+    visiblePages,
+  } = usePagination({
+    items: empresasGrouped,
+    currentPage,
+    itemsPerPage: ITEMS_PER_PAGE,
+  });
 
-  const totalPages = Math.ceil(empresasGrouped.length / ITEMS_PER_PAGE);
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const endIndex = startIndex + ITEMS_PER_PAGE;
-  const empresasPaginadas = empresasGrouped.slice(startIndex, endIndex);
+  if (profile?.role === 'SUPERVISOR') {
+    return <CadastrosSupervisorView cadastros={cadastros} statusFilter="enviado" />;
+  }
 
-  // Calcular quais páginas mostrar (máximo 10 páginas visíveis)
-  const getVisiblePages = () => {
-    const maxVisible = 10;
-    if (totalPages <= maxVisible) {
-      return Array.from({ length: totalPages }, (_, i) => i + 1);
-    }
-
-    const halfVisible = Math.floor(maxVisible / 2);
-    let startPage = Math.max(1, currentPage - halfVisible);
-    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
-
-    // Ajustar se chegou no fim
-    if (endPage - startPage < maxVisible - 1) {
-      startPage = Math.max(1, endPage - maxVisible + 1);
-    }
-
-    return Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
-  };
-
-  const visiblePages = getVisiblePages();
+  if (profile?.role === 'GERENTE') {
+    return <CadastrosGerenteView cadastros={cadastros} statusFilter="enviado" />;
+  }
 
   if (completos.length === 0) {
     return (
@@ -825,3 +802,4 @@ export function CadastrosCompletosList({ cadastros }: CadastrosCompletosListProp
     </>
   );
 }
+

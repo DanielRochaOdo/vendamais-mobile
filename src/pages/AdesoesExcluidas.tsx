@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Trash2, Search, X, FileText, Eye, Calendar, User, Building, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Trash2, Search, X, Eye, User, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getVisiblePages, usePagination } from '../hooks/usePagination';
 import { formatCPF, formatDate } from '../lib/cpf';
 import { Input } from '../components/Input';
 import { Select } from '../components/Select';
-import { Button } from '../components/Button';
 import { useAuth } from '../contexts/AuthContext';
 import { Layout } from '../components/Layout';
 
@@ -20,11 +20,6 @@ interface CadastroExcluido {
   team_id: string | null;
 }
 
-interface UserProfile {
-  id: string;
-  name: string;
-}
-
 export function AdesoesExcluidas() {
   const { profile } = useAuth();
   const [cadastrosExcluidos, setCadastrosExcluidos] = useState<CadastroExcluido[]>([]);
@@ -34,7 +29,6 @@ export function AdesoesExcluidas() {
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [exclusorFiltro, setExclusorFiltro] = useState('');
-  const [users, setUsers] = useState<UserProfile[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [cadastroDetalhes, setCadastroDetalhes] = useState<CadastroExcluido | null>(null);
 
@@ -42,22 +36,7 @@ export function AdesoesExcluidas() {
 
   useEffect(() => {
     fetchCadastrosExcluidos();
-    fetchUsers();
   }, []);
-
-  const fetchUsers = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, name')
-        .order('name', { ascending: true });
-
-      if (error) throw error;
-      setUsers(data || []);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-    }
-  };
 
   const fetchCadastrosExcluidos = async () => {
     try {
@@ -111,10 +90,14 @@ export function AdesoesExcluidas() {
 
     return true;
   });
-
-  const totalPages = Math.ceil(cadastrosFiltrados.length / ITEMS_PER_PAGE);
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const cadastrosPaginados = cadastrosFiltrados.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  const {
+    totalPages,
+    paginatedItems: cadastrosPaginados,
+  } = usePagination({
+    items: cadastrosFiltrados,
+    currentPage,
+    itemsPerPage: ITEMS_PER_PAGE,
+  });
 
   const limparFiltros = () => {
     setBuscaNome('');
@@ -133,35 +116,12 @@ export function AdesoesExcluidas() {
         .map((c) => [c.excluido_por, c.excluido_por_nome])
     ).entries()
   ).sort((a, b) => a[1].localeCompare(b[1]));
-
-  const getVisiblePages = () => {
-    const delta = 2;
-    const range = [];
-    const rangeWithDots = [];
-    let l;
-
-    for (let i = 1; i <= totalPages; i++) {
-      if (i === 1 || i === totalPages || (i >= currentPage - delta && i <= currentPage + delta)) {
-        range.push(i);
-      }
-    }
-
-    range.forEach((i) => {
-      if (l) {
-        if (i - l === 2) {
-          rangeWithDots.push(l + 1);
-        } else if (i - l !== 1) {
-          rangeWithDots.push('...');
-        }
-      }
-      rangeWithDots.push(i);
-      l = i;
-    });
-
-    return rangeWithDots;
-  };
-
-  const visiblePages = getVisiblePages();
+  const visiblePages = getVisiblePages({
+    totalPages,
+    currentPage,
+    withDots: true,
+    delta: 2,
+  });
 
   if (profile?.role !== 'ADMINISTRADOR') {
     return (
@@ -446,3 +406,4 @@ export function AdesoesExcluidas() {
     </Layout>
   );
 }
+

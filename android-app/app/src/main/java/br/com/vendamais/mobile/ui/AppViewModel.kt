@@ -79,6 +79,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import java.util.Locale
 
 enum class MainTab {
     DASHBOARD,
@@ -855,17 +856,28 @@ class AppViewModel(
                         } else {
                             null
                         }
-                        val fallbackPrompt = PendingCadastroPrompt(
-                            cadastroId = throwable.cadastroId,
-                            cpf = cpf,
-                            empresaNome = throwable.empresaNome,
+                        if (resolvedPrompt != null) {
+                            _uiState.update {
+                                it.copy(
+                                    cadastroWorkspace = it.cadastroWorkspace.copy(operationLoading = false),
+                                    errorMessage = null,
+                                    pendingCadastroPrompt = resolvedPrompt,
+                                    pendingCadastroActionLoading = false,
+                                )
+                            }
+                            return@onFailure
+                        }
+
+                        Log.w(
+                            logTag,
+                            "createDraftFromCpf recebeu canContinue=true, mas nao encontrou pendente visivel id=${throwable.cadastroId} cpf=$cpf",
                         )
                         _uiState.update {
                             it.copy(
                                 cadastroWorkspace = it.cadastroWorkspace.copy(operationLoading = false),
-                                errorMessage = null,
-                                pendingCadastroPrompt = resolvedPrompt ?: fallbackPrompt,
+                                pendingCadastroPrompt = null,
                                 pendingCadastroActionLoading = false,
+                                errorMessage = "Nao foi encontrado cadastro pendente visivel para este CPF. Tente novamente.",
                             )
                         }
                     } else if (throwable is CadastroExistenteException && !throwable.canContinue) {
@@ -1031,6 +1043,12 @@ class AppViewModel(
         return CadastroApiErrorMapper.isPendingCadastroConstraintViolation(message)
     }
 
+    private fun maskCpfForLog(cpf: String?): String {
+        val digits = cpf?.filter(Char::isDigit).orEmpty()
+        if (digits.length != 11) return "-"
+        return "***${digits.takeLast(4)}"
+    }
+
     fun openCadastro(id: String) {
         val session = currentSession ?: return
         viewModelScope.launch {
@@ -1070,7 +1088,27 @@ class AppViewModel(
             _uiState.update { it.copy(errorMessage = "Sua sessão expirou. Faça login novamente para continuar.") }
             return
         }
-        val cadastro = cadastroSnapshot ?: _uiState.value.selectedCadastro ?: return
+        val cadastroSelecionadoAtual = _uiState.value.selectedCadastro
+        val cadastro = when {
+            cadastroSnapshot == null && cadastroSelecionadoAtual != null -> cadastroSelecionadoAtual
+            cadastroSnapshot != null && cadastroSelecionadoAtual == null -> cadastroSnapshot
+            cadastroSnapshot == null && cadastroSelecionadoAtual == null -> return
+            cadastroSnapshot != null && cadastroSelecionadoAtual != null && cadastroSnapshot.id == cadastroSelecionadoAtual.id -> cadastroSelecionadoAtual
+            cadastroSelecionadoAtual != null && cadastroSelecionadoAtual.tipoCadastro == "cadastro" && isPendingCadastroStatus(cadastroSelecionadoAtual.status) -> {
+                Log.w(
+                    logTag,
+                    "sendSelectedCadastro recebeu snapshot desatualizado snapshotId=${cadastroSnapshot?.id ?: "-"} selectedId=${cadastroSelecionadoAtual.id}; usando selectedCadastro atual.",
+                )
+                cadastroSelecionadoAtual
+            }
+            else -> cadastroSnapshot ?: return
+        }
+        val sendTraceId = "send-${cadastro.id.take(8)}-${System.currentTimeMillis()}"
+        val fluxoContinuacaoPendente = cadastro.tipoCadastro == "cadastro" && isPendingCadastroStatus(cadastro.status)
+        Log.i(
+            logTag,
+            "[$sendTraceId] clickCadastrar received id=${cadastro.id} status=${cadastro.status ?: "-"} tipo=${cadastro.tipoCadastro} continuarPendente=$fluxoContinuacaoPendente hasPayloadHint=${payloadHint != null}",
+        )
 
         _uiState.update { it.copy(sendingCadastro = true, errorMessage = null) }
         viewModelScope.launch {
@@ -1128,6 +1166,18 @@ class AppViewModel(
                     ?.takeIf { it.isNotBlank() }
                 val empresaRawFromPayload = payloadHint?.get("empresa_raw")
                 val planosRawFromPayload = payloadHint?.get("planos_raw")
+                val numeroMatriculaFromPayload = payloadHint
+                    ?.get("numero_matricula")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                val statusAdesaoIdFromPayload = payloadHint
+                    ?.get("status_adesao_id")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
                 val arquivoPathFromPayload = payloadHint
                     ?.get("arquivo_path")
                     ?.jsonPrimitive
@@ -1156,9 +1206,18 @@ class AppViewModel(
                 }.getOrNull()
                 val cpfFromSnapshot = CadastroPayloadBuilder.normalizeDigits(cadastro.cpf).takeIf { it.length == 11 }
                 val cpfForUpdate = cpfFromPayload ?: cpfFromTitularPayload ?: cpfFromSnapshot
+                val numeroMatriculaFromSnapshot = cadastro.numeroMatricula
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                val numeroMatriculaForUpdate = numeroMatriculaFromPayload ?: numeroMatriculaFromSnapshot
+                val origemMatricula = when {
+                    !numeroMatriculaFromPayload.isNullOrBlank() -> "form_payload_hint"
+                    !numeroMatriculaFromSnapshot.isNullOrBlank() -> "cadastro_snapshot"
+                    else -> "ausente"
+                }
                 Log.i(
                     logTag,
-                    "sendSelectedCadastro preflight id=${cadastro.id} arquivoPathPayload=${!arquivoPathFromPayload.isNullOrBlank()} arquivoPathSnapshot=${!cadastro.arquivoPath.isNullOrBlank()} titularPlanoPayload=${titularPlanoFromPayload ?: 0}",
+                    "[$sendTraceId] preflight operation=update id=${cadastro.id} continuarPendente=$fluxoContinuacaoPendente tipo=${cadastro.tipoCadastro} status=${cadastro.status ?: "-"} cpf=${maskCpfForLog(cpfForUpdate)} hasMatricula=${!numeroMatriculaForUpdate.isNullOrBlank()} matriculaLength=${numeroMatriculaForUpdate?.length ?: 0} matriculaSource=$origemMatricula arquivoPathPayload=${!arquivoPathFromPayload.isNullOrBlank()} arquivoPathSnapshot=${!cadastro.arquivoPath.isNullOrBlank()} titularPlanoPayload=${titularPlanoFromPayload ?: 0}",
                 )
 
                 val cadastroBase = runCatching {
@@ -1205,33 +1264,140 @@ class AppViewModel(
                                 ?.let { put("empresa_cnpj", it) }
                             empresaRawFromPayload?.let { put("empresa_raw", it) } ?: cadastro.empresaRaw?.let { put("empresa_raw", it) }
                             planosRawFromPayload?.let { put("planos_raw", it) } ?: cadastro.planosRaw?.let { put("planos_raw", it) }
+                            numeroMatriculaFromPayload?.let { put("numero_matricula", it) }
+                                ?: cadastro.numeroMatricula
+                                    ?.trim()
+                                    ?.takeIf { it.isNotBlank() }
+                                    ?.let { put("numero_matricula", it) }
+                            statusAdesaoIdFromPayload?.let { put("status_adesao_id", it) }
+                                ?: cadastro.statusAdesaoId
+                                    ?.takeIf { it.isNotBlank() }
+                                    ?.let { put("status_adesao_id", it) }
                             arquivoPathFromPayload?.let { put("arquivo_path", it) } ?: cadastro.arquivoPath
                                 ?.takeIf { it.isNotBlank() }
                                 ?.let { put("arquivo_path", it) }
                         },
                     )
                 }.getOrElse { throwable ->
-                    if (isDuplicatePendingConstraintError(throwable.message)) {
-                        Log.w(
-                            logTag,
-                            "sendSelectedCadastro ignorando conflito de pendencia no update pre-envio e seguindo com snapshot id=${cadastro.id}",
-                            throwable,
-                        )
-                        workflowRepository.fetchCadastroDetalhe(activeSession, cadastro.id)
-                    } else {
+                    if (!isDuplicatePendingConstraintError(throwable.message)) {
                         throw throwable
                     }
+
+                    val cpfConflito = cpfForUpdate
+                        ?.let(CadastroPayloadBuilder::normalizeDigits)
+                        ?.takeIf { it.length == 11 }
+                    Log.w(
+                        logTag,
+                        "[$sendTraceId] preflight duplicateConstraint idAtual=${cadastro.id} continuarPendente=$fluxoContinuacaoPendente tipo=${cadastro.tipoCadastro} status=${cadastro.status ?: "-"} cpf=${maskCpfForLog(cpfConflito)}",
+                        throwable,
+                    )
+
+                    val idReconciliado = cpfConflito?.let { cpfDigits ->
+                        workflowRepository.resolvePendingCadastroConflictIdByCpf(
+                            session = activeSession,
+                            currentUserId = profile.id,
+                            cpfDigits = cpfDigits,
+                            excludeCadastroId = cadastro.id,
+                        )
+                    }
+                    if (!idReconciliado.isNullOrBlank()) {
+                        Log.w(
+                            logTag,
+                            "[$sendTraceId] preflight duplicate reconciledByList idAnterior=${cadastro.id} idAtual=$idReconciliado",
+                            throwable,
+                        )
+                        return@getOrElse workflowRepository.fetchCadastroDetalhe(activeSession, idReconciliado)
+                    }
+
+                    val checkConflict = cpfConflito?.let { cpfDigits ->
+                        workflowRepository.inspectCpfExistente(
+                            session = activeSession,
+                            userId = profile.id,
+                            cpf = cpfDigits,
+                        )
+                    }
+                    Log.i(
+                        logTag,
+                        "[$sendTraceId] check_cpf_existente cpf=${maskCpfForLog(cpfConflito)} exists=${checkConflict?.exists ?: false} status=${checkConflict?.status ?: "-"} canContinue=${checkConflict?.canContinue ?: false} idRpc=${checkConflict?.cadastroId ?: "-"}",
+                    )
+                    val idFromCheckConflict = checkConflict
+                        ?.cadastroId
+                        ?.trim()
+                        ?.takeIf { it.isNotBlank() && it != cadastro.id }
+                    if (!idFromCheckConflict.isNullOrBlank()) {
+                        Log.w(
+                            logTag,
+                            "[$sendTraceId] preflight duplicate reconciledByRpc idAnterior=${cadastro.id} idAtual=$idFromCheckConflict",
+                            throwable,
+                        )
+                        return@getOrElse workflowRepository.fetchCadastroDetalhe(activeSession, idFromCheckConflict)
+                    }
+
+                    if (
+                        checkConflict?.exists == true &&
+                        isPendingCadastroStatus(checkConflict.status) &&
+                        checkConflict.cadastroId?.trim() == cadastro.id
+                    ) {
+                        Log.w(
+                            logTag,
+                            "[$sendTraceId] preflight duplicate with same cadastro_id from rpc; continuing with current id=${cadastro.id}",
+                            throwable,
+                        )
+                        return@getOrElse workflowRepository.fetchCadastroDetalhe(activeSession, cadastro.id)
+                    }
+
+                    val detalheAtual = runCatching {
+                        workflowRepository.fetchCadastroDetalhe(activeSession, cadastro.id)
+                    }.getOrNull()
+                    val cpfDetalheAtual = CadastroPayloadBuilder.normalizeDigits(detalheAtual?.cpf).takeIf { it.length == 11 }
+                    val selfPendingByContext =
+                        detalheAtual?.tipoCadastro == "cadastro" &&
+                            isPendingCadastroStatus(detalheAtual.status) &&
+                            !cpfConflito.isNullOrBlank() &&
+                            cpfDetalheAtual == cpfConflito
+                    if (selfPendingByContext) {
+                        Log.w(
+                            logTag,
+                            "[$sendTraceId] duplicate unresolved by rpc, but current pending context is valid id=${cadastro.id} cpf=${maskCpfForLog(cpfDetalheAtual)}; continuing with current cadastro.",
+                            throwable,
+                        )
+                        return@getOrElse detalheAtual
+                    }
+
+                    if (checkConflict?.exists == true && isPendingCadastroStatus(checkConflict.status)) {
+                        Log.w(
+                            logTag,
+                            "[$sendTraceId] preflight duplicate unresolved exists=${checkConflict.exists} canContinue=${checkConflict.canContinue} status=${checkConflict.status ?: "-"} idRpc=${checkConflict.cadastroId ?: "-"} idAtual=${cadastro.id}",
+                        )
+                        val mensagemBloqueio = if (checkConflict.canContinue) {
+                            "Detectamos outro cadastro pendente para este CPF, mas nao foi possivel localizar o ID correto para continuidade. Atualize a lista de pendentes e tente novamente."
+                        } else {
+                            "Existe cadastro pendente para este CPF sem permissao de continuidade para o usuario atual. Solicite ao gestor a liberacao para continuar."
+                        }
+                        throw IllegalStateException(mensagemBloqueio)
+                    }
+
+                    if (fluxoContinuacaoPendente) {
+                        val mensagemContexto = if (cpfConflito.isNullOrBlank()) {
+                            "Nao foi possivel confirmar o CPF do cadastro pendente atual para concluir o envio. Reabra o pendente e tente novamente."
+                        } else {
+                            "Conflito de pendencia nao reconciliado para o cadastro atual. Reabra o pendente pela lista e tente novamente."
+                        }
+                        throw IllegalStateException(mensagemContexto)
+                    }
+
+                    throw throwable
                 }
                 val targetCadastroId = cadastroBase.id.ifBlank { cadastro.id }
                 if (targetCadastroId != cadastro.id) {
                     Log.w(
                         logTag,
-                        "sendSelectedCadastro reconciliado para cadastro pendente existente idAnterior=${cadastro.id} idAtual=$targetCadastroId",
+                        "[$sendTraceId] targetCadastroId changed idAnterior=${cadastro.id} idAtual=$targetCadastroId",
                     )
                 }
                 Log.i(
                     logTag,
-                    "sendSelectedCadastro afterUpdate id=$targetCadastroId arquivoPathPersisted=${!cadastroBase.arquivoPath.isNullOrBlank()}",
+                    "[$sendTraceId] afterUpdate id=$targetCadastroId arquivoPathPersisted=${!cadastroBase.arquivoPath.isNullOrBlank()}",
                 )
                 val cadastroComEmpresa = ensureCadastroEmpresaBeforeSend(
                     session = activeSession,
@@ -1250,7 +1416,15 @@ class AppViewModel(
                     nomeHint = nomeFromPayload ?: cadastroComEmpresa.nome,
                     dataNascimentoHint = dataNascimentoFromPayload ?: cadastroComEmpresa.dataNascimento,
                     nomeMaeHint = nomeMaeFromPayload ?: cadastroComEmpresa.nomeMae,
+                    numeroMatriculaHint = numeroMatriculaFromPayload
+                        ?.trim()
+                        ?.takeIf { it.isNotBlank() }
+                        ?: cadastroComEmpresa.numeroMatricula
+                            ?.trim()
+                            ?.takeIf { it.isNotBlank() },
+                    flowContext = if (fluxoContinuacaoPendente) "pending_continuation" else "regular_send",
                 )
+                Log.i(logTag, "[$sendTraceId] sendCadastroToErp finished id=$targetCadastroId")
                 val cadastrosResult = runCatching { repository.fetchCadastros(activeSession) }
                 val statsResult = runCatching { repository.fetchCadastroStats(activeSession) }
                 val notice = buildString {
@@ -1269,6 +1443,7 @@ class AppViewModel(
                 }
                 Triple(detalheAtualizado, cadastrosAtualizados, statsAtualizadas) to notice
             }.onSuccess { (payload, noticeMessage) ->
+                Log.i(logTag, "[$sendTraceId] flowSuccess")
                 val (_, cadastrosAtualizados, statsAtualizadas) = payload
                 _uiState.update {
                     it.copy(
@@ -1285,7 +1460,7 @@ class AppViewModel(
                     )
                 }
             }.onFailure { throwable ->
-                Log.e(logTag, "Falha ao enviar cadastro ao ERP", throwable)
+                Log.e(logTag, "[$sendTraceId] flowFailure", throwable)
                 val erpError = CadastroApiErrorMapper.mapErpError(throwable.message)
                 if (erpError != null) {
                     resolveCadastroOverlay(CadastroModalSignal(erpError = erpError))
@@ -1378,6 +1553,10 @@ class AppViewModel(
                     nomeHint = cadastroComEmpresa.nome,
                     dataNascimentoHint = cadastroComEmpresa.dataNascimento,
                     nomeMaeHint = cadastroComEmpresa.nomeMae,
+                    numeroMatriculaHint = cadastroComEmpresa.numeroMatricula
+                        ?.trim()
+                        ?.takeIf { it.isNotBlank() },
+                    flowContext = "retry_send",
                 )
                 val cadastrosResult = runCatching { repository.fetchCadastros(activeSession) }
                 val statsResult = runCatching { repository.fetchCadastroStats(activeSession) }
@@ -2210,6 +2389,7 @@ class AppViewModel(
         runCatching { withContext(Dispatchers.IO) { loadCriticalSessionData(session) } }
             .onSuccess { critical ->
                 applyCriticalSessionData(critical, null)
+                registerCurrentAppVersionBestEffort(session)
                 prefetchCadastroSupport(session, critical.profile)
                 if (_uiState.value.activeTab == MainTab.CADASTROS) {
                     ensureCadastroResourcesLoaded()
@@ -2234,6 +2414,7 @@ class AppViewModel(
                             critical = fallback,
                             errorMessage = "Sessao iniciada com dados parciais. Use Atualizar para tentar novamente.",
                         )
+                        registerCurrentAppVersionBestEffort(session)
                     }
                     .onFailure { fallbackThrowable ->
                         Log.e(logTag, "Falha ao carregar fallback da sessao", fallbackThrowable)
@@ -2254,6 +2435,16 @@ class AppViewModel(
                         }
                     }
             }
+    }
+
+    private suspend fun registerCurrentAppVersionBestEffort(session: SavedSession) {
+        runCatching {
+            withContext(Dispatchers.IO) {
+                repository.registerCurrentAppVersion(ensureFreshSession(session))
+            }
+        }.onFailure { throwable ->
+            Log.e(logTag, "Falha ao registrar versao do app", throwable)
+        }
     }
 
     private fun applyCriticalSessionData(critical: CriticalSessionData, errorMessage: String?) {
@@ -2582,7 +2773,31 @@ class AppViewModel(
     }
 
     private suspend fun ensureFreshSession(session: SavedSession): SavedSession {
-        val refreshed = authService.refreshIfNeeded(session)
+        val refreshed = try {
+            authService.refreshIfNeeded(session)
+        } catch (throwable: Throwable) {
+            if (shouldForceLogoutOnRefreshFailure(throwable.message)) {
+                Log.w(logTag, "Sessao invalida detectada no refresh; limpando sessao local", throwable)
+                stopCadastrosAutoSync()
+                inMemorySessionActive = false
+                currentSession = null
+                sessionStore.clearSavedSession()
+                _uiState.update {
+                    AppUiState(
+                        email = it.email,
+                        password = "",
+                        darkModeEnabled = it.darkModeEnabled,
+                        rememberConnected = it.rememberConnected,
+                        loading = false,
+                        configurationMissing = !AppConfig.isConfigured(),
+                        errorMessage = "Sua sessao expirou. Faca login novamente para continuar.",
+                    )
+                }
+                throw IllegalStateException("Sua sessao expirou. Faca login novamente para continuar.")
+            }
+            throw throwable
+        }
+
         if (refreshed != session) {
             currentSession = refreshed
             if (_uiState.value.rememberConnected) {
@@ -2590,6 +2805,21 @@ class AppViewModel(
             }
         }
         return refreshed
+    }
+
+    private fun shouldForceLogoutOnRefreshFailure(message: String?): Boolean {
+        val normalized = message
+            ?.trim()
+            ?.lowercase(Locale.ROOT)
+            .orEmpty()
+        if (normalized.isBlank()) return false
+
+        return normalized.contains("refresh token") ||
+            normalized.contains("invalid_grant") ||
+            normalized.contains("session expired") ||
+            normalized.contains("jwt expired") ||
+            normalized.contains("token is expired") ||
+            normalized.contains("revoked")
     }
 
     private fun requiresVendedorSelection(profile: MobileProfile): Boolean {
@@ -2761,4 +2991,3 @@ private data class AdminData(
 )
 
 private typealias LoadedSessionData = CriticalSessionData
-

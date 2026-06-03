@@ -1,4 +1,4 @@
-import { formatCPF, formatDate, formatDateFromISO, removeCPFMask } from './cpf';
+import { formatCPF, formatDateFromISO, removeCPFMask } from './cpf';
 
 export interface LemmitPessoa {
   cpf?: string | null;
@@ -197,7 +197,7 @@ export function mapLemitToCadastro(lemitData: LemitResponse | null, cpf: string)
     try {
       const date = new Date(pessoa.data_nascimento);
       dataNascimento = date.toISOString().split('T')[0];
-    } catch (e) {
+    } catch {
       dataNascimento = pessoa.data_nascimento;
     }
   }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Search, Plus, Trash, Loader2, Upload, Save } from 'lucide-react';
+import { X, Search, Plus, Trash, Loader2, Save } from 'lucide-react';
 import { Button } from '../Button';
 import { Input } from '../Input';
 import { Select } from '../Select';
@@ -896,7 +896,7 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
     }
   };
 
-  const handleRetryWithVendedor = async (vendedorCodigo: string, vendedorNome: string) => {
+  const handleRetryWithVendedor = async (vendedorCodigo: string) => {
     setShowParceiroInvalidoModal(false);
     setSelectedVendedor('');
 
