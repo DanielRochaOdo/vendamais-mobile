@@ -505,7 +505,14 @@ class CadastroWorkflowRepository(
                 cadastroAtual = cadastroCore,
             )
             val cadastroComDependentes = withDependentesHint(cadastroComMatricula, dependentesHint)
-            val cadastro = withArquivoPathHint(cadastroComDependentes, arquivoPathHint)
+            val cadastroComArquivoHint = withArquivoPathHint(cadastroComDependentes, arquivoPathHint)
+
+            val cadastro = persistArquivoPathBeforeSend(
+                session = session,
+                cadastroAnterior = cadastroComDependentes,
+                cadastroAtual = cadastroComArquivoHint,
+            )
+
             validateCadastroReady(cadastro, config)
             val targetCadastroId = cadastro.id.ifBlank { cadastroId }
 
@@ -522,6 +529,7 @@ class CadastroWorkflowRepository(
                 userRole = profile.role,
                 userExternalId = profile.externalId,
                 adesionistaCodigo = cadastro.adesionistaCodigo,
+                arquivoPath = cadastro.arquivoPath,
             )
 
             val matriculaHintNormalizada = numeroMatriculaHint
@@ -588,6 +596,47 @@ class CadastroWorkflowRepository(
         val hintNormalizado = arquivoPathHint?.trim().orEmpty()
         if (arquivoAtual.isNotBlank() || hintNormalizado.isBlank()) return cadastro
         return cadastro.copy(arquivoPath = hintNormalizado)
+    }
+
+    private suspend fun persistArquivoPathBeforeSend(
+        session: SavedSession,
+        cadastroAnterior: CadastroDetalhe,
+        cadastroAtual: CadastroDetalhe,
+    ): CadastroDetalhe {
+        val arquivoAnterior = cadastroAnterior.arquivoPath
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+
+        val arquivoAtual = cadastroAtual.arquivoPath
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+
+        if (arquivoAtual.isNullOrBlank()) {
+            return cadastroAtual
+        }
+
+        if (arquivoAnterior == arquivoAtual) {
+            return cadastroAtual.copy(arquivoPath = arquivoAtual)
+        }
+
+        runCatching {
+            patchCadastroById(
+                session = session,
+                id = cadastroAtual.id,
+                payload = buildJsonObject {
+                    put("arquivo_path", arquivoAtual)
+                    put("created_by", session.userId)
+                },
+            )
+        }.onFailure { throwable ->
+            Log.w(
+                logTag,
+                "Falha ao persistir arquivo_path antes do envio ERP id=${cadastroAtual.id} arquivoPath=$arquivoAtual",
+                throwable,
+            )
+        }
+
+        return cadastroAtual.copy(arquivoPath = arquivoAtual)
     }
 
     private fun withDependentesHint(

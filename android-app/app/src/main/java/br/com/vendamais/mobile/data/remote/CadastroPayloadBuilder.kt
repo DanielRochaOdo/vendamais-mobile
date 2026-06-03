@@ -300,6 +300,7 @@ internal object CadastroPayloadBuilder {
         userRole: String?,
         userExternalId: String?,
         adesionistaCodigo: String?,
+        arquivoPath: String? = null,
     ): JsonObject {
         val titularDataNascimento = requireBrDate(
             value = cadastro.dataNascimento,
@@ -386,6 +387,12 @@ internal object CadastroPayloadBuilder {
                         })
                     }
                 })
+                arquivoPath?.trim()?.takeIf { it.isNotBlank() }?.let { path ->
+                    put("documento", buildJsonObject {
+                        put("caminho", path)
+                        put("nome", path.substringAfterLast('/'))
+                    })
+                }
             })
         }
     }
