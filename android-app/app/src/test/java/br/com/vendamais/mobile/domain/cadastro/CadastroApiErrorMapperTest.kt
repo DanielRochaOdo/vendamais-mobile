@@ -45,4 +45,39 @@ class CadastroApiErrorMapperTest {
 
         assertThat(mapped).isEqualTo(raw)
     }
+
+    @Test
+    fun `mapUserMessage should preserve contextual pending guidance message`() {
+        val raw = "Ja existe um cadastro pendente para este CPF vinculado a outra sessao/equipe. Solicite ao gestor a liberacao para continuar."
+        val mapped = CadastroApiErrorMapper.mapUserMessage(
+            raw,
+            "Falha ao enviar cadastro.",
+        )
+
+        assertThat(mapped).isEqualTo(raw)
+    }
+
+    @Test
+    fun `mapUserMessage should hide erp technical json failure`() {
+        val mapped = CadastroApiErrorMapper.mapUserMessage(
+            """{"codigo":504,"mensagem":"Incorrect syntax near \u0027ÿ\u0027.","dados":null,"erros":null}""",
+            "Falha ao enviar cadastro.",
+        )
+
+        assertThat(mapped).isEqualTo(
+            "O ERP retornou uma falha tecnica ao finalizar o cadastro. Verifique se o cadastro ja foi criado no ERP antes de reenviar.",
+        )
+    }
+
+    @Test
+    fun `mapUserMessage should hide erp sql syntax failure`() {
+        val mapped = CadastroApiErrorMapper.mapUserMessage(
+            "Incorrect syntax near '}'.",
+            "Falha ao enviar cadastro.",
+        )
+
+        assertThat(mapped).isEqualTo(
+            "O ERP retornou uma falha tecnica ao finalizar o cadastro. Verifique se o cadastro ja foi criado no ERP antes de reenviar.",
+        )
+    }
 }

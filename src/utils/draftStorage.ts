@@ -205,7 +205,7 @@ export function setupAutosave(
   };
 
   // pagehide - when page is being unloaded (critical for mobile!)
-  const handlePageHide = (e: PageTransitionEvent) => {
+  const handlePageHide = () => {
     saveNow();
   };
 

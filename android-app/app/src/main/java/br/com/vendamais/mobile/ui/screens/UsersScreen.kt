@@ -47,6 +47,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.Locale
+import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -89,7 +90,7 @@ fun UsersScreen(
                     OutlinedTextField(
                         value = searchTerm,
                         onValueChange = { searchTerm = it },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Pesquisar por nome") },
                         singleLine = true,
                     )
@@ -250,7 +251,7 @@ private fun UserEditorDialog(
                     OutlinedTextField(
                         value = form.name,
                         onValueChange = { form = form.copy(name = it) },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Nome") },
                     )
                 }
@@ -258,7 +259,7 @@ private fun UserEditorDialog(
                     OutlinedTextField(
                         value = form.email,
                         onValueChange = { form = form.copy(email = it) },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Email") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                     )
@@ -268,7 +269,7 @@ private fun UserEditorDialog(
                         OutlinedTextField(
                             value = form.password,
                             onValueChange = { form = form.copy(password = it) },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                             label = { Text("Senha") },
                         )
                     }
@@ -286,7 +287,7 @@ private fun UserEditorDialog(
                     OutlinedTextField(
                         value = form.telefone,
                         onValueChange = { form = form.copy(telefone = formatPhone(it)) },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Telefone") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     )
@@ -295,7 +296,7 @@ private fun UserEditorDialog(
                     OutlinedTextField(
                         value = form.lemmitLimite,
                         onValueChange = { form = form.copy(lemmitLimite = normalizeLemmitEditableInput(it)) },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Limite Lemmit (R$)") },
                         prefix = { Text("R$ ") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -306,7 +307,7 @@ private fun UserEditorDialog(
                         OutlinedTextField(
                             value = form.externalId,
                             onValueChange = { form = form.copy(externalId = it) },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                             label = { Text("ID Externo") },
                         )
                     }
@@ -364,7 +365,11 @@ private fun UserEditorDialog(
                 enabled = !isSubmitting && validationError == null,
                 onClick = { onSubmit(form) },
             ) {
-                Text(if (isSubmitting) "Salvando..." else "Salvar")
+                Text(
+                    text = if (isSubmitting) "Salvando..." else "Salvar",
+                    maxLines = 1,
+                    softWrap = false,
+                )
             }
         },
         dismissButton = {

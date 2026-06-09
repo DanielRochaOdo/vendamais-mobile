@@ -7,6 +7,8 @@ object AppConfig {
     val supabaseUrl: String = BuildConfig.SUPABASE_URL.trim()
     val supabaseAnonKey: String = BuildConfig.SUPABASE_ANON_KEY.trim()
     val publicAppUrl: String = normalizePublicAppUrl(BuildConfig.PUBLIC_APP_URL)
+    val updateMetadataUrl: String = BuildConfig.UPDATE_METADATA_URL.trim()
+    val updateApkUrl: String = BuildConfig.UPDATE_APK_URL.trim()
 
     fun isConfigured(): Boolean = supabaseUrl.isNotBlank() && supabaseAnonKey.isNotBlank()
 

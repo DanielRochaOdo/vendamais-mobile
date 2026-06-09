@@ -9,6 +9,10 @@ object CadastroApiErrorMapper {
         RegexOption.IGNORE_CASE,
     )
     private const val pendingCadastroConstraintName = "cadastros_cadastro_incompleto_cpf_unique_idx"
+    private const val pendingCadastroCanonicalMessage =
+        "ja existe um cadastro pendente para este cpf. abra o pendente e continue por ele."
+    private const val erpTechnicalFailureMessage =
+        "O ERP retornou uma falha tecnica ao finalizar o cadastro. Verifique se o cadastro ja foi criado no ERP antes de reenviar."
 
     fun mapErpError(message: String?): CadastroErpError? {
         val normalized = normalize(message)
@@ -36,6 +40,7 @@ object CadastroApiErrorMapper {
         return when {
             isPendingCadastroConstraintViolation(raw) ->
                 "Ja existe um cadastro pendente para este CPF. Abra o pendente e continue por ele."
+            isErpTechnicalFailure(raw) -> erpTechnicalFailureMessage
             else -> raw
         }
     }
@@ -45,7 +50,18 @@ object CadastroApiErrorMapper {
         if (normalized.isBlank()) return false
 
         return normalized.contains(pendingCadastroConstraintName) ||
-            normalized.contains("ja existe um cadastro pendente para este cpf")
+            normalized == pendingCadastroCanonicalMessage
+    }
+
+    private fun isErpTechnicalFailure(message: String?): Boolean {
+        val normalized = normalize(message).lowercase()
+        if (normalized.isBlank()) return false
+
+        return normalized.contains("incorrect syntax near") ||
+            (
+                normalized.contains("\"codigo\":504") &&
+                    normalized.contains("\"dados\":null")
+                )
     }
 
     private fun normalize(value: String?): String {

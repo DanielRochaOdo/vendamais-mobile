@@ -639,7 +639,26 @@ const syncCadastroEnviado = async (
   }
 
   if (error) {
-    throw new Error(`Falha ao sincronizar cadastro local apos envio ao ERP: ${error.message}`);
+    console.warn("[cadastro-public-submit] full sync failed after ERP success, retrying minimal status sync", error);
+
+    const fallback = await supabase
+      .from("cadastros")
+      .update({
+        status: "enviado",
+        payload_erp: erpPayload,
+        erp_response: erpResult,
+      }, { count: "exact" })
+      .eq("id", cadastroId);
+
+    if (fallback.error) {
+      throw new Error(`Falha ao sincronizar cadastro local apos envio ao ERP: ${fallback.error.message}`);
+    }
+
+    if (!fallback.count || fallback.count < 1) {
+      throw new Error(`Nenhum cadastro local foi marcado como enviado apos envio ao ERP (cadastro ${cadastroId}).`);
+    }
+
+    return;
   }
 
   if (!count || count < 1) {
@@ -1030,13 +1049,12 @@ Deno.serve(async (req: Request) => {
       console.error("[cadastro-public-submit] cadastro sync error after ERP success:", syncError);
 
       return await logAndRespond({
-        ok: true,
-        warning: syncError instanceof Error
+        ok: false,
+        error: syncError instanceof Error
           ? syncError.message
           : "Cadastro enviado ao ERP, mas houve uma divergencia na sincronizacao local",
         cadastroId: workingCadastroId,
-        message: "Cadastro concluido com sucesso",
-      }, 200, true, undefined, workingCadastroId);
+      }, 500, false, syncError instanceof Error ? syncError.message : "Falha ao sincronizar cadastro local", workingCadastroId);
     }
 
     try {

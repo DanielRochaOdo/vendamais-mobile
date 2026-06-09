@@ -54,6 +54,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.util.UUID
+import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 
 private const val PUBLIC_CADASTRO_DRAFT_VERSION = 1
 private const val PUBLIC_CADASTRO_DRAFT_TTL_MS = 24 * 60 * 60 * 1000L
@@ -432,13 +433,13 @@ fun PublicAdesaoTokenScreen(
                     OutlinedTextField(
                         value = nome,
                         onValueChange = { nome = it },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Nome completo") },
                     )
                     OutlinedTextField(
                         value = cpf,
                         onValueChange = { cpf = it.filter(Char::isDigit).take(11) },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("CPF (somente numeros)") },
                         singleLine = true,
                         enabled = !cpfLocked && !consultingCpf && !submitting,
@@ -501,7 +502,7 @@ fun PublicAdesaoTokenScreen(
                     OutlinedTextField(
                         value = dataNascimento,
                         onValueChange = { dataNascimento = it },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Data nascimento (YYYY-MM-DD)") },
                         singleLine = true,
                     )
@@ -514,20 +515,20 @@ fun PublicAdesaoTokenScreen(
                     OutlinedTextField(
                         value = nomeMae,
                         onValueChange = { nomeMae = it },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Nome da mae") },
                     )
                     OutlinedTextField(
                         value = telefone,
                         onValueChange = { telefone = it.filter(Char::isDigit).take(11) },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Telefone") },
                     )
                     if (empresa.empresaExigeMatricula == 1) {
                         OutlinedTextField(
                             value = numeroMatricula,
                             onValueChange = { numeroMatricula = it },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                             label = { Text("Numero matricula") },
                         )
                     }
@@ -553,7 +554,7 @@ fun PublicAdesaoTokenScreen(
                                 ultimoCepConsultado = ""
                             }
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("CEP") },
                         colors = enderecoFieldColors,
                     )
@@ -574,7 +575,7 @@ fun PublicAdesaoTokenScreen(
                     OutlinedTextField(
                         value = logradouro,
                         onValueChange = { logradouro = it },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Logradouro") },
                         colors = enderecoFieldColors,
                     )
@@ -582,14 +583,14 @@ fun PublicAdesaoTokenScreen(
                         OutlinedTextField(
                             value = numero,
                             onValueChange = { numero = it },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f).bringIntoViewOnFocus(),
                             label = { Text("Numero") },
                             colors = enderecoFieldColors,
                         )
                         OutlinedTextField(
                             value = uf,
                             onValueChange = { uf = it.uppercase().take(2) },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f).bringIntoViewOnFocus(),
                             label = { Text("UF") },
                             colors = enderecoFieldColors,
                         )
@@ -597,21 +598,21 @@ fun PublicAdesaoTokenScreen(
                     OutlinedTextField(
                         value = complemento,
                         onValueChange = { complemento = it },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Complemento") },
                         colors = enderecoFieldColors,
                     )
                     OutlinedTextField(
                         value = bairro,
                         onValueChange = { bairro = it },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Bairro") },
                         colors = enderecoFieldColors,
                     )
                     OutlinedTextField(
                         value = cidade,
                         onValueChange = { cidade = it },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Cidade") },
                         colors = enderecoFieldColors,
                     )

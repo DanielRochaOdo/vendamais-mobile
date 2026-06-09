@@ -1,6 +1,7 @@
 ﻿package br.com.vendamais.mobile.data.remote
 
 import br.com.vendamais.mobile.AppConfig
+import br.com.vendamais.mobile.BuildConfig
 import br.com.vendamais.mobile.data.auth.SavedSession
 import br.com.vendamais.mobile.data.models.AdminTeam
 import br.com.vendamais.mobile.data.models.AdminUser
@@ -30,6 +31,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.contentType
+import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -104,6 +106,21 @@ class SupabaseRepository(
             contentType(ContentType.Application.Json)
             setBody(mapOf("p_user_id" to session.userId))
         }.body()
+    }
+
+    suspend fun registerCurrentAppVersion(session: SavedSession) {
+        val response = client.post("${AppConfig.supabaseUrl}/rest/v1/rpc/record_profile_app_seen") {
+            applyAuthHeaders(session)
+            contentType(ContentType.Application.Json)
+            setBody(
+                buildJsonObject {
+                    put("p_version_name", BuildConfig.VERSION_NAME)
+                    put("p_version_code", BuildConfig.VERSION_CODE)
+                    put("p_platform", "android")
+                },
+            )
+        }
+        if (!response.status.isSuccess()) throw IllegalStateException("Falha ao registrar versao do app.")
     }
 
     suspend fun fetchCadastros(session: SavedSession): List<CadastroResumo> {

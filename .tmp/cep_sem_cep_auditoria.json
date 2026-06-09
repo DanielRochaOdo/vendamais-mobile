@@ -1,0 +1,2766 @@
+{
+  "summary": {
+    "total_target_cpfs": 120,
+    "status_now": [
+      [
+        "incompleto",
+        120
+      ],
+      [
+        "enviado",
+        116
+      ]
+    ],
+    "tipo_cadastro": [
+      [
+        "cadastro",
+        236
+      ]
+    ],
+    "fluxo_publico": [
+      [
+        "False",
+        236
+      ]
+    ],
+    "origem_link": [
+      [
+        "sem_origem_link",
+        236
+      ]
+    ],
+    "cadastros_with_any_log": 120,
+    "cadastros_without_log": 116,
+    "log_status_code": [
+      [
+        "200",
+        125
+      ]
+    ],
+    "log_success": [
+      [
+        "True",
+        120
+      ],
+      [
+        "False",
+        5
+      ]
+    ],
+    "log_user_email_top": [
+      [
+        "glauber@gmail.com",
+        27
+      ],
+      [
+        "adriano@gmail.com",
+        26
+      ],
+      [
+        "tiago@gmail.com",
+        22
+      ],
+      [
+        "ilcilane@gmail.com",
+        16
+      ],
+      [
+        "ricardo@gmail.com",
+        12
+      ],
+      [
+        "correia@gmail.com",
+        9
+      ],
+      [
+        "rogerio@gmail.com",
+        7
+      ],
+      [
+        "shirlene@gmail.com",
+        4
+      ],
+      [
+        "comercial.85991499558@odontoart.com",
+        1
+      ],
+      [
+        "johnattan@gmail.com",
+        1
+      ]
+    ],
+    "cep_no_request_pattern": [
+      [
+        "empty_string",
+        125
+      ]
+    ]
+  },
+  "month_distribution_first_log": {
+    "2026-05": 120
+  },
+  "audit_rows_sample": [
+    {
+      "cpf": "00985929391",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-17T23:45:09.902382+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-17T23:49:13.165256+00:00",
+      "log_time_last": "2026-05-17T23:49:13.165256+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "03521839346",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-18T23:33:33.684561+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-18T23:41:14.515319+00:00",
+      "log_time_last": "2026-05-18T23:41:14.515319+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "rogerio@gmail.com"
+      ]
+    },
+    {
+      "cpf": "06731698393",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-25T23:06:31.430913+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T23:07:55.226428+00:00",
+      "log_time_last": "2026-05-25T23:07:55.226428+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "06867310346",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-20T17:39:41.340016+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-20T17:40:42.52156+00:00",
+      "log_time_last": "2026-05-20T17:40:42.52156+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ricardo@gmail.com"
+      ]
+    },
+    {
+      "cpf": "06872234318",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-21T01:54:31.535742+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T20:49:51.409717+00:00",
+      "log_time_last": "2026-05-25T20:49:51.409717+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07017488342",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-21T00:55:02.747853+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-27T02:46:25.436181+00:00",
+      "log_time_last": "2026-05-27T02:46:25.436181+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07295303375",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-17T20:23:49.555016+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-17T20:26:23.518075+00:00",
+      "log_time_last": "2026-05-17T20:26:23.518075+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ilcilane@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07295946373",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-20T16:46:10.337252+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-20T16:48:53.352171+00:00",
+      "log_time_last": "2026-05-20T16:48:53.352171+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ricardo@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07328439360",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-27T02:39:32.279154+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-27T02:40:26.058395+00:00",
+      "log_time_last": "2026-05-27T02:40:26.058395+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07452953398",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-21T01:54:11.60563+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T20:53:17.16647+00:00",
+      "log_time_last": "2026-05-25T20:53:17.16647+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07545448340",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-15T00:05:33.730295+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-15T00:09:07.163661+00:00",
+      "log_time_last": "2026-05-15T00:09:07.163661+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ilcilane@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07636383314",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-21T02:46:00.803694+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T22:54:00.997872+00:00",
+      "log_time_last": "2026-05-25T22:54:00.997872+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07647835300",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-17T21:18:59.288225+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-17T21:21:06.004638+00:00",
+      "log_time_last": "2026-05-17T21:21:06.004638+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ilcilane@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07705536307",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-14T19:54:15.395218+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-14T19:55:44.790068+00:00",
+      "log_time_last": "2026-05-14T19:55:44.790068+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07718865355",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-27T02:38:14.156987+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-27T02:39:03.537677+00:00",
+      "log_time_last": "2026-05-27T02:39:03.537677+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07834915304",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-23T20:13:28.096966+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-23T20:15:47.577328+00:00",
+      "log_time_last": "2026-05-23T20:15:47.577328+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "shirlene@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07948259317",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-27T01:40:23.569364+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-27T01:41:37.395215+00:00",
+      "log_time_last": "2026-05-27T01:41:37.395215+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07969049362",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-08T20:24:32.871654+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-08T20:25:24.674127+00:00",
+      "log_time_last": "2026-05-08T20:25:24.674127+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ricardo@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07994309356",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-27T02:04:27.300317+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-27T02:05:58.482176+00:00",
+      "log_time_last": "2026-05-27T02:05:58.482176+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "08282759392",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-21T11:54:01.391285+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-21T11:55:51.660259+00:00",
+      "log_time_last": "2026-05-21T11:55:51.660259+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    }
+  ],
+  "audit_rows_all": [
+    {
+      "cpf": "00985929391",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-17T23:45:09.902382+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-17T23:49:13.165256+00:00",
+      "log_time_last": "2026-05-17T23:49:13.165256+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "03521839346",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-18T23:33:33.684561+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-18T23:41:14.515319+00:00",
+      "log_time_last": "2026-05-18T23:41:14.515319+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "rogerio@gmail.com"
+      ]
+    },
+    {
+      "cpf": "06731698393",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-25T23:06:31.430913+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T23:07:55.226428+00:00",
+      "log_time_last": "2026-05-25T23:07:55.226428+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "06867310346",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-20T17:39:41.340016+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-20T17:40:42.52156+00:00",
+      "log_time_last": "2026-05-20T17:40:42.52156+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ricardo@gmail.com"
+      ]
+    },
+    {
+      "cpf": "06872234318",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-21T01:54:31.535742+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T20:49:51.409717+00:00",
+      "log_time_last": "2026-05-25T20:49:51.409717+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07017488342",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-21T00:55:02.747853+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-27T02:46:25.436181+00:00",
+      "log_time_last": "2026-05-27T02:46:25.436181+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07295303375",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-17T20:23:49.555016+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-17T20:26:23.518075+00:00",
+      "log_time_last": "2026-05-17T20:26:23.518075+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ilcilane@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07295946373",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-20T16:46:10.337252+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-20T16:48:53.352171+00:00",
+      "log_time_last": "2026-05-20T16:48:53.352171+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ricardo@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07328439360",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-27T02:39:32.279154+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-27T02:40:26.058395+00:00",
+      "log_time_last": "2026-05-27T02:40:26.058395+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07452953398",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-21T01:54:11.60563+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T20:53:17.16647+00:00",
+      "log_time_last": "2026-05-25T20:53:17.16647+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07545448340",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-15T00:05:33.730295+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-15T00:09:07.163661+00:00",
+      "log_time_last": "2026-05-15T00:09:07.163661+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ilcilane@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07636383314",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-21T02:46:00.803694+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T22:54:00.997872+00:00",
+      "log_time_last": "2026-05-25T22:54:00.997872+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07647835300",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-17T21:18:59.288225+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-17T21:21:06.004638+00:00",
+      "log_time_last": "2026-05-17T21:21:06.004638+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ilcilane@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07705536307",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-14T19:54:15.395218+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-14T19:55:44.790068+00:00",
+      "log_time_last": "2026-05-14T19:55:44.790068+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07718865355",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-27T02:38:14.156987+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-27T02:39:03.537677+00:00",
+      "log_time_last": "2026-05-27T02:39:03.537677+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07834915304",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-23T20:13:28.096966+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-23T20:15:47.577328+00:00",
+      "log_time_last": "2026-05-23T20:15:47.577328+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "shirlene@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07948259317",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-27T01:40:23.569364+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-27T01:41:37.395215+00:00",
+      "log_time_last": "2026-05-27T01:41:37.395215+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07969049362",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-08T20:24:32.871654+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-08T20:25:24.674127+00:00",
+      "log_time_last": "2026-05-08T20:25:24.674127+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ricardo@gmail.com"
+      ]
+    },
+    {
+      "cpf": "07994309356",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-27T02:04:27.300317+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-27T02:05:58.482176+00:00",
+      "log_time_last": "2026-05-27T02:05:58.482176+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "08282759392",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-21T11:54:01.391285+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-21T11:55:51.660259+00:00",
+      "log_time_last": "2026-05-21T11:55:51.660259+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "08285607305",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-25T12:52:33.320136+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T12:53:58.649863+00:00",
+      "log_time_last": "2026-05-25T12:53:58.649863+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "08314031364",
+      "qtd_cadastros": 1,
+      "first_created_at": "2026-05-27T02:55:40.696028+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "incompleto",
+      "qtd_logs_erp_novo_usuario2": 2,
+      "log_time_first": "2026-05-27T02:57:53.154015+00:00",
+      "log_time_last": "2026-05-27T02:57:55.083181+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "08398803320",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-25T09:50:48.079597+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T09:53:05.82072+00:00",
+      "log_time_last": "2026-05-25T09:53:05.82072+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "correia@gmail.com"
+      ]
+    },
+    {
+      "cpf": "08423041344",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-14T19:56:20.458454+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-14T19:57:43.243458+00:00",
+      "log_time_last": "2026-05-14T19:57:43.243458+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "08568977367",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-14T19:26:03.733522+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-14T19:30:57.555844+00:00",
+      "log_time_last": "2026-05-14T19:30:57.555844+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "08632139363",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-15T00:09:46.580493+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-15T00:13:52.496404+00:00",
+      "log_time_last": "2026-05-15T00:13:52.496404+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ilcilane@gmail.com"
+      ]
+    },
+    {
+      "cpf": "08673170354",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-21T02:46:24.176072+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T22:51:36.562085+00:00",
+      "log_time_last": "2026-05-25T22:51:36.562085+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "08681427350",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-25T23:00:05.642943+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T23:04:56.9039+00:00",
+      "log_time_last": "2026-05-25T23:04:56.9039+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "rogerio@gmail.com"
+      ]
+    },
+    {
+      "cpf": "08736885380",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-21T02:33:05.924921+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T23:42:09.58767+00:00",
+      "log_time_last": "2026-05-25T23:42:09.58767+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "08754593310",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-12T22:44:59.916935+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-12T22:47:10.979079+00:00",
+      "log_time_last": "2026-05-12T22:47:10.979079+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ricardo@gmail.com"
+      ]
+    },
+    {
+      "cpf": "08899861340",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-18T22:58:10.871133+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-18T23:04:07.584695+00:00",
+      "log_time_last": "2026-05-18T23:04:07.584695+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "rogerio@gmail.com"
+      ]
+    },
+    {
+      "cpf": "08975945332",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-17T23:08:59.22373+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-17T23:10:05.609224+00:00",
+      "log_time_last": "2026-05-17T23:10:05.609224+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "09104894324",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-26T00:23:51.914352+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-26T00:31:26.260946+00:00",
+      "log_time_last": "2026-05-26T00:31:26.260946+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "09162511360",
+      "qtd_cadastros": 1,
+      "first_created_at": "2026-05-18T18:27:52.586502+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "incompleto",
+      "qtd_logs_erp_novo_usuario2": 2,
+      "log_time_first": "2026-05-20T10:36:08.397594+00:00",
+      "log_time_last": "2026-05-20T10:36:14.567618+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "correia@gmail.com"
+      ]
+    },
+    {
+      "cpf": "09166924340",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-21T23:52:42.471086+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-21T23:56:51.053083+00:00",
+      "log_time_last": "2026-05-21T23:56:51.053083+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "09179952364",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-25T16:57:35.664187+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T17:00:38.326657+00:00",
+      "log_time_last": "2026-05-25T17:00:38.326657+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "rogerio@gmail.com"
+      ]
+    },
+    {
+      "cpf": "09180100392",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-27T01:55:44.573995+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-27T01:57:15.917358+00:00",
+      "log_time_last": "2026-05-27T01:57:15.917358+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "09194725322",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-20T16:53:30.819006+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-20T16:55:28.694067+00:00",
+      "log_time_last": "2026-05-20T16:55:28.694067+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ricardo@gmail.com"
+      ]
+    },
+    {
+      "cpf": "09199825309",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-18T00:17:47.878451+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-18T00:18:47.897198+00:00",
+      "log_time_last": "2026-05-18T00:18:47.897198+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "09254871397",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-21T02:10:55.994183+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T21:42:53.647145+00:00",
+      "log_time_last": "2026-05-25T21:42:53.647145+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "09320568308",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-27T02:23:46.842737+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-27T02:24:33.140751+00:00",
+      "log_time_last": "2026-05-27T02:24:33.140751+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "09359925373",
+      "qtd_cadastros": 1,
+      "first_created_at": "2026-05-18T23:31:31.621498+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "incompleto",
+      "qtd_logs_erp_novo_usuario2": 2,
+      "log_time_first": "2026-05-18T23:34:18.638288+00:00",
+      "log_time_last": "2026-05-18T23:35:18.3213+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "09409593301",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-25T22:39:37.051999+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T22:40:59.724494+00:00",
+      "log_time_last": "2026-05-25T22:40:59.724494+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "09469980352",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-14T21:15:21.910782+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-14T21:20:51.342514+00:00",
+      "log_time_last": "2026-05-14T21:20:51.342514+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "09540639379",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-24T18:15:51.35397+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-24T18:19:25.451296+00:00",
+      "log_time_last": "2026-05-24T18:19:25.451296+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ilcilane@gmail.com"
+      ]
+    },
+    {
+      "cpf": "09572409379",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-24T17:50:08.607382+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-24T17:52:36.396628+00:00",
+      "log_time_last": "2026-05-24T17:52:36.396628+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ilcilane@gmail.com"
+      ]
+    },
+    {
+      "cpf": "09585250306",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-07T20:16:56.286867+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-07T20:17:34.306293+00:00",
+      "log_time_last": "2026-05-07T20:17:34.306293+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "09645127343",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-21T01:43:47.944041+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T22:09:58.876746+00:00",
+      "log_time_last": "2026-05-25T22:09:58.876746+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "09652190381",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-13T01:08:15.132991+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-13T01:11:59.762588+00:00",
+      "log_time_last": "2026-05-13T01:11:59.762588+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "09897783393",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-17T21:14:19.031528+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-17T21:15:46.064126+00:00",
+      "log_time_last": "2026-05-17T21:15:46.064126+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ilcilane@gmail.com"
+      ]
+    },
+    {
+      "cpf": "09998826357",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-13T16:00:13.442852+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-13T16:02:22.334289+00:00",
+      "log_time_last": "2026-05-13T16:02:22.334289+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "shirlene@gmail.com"
+      ]
+    },
+    {
+      "cpf": "10006004326",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-21T02:18:38.04604+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T22:31:37.417226+00:00",
+      "log_time_last": "2026-05-25T22:31:37.417226+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "10020183313",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-24T18:03:47.841109+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-24T18:06:07.247733+00:00",
+      "log_time_last": "2026-05-24T18:06:07.247733+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ilcilane@gmail.com"
+      ]
+    },
+    {
+      "cpf": "10150197306",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-17T21:27:15.003917+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-17T21:33:38.415187+00:00",
+      "log_time_last": "2026-05-17T21:33:38.415187+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ilcilane@gmail.com"
+      ]
+    },
+    {
+      "cpf": "10219186367",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-14T22:11:18.791112+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-14T22:13:50.772382+00:00",
+      "log_time_last": "2026-05-14T22:13:50.772382+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "10226285340",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-08T20:12:07.034964+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-08T20:14:02.392041+00:00",
+      "log_time_last": "2026-05-08T20:14:02.392041+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ricardo@gmail.com"
+      ]
+    },
+    {
+      "cpf": "10279558350",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-27T02:59:15.373625+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-27T03:00:47.583143+00:00",
+      "log_time_last": "2026-05-27T03:00:47.583143+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "10342099302",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-18T23:59:12.045644+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-19T00:00:54.725453+00:00",
+      "log_time_last": "2026-05-19T00:00:54.725453+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "10344791300",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-08T11:45:52.036756+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-08T11:50:49.526507+00:00",
+      "log_time_last": "2026-05-08T11:50:49.526507+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "10366595342",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-19T19:18:43.93531+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-20T12:15:35.424072+00:00",
+      "log_time_last": "2026-05-20T12:15:35.424072+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "correia@gmail.com"
+      ]
+    },
+    {
+      "cpf": "10402196325",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-19T19:22:29.329251+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-20T12:18:06.364164+00:00",
+      "log_time_last": "2026-05-20T12:18:06.364164+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "correia@gmail.com"
+      ]
+    },
+    {
+      "cpf": "10472675354",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-20T17:35:06.556369+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-20T17:37:04.374303+00:00",
+      "log_time_last": "2026-05-20T17:37:04.374303+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ricardo@gmail.com"
+      ]
+    },
+    {
+      "cpf": "10526037342",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-21T23:50:11.307236+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-21T23:54:14.985065+00:00",
+      "log_time_last": "2026-05-21T23:54:14.985065+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ilcilane@gmail.com"
+      ]
+    },
+    {
+      "cpf": "10593032489",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-27T01:45:58.934986+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-27T01:47:58.234006+00:00",
+      "log_time_last": "2026-05-27T01:47:58.234006+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "10645162388",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-06T00:34:42.309595+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-06T00:37:24.825266+00:00",
+      "log_time_last": "2026-05-06T00:37:24.825266+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "10697660389",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-26T23:09:20.590543+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-26T23:11:24.972035+00:00",
+      "log_time_last": "2026-05-26T23:11:24.972035+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "comercial.85991499558@odontoart.com"
+      ]
+    },
+    {
+      "cpf": "10751167320",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-18T18:25:57.953287+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-20T11:09:30.85783+00:00",
+      "log_time_last": "2026-05-20T11:09:30.85783+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "correia@gmail.com"
+      ]
+    },
+    {
+      "cpf": "10834928370",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-14T17:02:48.481942+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-14T17:04:13.011242+00:00",
+      "log_time_last": "2026-05-14T17:04:13.011242+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "11279436344",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-21T23:41:21.663271+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-21T23:43:42.953772+00:00",
+      "log_time_last": "2026-05-21T23:43:42.953772+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ilcilane@gmail.com"
+      ]
+    },
+    {
+      "cpf": "11331092337",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-13T01:12:35.343594+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-13T01:13:49.499841+00:00",
+      "log_time_last": "2026-05-13T01:13:49.499841+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "11524330329",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-21T21:57:46.037443+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-21T21:59:35.004737+00:00",
+      "log_time_last": "2026-05-21T21:59:35.004737+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "11540130304",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-19T00:01:58.863413+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-19T00:05:03.04637+00:00",
+      "log_time_last": "2026-05-19T00:05:03.04637+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "11600846378",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-14T23:08:24.128021+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-14T23:10:22.998122+00:00",
+      "log_time_last": "2026-05-14T23:10:22.998122+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "11631037307",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-11T22:21:20.964751+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-11T22:22:52.709217+00:00",
+      "log_time_last": "2026-05-11T22:22:52.709217+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "11661952364",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-14T22:00:25.140399+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-14T22:07:32.529142+00:00",
+      "log_time_last": "2026-05-14T22:07:32.529142+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "11907214305",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-21T02:17:51.566438+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T22:40:53.442834+00:00",
+      "log_time_last": "2026-05-25T22:40:53.442834+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "11934884359",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-10T21:13:00.350223+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-10T21:15:22.347374+00:00",
+      "log_time_last": "2026-05-10T21:15:22.347374+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ilcilane@gmail.com"
+      ]
+    },
+    {
+      "cpf": "12463033371",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-14T17:28:33.737087+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-14T17:31:23.558342+00:00",
+      "log_time_last": "2026-05-14T17:31:23.558342+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "12664665332",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-20T17:21:44.949251+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-20T17:34:34.869913+00:00",
+      "log_time_last": "2026-05-20T17:34:34.869913+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ricardo@gmail.com"
+      ]
+    },
+    {
+      "cpf": "13370779412",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-27T02:26:41.700626+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-27T02:28:13.511273+00:00",
+      "log_time_last": "2026-05-27T02:28:13.511273+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "14227791499",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-14T23:58:41.596873+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-15T00:04:51.036306+00:00",
+      "log_time_last": "2026-05-15T00:04:51.036306+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ilcilane@gmail.com"
+      ]
+    },
+    {
+      "cpf": "14920052405",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-11T22:16:36.895748+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-11T22:22:12.398841+00:00",
+      "log_time_last": "2026-05-11T22:22:12.398841+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ricardo@gmail.com"
+      ]
+    },
+    {
+      "cpf": "55014385850",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-12T14:03:04.644598+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-12T14:27:32.126998+00:00",
+      "log_time_last": "2026-05-12T14:27:32.126998+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ricardo@gmail.com"
+      ]
+    },
+    {
+      "cpf": "60632587369",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-08T11:52:19.525187+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T21:09:42.738976+00:00",
+      "log_time_last": "2026-05-25T21:09:42.738976+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "60814868347",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-18T23:50:38.685259+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-18T23:52:23.30055+00:00",
+      "log_time_last": "2026-05-18T23:52:23.30055+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "60963510347",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-20T11:02:21.518335+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-20T11:02:53.07806+00:00",
+      "log_time_last": "2026-05-20T11:02:53.07806+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "61552089304",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-20T22:38:05.056729+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-20T22:41:24.469536+00:00",
+      "log_time_last": "2026-05-20T22:41:24.469536+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "johnattan@gmail.com"
+      ]
+    },
+    {
+      "cpf": "62155794320",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-18T18:15:28.906123+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-20T11:00:13.910079+00:00",
+      "log_time_last": "2026-05-20T11:00:13.910079+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "correia@gmail.com"
+      ]
+    },
+    {
+      "cpf": "62166673350",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-22T13:56:45.897058+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-22T14:00:35.601198+00:00",
+      "log_time_last": "2026-05-22T14:00:35.601198+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "62202373314",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-27T02:01:39.537525+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-27T02:02:36.376619+00:00",
+      "log_time_last": "2026-05-27T02:02:36.376619+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "62342237375",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-11T00:27:30.85432+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-11T00:29:29.015814+00:00",
+      "log_time_last": "2026-05-11T00:29:29.015814+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "62398754308",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-26T01:07:30.021732+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-26T01:10:06.010665+00:00",
+      "log_time_last": "2026-05-26T01:10:06.010665+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "62407370384",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-14T17:15:33.855086+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-14T17:17:10.662706+00:00",
+      "log_time_last": "2026-05-14T17:17:10.662706+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "62436240302",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-14T17:42:07.503973+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-14T17:44:06.642672+00:00",
+      "log_time_last": "2026-05-14T17:44:06.642672+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "62493633350",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-25T22:58:13.465+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T22:59:32.702276+00:00",
+      "log_time_last": "2026-05-25T22:59:32.702276+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "62698070340",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-19T21:33:06.212459+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-19T21:35:22.765064+00:00",
+      "log_time_last": "2026-05-19T21:35:22.765064+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "rogerio@gmail.com"
+      ]
+    },
+    {
+      "cpf": "62704836388",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-19T00:14:28.322961+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-19T00:15:43.15054+00:00",
+      "log_time_last": "2026-05-19T00:15:43.15054+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "62776512341",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-20T17:47:22.709273+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-20T17:49:46.585728+00:00",
+      "log_time_last": "2026-05-20T17:49:46.585728+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ricardo@gmail.com"
+      ]
+    },
+    {
+      "cpf": "62800746335",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-19T00:31:31.038589+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-19T00:32:50.217672+00:00",
+      "log_time_last": "2026-05-19T00:32:50.217672+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "62811848312",
+      "qtd_cadastros": 3,
+      "first_created_at": "2026-02-24T16:05:01.021088+00:00",
+      "first_status": "enviado",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-11T21:27:36.862794+00:00",
+      "log_time_last": "2026-05-11T21:27:36.862794+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "62838386344",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-18T14:14:38.155596+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-18T14:20:12.407612+00:00",
+      "log_time_last": "2026-05-18T14:20:12.407612+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "rogerio@gmail.com"
+      ]
+    },
+    {
+      "cpf": "62861759380",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-20T12:40:25.164262+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T21:18:55.396747+00:00",
+      "log_time_last": "2026-05-25T21:18:55.396747+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "62890017362",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-22T13:54:19.116197+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-22T13:55:39.776943+00:00",
+      "log_time_last": "2026-05-22T13:55:39.776943+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "63066603300",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-18T00:20:20.235033+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-18T00:21:07.234004+00:00",
+      "log_time_last": "2026-05-18T00:21:07.234004+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "63067128362",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-22T00:00:41.598707+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-22T00:02:09.757017+00:00",
+      "log_time_last": "2026-05-22T00:02:09.757017+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ilcilane@gmail.com"
+      ]
+    },
+    {
+      "cpf": "63081737389",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-20T11:46:34.888646+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-20T11:49:21.285529+00:00",
+      "log_time_last": "2026-05-20T11:49:21.285529+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "correia@gmail.com"
+      ]
+    },
+    {
+      "cpf": "63092322312",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-14T17:54:59.406072+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-14T18:04:20.91606+00:00",
+      "log_time_last": "2026-05-14T18:04:20.91606+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "63136571363",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-20T17:24:03.498717+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-20T17:26:55.528733+00:00",
+      "log_time_last": "2026-05-20T17:26:55.528733+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ricardo@gmail.com"
+      ]
+    },
+    {
+      "cpf": "63154947302",
+      "qtd_cadastros": 1,
+      "first_created_at": "2026-05-27T02:51:15.880897+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "incompleto",
+      "qtd_logs_erp_novo_usuario2": 2,
+      "log_time_first": "2026-05-27T02:51:53.282857+00:00",
+      "log_time_last": "2026-05-27T02:52:02.422417+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "tiago@gmail.com"
+      ]
+    },
+    {
+      "cpf": "63169473301",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-11T20:42:45.309057+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-11T20:45:39.319537+00:00",
+      "log_time_last": "2026-05-11T20:45:39.319537+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "63211811370",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-25T16:30:18.157716+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-25T22:52:56.741861+00:00",
+      "log_time_last": "2026-05-25T22:52:56.741861+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "rogerio@gmail.com"
+      ]
+    },
+    {
+      "cpf": "63220540317",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-19T00:34:53.654264+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-19T00:35:49.176483+00:00",
+      "log_time_last": "2026-05-19T00:35:49.176483+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "63290497348",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-17T21:11:34.483308+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-17T21:13:36.572374+00:00",
+      "log_time_last": "2026-05-17T21:13:36.572374+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ilcilane@gmail.com"
+      ]
+    },
+    {
+      "cpf": "63338336306",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-20T11:49:50.367524+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-20T12:00:11.711447+00:00",
+      "log_time_last": "2026-05-20T12:00:11.711447+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "correia@gmail.com"
+      ]
+    },
+    {
+      "cpf": "63339477337",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-23T19:46:08.034555+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-23T19:48:33.864145+00:00",
+      "log_time_last": "2026-05-23T19:48:33.864145+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "shirlene@gmail.com"
+      ]
+    },
+    {
+      "cpf": "63570976327",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-20T19:06:07.795145+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-20T19:09:18.195235+00:00",
+      "log_time_last": "2026-05-20T19:09:18.195235+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "shirlene@gmail.com"
+      ]
+    },
+    {
+      "cpf": "63738811303",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-17T23:21:40.110308+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-17T23:23:20.353726+00:00",
+      "log_time_last": "2026-05-17T23:23:20.353726+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "adriano@gmail.com"
+      ]
+    },
+    {
+      "cpf": "63891596332",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-24T22:08:51.534379+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-24T22:11:46.458232+00:00",
+      "log_time_last": "2026-05-24T22:11:46.458232+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "ilcilane@gmail.com"
+      ]
+    },
+    {
+      "cpf": "75188214350",
+      "qtd_cadastros": 2,
+      "first_created_at": "2026-05-04T18:46:40.247954+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "enviado",
+      "qtd_logs_erp_novo_usuario2": 1,
+      "log_time_first": "2026-05-04T18:48:00.303489+00:00",
+      "log_time_last": "2026-05-04T18:48:00.303489+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    },
+    {
+      "cpf": "84359225377",
+      "qtd_cadastros": 1,
+      "first_created_at": "2026-05-04T18:36:37.406985+00:00",
+      "first_status": "incompleto",
+      "first_fluxo_publico": false,
+      "first_origem_link_id": null,
+      "first_cep_cadastro": null,
+      "latest_status": "incompleto",
+      "qtd_logs_erp_novo_usuario2": 2,
+      "log_time_first": "2026-05-04T18:38:44.330649+00:00",
+      "log_time_last": "2026-05-04T18:39:17.008087+00:00",
+      "req_ceps_unique": [
+        ""
+      ],
+      "user_emails": [
+        "glauber@gmail.com"
+      ]
+    }
+  ]
+}

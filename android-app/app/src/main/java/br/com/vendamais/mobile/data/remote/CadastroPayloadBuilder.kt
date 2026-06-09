@@ -121,9 +121,13 @@ internal object CadastroPayloadBuilder {
 
         val contatos = mutableListOf<CadastroContato>()
 
-        pessoa.celulares
-            .filter { it.plus == true }
+        val celularesOrdenados = pessoa.celulares
             .sortedBy { it.ranking ?: 999 }
+        val celularesPreferenciais = celularesOrdenados
+            .filter { it.plus == true }
+            .ifEmpty { celularesOrdenados }
+
+        celularesPreferenciais
             .forEachIndexed { index, item ->
                 val numero = "${item.ddd ?: ""}${item.numero.orEmpty()}"
                 if (numero.isNotBlank()) {
@@ -175,23 +179,36 @@ internal object CadastroPayloadBuilder {
                 )
             }
 
-        val sexo = pessoa.sexo.orEmpty().uppercase()
+        val sexo = pessoa.sexo.orEmpty().trim().uppercase()
         val sexoCodigo = when (sexo) {
             "M", "MASCULINO" -> 1
             "F", "FEMININO" -> 0
             else -> 0
         }
-        val dataNascimento = normalizeIsoDateOrNull(pessoa.dataNascimento).orEmpty()
+        val dataNascimentoRaw = pessoa.dataNascimento
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: pessoa.dataNascimentoAlternativa
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+        val dataNascimento = normalizeIsoDateOrNull(dataNascimentoRaw).orEmpty()
+        val nomeMae = pessoa.nomeMae
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: pessoa.nomeMaeAlternativa
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
 
         return CadastroBaseData(
             cpf = normalizeDigits(cpf),
-            nome = pessoa.nome.orEmpty(),
+            nome = pessoa.nome.orEmpty().trim(),
             dataNascimento = dataNascimento,
             sexo = sexo,
             sexoCodigo = sexoCodigo,
             contatos = contatos,
             endereco = endereco,
-            nomeMae = pessoa.nomeMae,
+            nomeMae = nomeMae,
+            numeroMatricula = null,
         )
     }
 
@@ -211,6 +228,9 @@ internal object CadastroPayloadBuilder {
             contatos = contatos,
             endereco = endereco,
             nomeMae = cadastro.nomeMae,
+            numeroMatricula = cadastro.numeroMatricula
+                ?.trim()
+                ?.takeIf { it.isNotBlank() },
         )
     }
 
@@ -280,6 +300,7 @@ internal object CadastroPayloadBuilder {
         userRole: String?,
         userExternalId: String?,
         adesionistaCodigo: String?,
+        arquivoPath: String? = null,
     ): JsonObject {
         val titularDataNascimento = requireBrDate(
             value = cadastro.dataNascimento,
@@ -335,6 +356,10 @@ internal object CadastroPayloadBuilder {
                             })
                         }
                     })
+                    cadastro.numeroMatricula
+                        ?.trim()
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let { put("Matricula", it) }
                     put("fl_AlteraSituacao", 1)
                     put("dataApresentacao", currentPresentationTimestamp())
                 })
@@ -362,6 +387,12 @@ internal object CadastroPayloadBuilder {
                         })
                     }
                 })
+                arquivoPath?.trim()?.takeIf { it.isNotBlank() }?.let { path ->
+                    put("documento", buildJsonObject {
+                        put("caminho", path)
+                        put("nome", path.substringAfterLast('/'))
+                    })
+                }
             })
         }
     }

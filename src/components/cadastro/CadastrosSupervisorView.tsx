@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Users, Building2, ChevronDown, ChevronRight, Ban, Eye, Clock, CheckCircle2 } from 'lucide-react';
+import { Users, Building2, ChevronDown, ChevronRight, Ban, Eye, CheckCircle2 } from 'lucide-react';
 import { Cadastro } from '../../hooks/useCadastros';
 import { formatCPF, formatDate } from '../../lib/cpf';
 import { AlreadyExistsModal } from './AlreadyExistsModal';
@@ -76,12 +76,12 @@ export function CadastrosSupervisorView({ cadastros, onSelect, statusFilter }: P
 
     const result: UserGroup[] = [];
 
-    usersMap.forEach((empresasMap, userKey) => {
+    usersMap.forEach((empresasMap) => {
       const firstCadastro = Array.from(empresasMap.values())[0][0];
       const user = users.find(u => u.id === firstCadastro.vendedor_id);
       const empresas: EmpresaGroup[] = [];
 
-      empresasMap.forEach((cads, empresaKey) => {
+      empresasMap.forEach((cads) => {
         empresas.push({
           empresaId: cads[0].empresa_id,
           empresaNome: cads[0].empresa_nome || 'Empresa não informada',

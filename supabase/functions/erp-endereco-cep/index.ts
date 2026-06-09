@@ -1,11 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
+import { corsHeaders, resolveRequestUser, saveLog } from "../_shared/api-utils.ts";
 
 interface EnderecoERPResponse {
   dados: {
@@ -52,28 +47,6 @@ const UF_MAP: Record<string, string> = {
   'TOCANTINS': 'TO',
 };
 
-async function saveLog(
-  supabase: any,
-  logData: {
-    user_id?: string;
-    user_email?: string;
-    endpoint: string;
-    method: string;
-    request_body: any;
-    response_body?: any;
-    status_code?: number;
-    success: boolean;
-    error_message?: string;
-    duration_ms: number;
-  }
-) {
-  try {
-    await supabase.from("api_logs").insert(logData);
-  } catch (error) {
-    console.error("Error saving log:", error);
-  }
-}
-
 Deno.serve(async (req: Request) => {
   console.log('[erp-endereco-cep] Request received:', req.method, req.url);
 
@@ -90,7 +63,6 @@ Deno.serve(async (req: Request) => {
   let requestBody: any = {};
   let responseBody: any;
   let statusCode = 200;
-  let success = false;
   let errorMessage: string | undefined;
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -98,15 +70,7 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (authHeader) {
-      const token = authHeader.replace("Bearer ", "");
-      const { data: { user } } = await supabase.auth.getUser(token);
-      if (user) {
-        userId = user.id;
-        userEmail = user.email;
-      }
-    }
+    ({ userId, userEmail } = await resolveRequestUser(supabase, req));
 
     if (req.method !== "POST") {
       console.error('[erp-endereco-cep] Method not allowed:', req.method);
@@ -356,7 +320,6 @@ Deno.serve(async (req: Request) => {
 
     console.log('[erp-endereco-cep] Success! Returning data for CEP:', cepLimpo);
 
-    success = true;
     responseBody = {
       ok: true,
       dados: {

@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.domain.cadastro.CadastroOverlayIntent
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
+import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 
 @Composable
 fun CadastroOverlayDialogs(
@@ -124,14 +125,14 @@ fun CadastroOverlayDialogs(
                         OutlinedTextField(
                             value = vendedorCodigo,
                             onValueChange = { vendedorCodigo = it.filter(Char::isDigit) },
-                            modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                            modifier = androidx.compose.ui.Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                             label = { Text("Codigo vendedor") },
                             singleLine = true,
                         )
                         OutlinedTextField(
                             value = vendedorNome,
                             onValueChange = { vendedorNome = it },
-                            modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                            modifier = androidx.compose.ui.Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                             label = { Text("Nome vendedor") },
                             singleLine = true,
                         )
@@ -188,7 +189,7 @@ fun CadastroOverlayDialogs(
                         OutlinedTextField(
                             value = motivo,
                             onValueChange = { motivo = it },
-                            modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                            modifier = androidx.compose.ui.Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                             label = { Text("Motivo exclusao") },
                         )
                     }

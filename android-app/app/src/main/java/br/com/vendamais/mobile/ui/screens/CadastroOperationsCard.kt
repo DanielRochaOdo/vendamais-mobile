@@ -47,6 +47,7 @@ import br.com.vendamais.mobile.ui.components.ScreenHeading
 import br.com.vendamais.mobile.ui.components.WebCard
 import br.com.vendamais.mobile.ui.theme.Emerald
 import br.com.vendamais.mobile.ui.theme.EmeraldSoft
+import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 
 @Composable
 fun CadastroOperationsCard(
@@ -113,7 +114,7 @@ fun CadastroOperationsCard(
                     OutlinedTextField(
                         value = workspace.empresaSearchValue,
                         onValueChange = onSearchValueChange,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = {
                             Text(
                                 text = when (workspace.empresaSearchType) {
@@ -279,7 +280,7 @@ fun CadastroOperationsCard(
                             append(profile?.externalId?.takeIf { it.isNotBlank() } ?: "-")
                         },
                         onValueChange = {},
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Vendedor") },
                         enabled = false,
                     )
@@ -307,7 +308,7 @@ fun CadastroOperationsCard(
                         )
                         onCpfChange(digits)
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                     label = { Text("CPF") },
                     placeholder = { Text("000.000.000-00") },
                     keyboardOptions = KeyboardOptions(

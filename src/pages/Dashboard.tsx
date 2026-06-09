@@ -17,7 +17,7 @@ interface VendedorStats {
 
 export function Dashboard() {
   const { profile } = useAuth();
-  const { stats: cadastroStats, loading: cadastroLoading, loadStats } = useCadastros();
+  const { stats: cadastroStats, loading: cadastroLoading } = useCadastros();
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalTeams: 0,

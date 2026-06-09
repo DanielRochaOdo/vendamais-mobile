@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -20,8 +21,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import br.com.vendamais.mobile.BuildConfig
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.components.InfoRow
 import br.com.vendamais.mobile.ui.components.ScreenHeading
@@ -33,6 +36,7 @@ fun ProfileScreen(
     onLogout: () -> Unit,
     onRefresh: () -> Unit,
     onToggleDarkMode: (Boolean) -> Unit,
+    onCheckAndInstallUpdate: () -> Unit,
 ) {
     val profile = state.profile ?: return
 
@@ -52,7 +56,8 @@ fun ProfileScreen(
                 val refreshing = state.loading
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(onClick = onRefresh, enabled = !refreshing) {
                         if (refreshing) {
@@ -66,6 +71,13 @@ fun ProfileScreen(
                                 contentDescription = "Atualizar dados",
                             )
                         }
+                    }
+                    IconButton(onClick = onLogout) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.Logout,
+                            contentDescription = "Sair",
+                            tint = Color(0xFFFF9800),
+                        )
                     }
                 }
                 Row(
@@ -105,18 +117,23 @@ fun ProfileScreen(
                 InfoRow("Codigo do Usuario (ID Externo)", profile.externalId ?: "-")
                 InfoRow("Equipe", state.team?.name ?: "-")
                 InfoRow("Membro desde", profile.createdAt?.let(::formatDate) ?: "-")
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-        ) {
-            IconButton(onClick = onLogout) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.Logout,
-                    contentDescription = "Sair",
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    InfoRow(
+                        label = "Versao atual",
+                        value = BuildConfig.VERSION_NAME,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = onCheckAndInstallUpdate) {
+                        Icon(
+                            imageVector = Icons.Rounded.SystemUpdate,
+                            contentDescription = "Verificar atualizacao",
+                        )
+                    }
+                }
             }
         }
     }

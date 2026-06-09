@@ -24,6 +24,7 @@ import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
 import br.com.vendamais.mobile.ui.components.ScreenHeading
 import br.com.vendamais.mobile.ui.components.WebCard
+import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 
 @Composable
 fun AuditoriaLemmitScreen(
@@ -59,14 +60,14 @@ fun AuditoriaLemmitScreen(
                         OutlinedTextField(
                             value = startDate,
                             onValueChange = { startDate = it },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f).bringIntoViewOnFocus(),
                             label = { Text("Data inicio (YYYY-MM-DD)") },
                             singleLine = true,
                         )
                         OutlinedTextField(
                             value = endDate,
                             onValueChange = { endDate = it },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f).bringIntoViewOnFocus(),
                             label = { Text("Data fim (YYYY-MM-DD)") },
                             singleLine = true,
                         )

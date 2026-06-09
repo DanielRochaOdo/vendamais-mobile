@@ -1,11 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
+import { corsHeaders, resolveRequestUser, saveLog } from "../_shared/api-utils.ts";
 
 interface BuscaEmpresaRequest {
   cnpj?: string;
@@ -40,28 +35,6 @@ interface ERPEmpresa {
   [key: string]: any;
 }
 
-async function saveLog(
-  supabase: any,
-  logData: {
-    user_id?: string;
-    user_email?: string;
-    endpoint: string;
-    method: string;
-    request_body: any;
-    response_body?: any;
-    status_code?: number;
-    success: boolean;
-    error_message?: string;
-    duration_ms: number;
-  }
-) {
-  try {
-    await supabase.from("api_logs").insert(logData);
-  } catch (error) {
-    console.error("Error saving log:", error);
-  }
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -76,7 +49,6 @@ Deno.serve(async (req: Request) => {
   let requestBody: BuscaEmpresaRequest = {};
   let responseBody: any;
   let statusCode = 200;
-  let success = false;
   let errorMessage: string | undefined;
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -86,15 +58,9 @@ Deno.serve(async (req: Request) => {
   try {
     console.log('[ERP Search] Starting request');
 
-    const authHeader = req.headers.get("Authorization");
-    if (authHeader) {
-      const token = authHeader.replace("Bearer ", "");
-      const { data: { user } } = await supabase.auth.getUser(token);
-      if (user) {
-        userId = user.id;
-        userEmail = user.email;
-        console.log(`[ERP Search] User authenticated: ${userEmail}`);
-      }
+    ({ userId, userEmail } = await resolveRequestUser(supabase, req));
+    if (userEmail) {
+      console.log(`[ERP Search] User authenticated: ${userEmail}`);
     }
 
     requestBody = await req.json();
@@ -316,7 +282,6 @@ Deno.serve(async (req: Request) => {
       raw: empresa,
     }));
 
-    success = true;
     responseBody = {
       ok: true,
       empresas,

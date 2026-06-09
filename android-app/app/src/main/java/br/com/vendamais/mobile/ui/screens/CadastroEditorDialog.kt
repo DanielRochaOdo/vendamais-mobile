@@ -4,22 +4,24 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.util.Log
 import android.webkit.MimeTypeMap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -36,6 +38,7 @@ import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,6 +51,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -83,6 +87,8 @@ import br.com.vendamais.mobile.domain.cadastro.CadastroModalSignal
 import br.com.vendamais.mobile.domain.cadastro.isPendingCadastroStatus
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
+import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
+import br.com.vendamais.mobile.ui.components.rememberKeyboardAwareFooterState
 import br.com.vendamais.mobile.ui.components.WebCard
 import br.com.vendamais.mobile.ui.theme.Amber100
 import br.com.vendamais.mobile.ui.theme.Amber500
@@ -93,6 +99,7 @@ import br.com.vendamais.mobile.ui.theme.Red100
 import br.com.vendamais.mobile.ui.theme.Red500
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -114,6 +121,9 @@ import java.time.Period
 import java.util.Locale
 
 private const val MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+private const val LEMMIT_DEPENDENTE_MAX_ATTEMPTS = 3
+private const val LEMMIT_DEPENDENTE_TIMEOUT_MS = 12000L
+private const val LEMMIT_DEPENDENTE_RETRY_DELAY_MS = 900L
 private val cadastroEditorJsonParser = Json {
     ignoreUnknownKeys = true
     isLenient = true
@@ -226,8 +236,7 @@ fun CadastroEditorDialog(
     var suppressBackgroundPersist by rememberSaveable(cadastro.id) { mutableStateOf(false) }
     var showArquivoSourceModal by rememberSaveable { mutableStateOf(false) }
     var cameraCapturePath by rememberSaveable { mutableStateOf("") }
-    val navigationBottomInset = WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding()
-    val footerSafeBottomPadding = maxOf(navigationBottomInset, 56.dp)
+    val keyboardAwareFooter = rememberKeyboardAwareFooterState()
 
     var dataNascimentoField by rememberSaveable(cadastro.id, stateSaver = textFieldValueSaver()) {
         val digits = extractDateDigits(cadastro.dataNascimento.orEmpty())
@@ -250,6 +259,9 @@ fun CadastroEditorDialog(
             }
         }
     }
+    val cpfValidationErrors = remember(cadastro.id) { mutableStateMapOf<Int, String>() }
+    val consultedCpfByIndex = remember(cadastro.id) { mutableStateMapOf<Int, String>() }
+    var consultingLemmitIndex by rememberSaveable(cadastro.id) { mutableStateOf<Int?>(null) }
 
     val planoOptions = remember(
         cadastro.id,
@@ -698,7 +710,107 @@ fun CadastroEditorDialog(
     fun removeDependente(index: Int) {
         if (index <= 0 || index !in dependentes.indices) return
         dependentes.removeAt(index)
+        cpfValidationErrors.clear()
+        consultedCpfByIndex.clear()
         persistDraftSnapshotSilently()
+    }
+
+    suspend fun consultarLemmitDependente(index: Int, cpfDigits: String) {
+        if (state.cadastroWorkspace.config?.lemmitDependente != true) return
+        if (cpfDigits.length != 11 || !validateCpf(cpfDigits)) return
+
+        consultingLemmitIndex = index
+        try {
+            val canUse = viewModel.canUseLemmit()
+            if (!canUse) {
+                val limitInfo = runCatching { viewModel.fetchLemmitLimitInfo() }.getOrNull()
+                val motivo = if (limitInfo?.limiteMensal != null) {
+                    "Limite mensal da Lemmit atingido."
+                } else {
+                    "Consulta Lemmit indisponivel para este usuario."
+                }
+                cpfValidationErrors[index] = "$motivo Apague e digite novamente o CPF para nova leitura."
+                return
+            }
+
+            var lastFailure: Throwable? = null
+            repeat(LEMMIT_DEPENDENTE_MAX_ATTEMPTS) { attempt ->
+                val result = runCatching {
+                    withTimeoutOrNull(LEMMIT_DEPENDENTE_TIMEOUT_MS) {
+                        viewModel.consultarCpfLemmit(cpfDigits)
+                    } ?: throw IllegalStateException("Tempo limite da consulta Lemmit excedido.")
+                }
+
+                val lemmitData = result.getOrNull()
+                if (lemmitData != null) {
+                    val pessoa = lemmitData.pessoa
+                    if (pessoa == null) {
+                        consultedCpfByIndex.remove(index)
+                        cpfValidationErrors[index] =
+                            "CPF sem retorno na Lemmit. Apague e digite novamente para nova leitura."
+                        return
+                    }
+
+                    val dataNascimentoRaw = pessoa.dataNascimento
+                        ?.trim()
+                        ?.takeIf { it.isNotBlank() }
+                        ?: pessoa.dataNascimentoAlternativa
+                            ?.trim()
+                            ?.takeIf { it.isNotBlank() }
+                    val dataNascimentoDigits = resolveLemmitDateDigits(dataNascimentoRaw)
+                    val sexoCodigoLemmit = resolveLemmitSexoCodigo(pessoa.sexo)
+                    val nomeMaeLemmit = pessoa.nomeMae
+                        ?.trim()
+                        ?.takeIf { it.isNotBlank() }
+                        ?: pessoa.nomeMaeAlternativa
+                            ?.trim()
+                            ?.takeIf { it.isNotBlank() }
+
+                    if (index !in dependentes.indices) return
+                    dependentes[index] = dependentes[index].copy(
+                        nome = pessoa.nome?.trim().takeIf { !it.isNullOrBlank() } ?: dependentes[index].nome,
+                        nomeMae = nomeMaeLemmit ?: dependentes[index].nomeMae,
+                        dataNascimento = dataNascimentoDigits?.let { TextFieldValue(it, TextRange(it.length)) }
+                            ?: dependentes[index].dataNascimento,
+                        sexo = sexoCodigoLemmit ?: dependentes[index].sexo,
+                    )
+                    cpfValidationErrors.remove(index)
+                    localMessage = "Dados Lemmit carregados para o CPF informado."
+                    return
+                }
+
+                lastFailure = result.exceptionOrNull()
+                val shouldRetry = shouldRetryLemmitRequest(lastFailure?.message)
+                if (!shouldRetry || attempt == LEMMIT_DEPENDENTE_MAX_ATTEMPTS - 1) return@repeat
+                delay(LEMMIT_DEPENDENTE_RETRY_DELAY_MS)
+            }
+
+            consultedCpfByIndex.remove(index)
+            val fallback = CadastroApiErrorMapper.mapUserMessage(
+                lastFailure?.message,
+                "Falha na consulta Lemmit.",
+            )
+            val retryPrompt = if (shouldRetryLemmitRequest(lastFailure?.message)) {
+                "Instabilidade na API Lemmit. Apague e digite novamente o CPF para nova leitura."
+            } else {
+                "$fallback Apague e digite novamente o CPF para nova leitura."
+            }
+            cpfValidationErrors[index] = retryPrompt
+        } catch (throwable: Throwable) {
+            consultedCpfByIndex.remove(index)
+            val fallback = CadastroApiErrorMapper.mapUserMessage(
+                throwable.message,
+                "Falha na consulta Lemmit.",
+            )
+            val retryPrompt = if (shouldRetryLemmitRequest(throwable.message)) {
+                "Instabilidade na API Lemmit. Apague e digite novamente o CPF para nova leitura."
+            } else {
+                "$fallback Apague e digite novamente o CPF para nova leitura."
+            }
+            cpfValidationErrors[index] = retryPrompt
+        } finally {
+            consultingLemmitIndex = null
+        }
     }
 
     fun validateStepOne(): String? {
@@ -719,6 +831,14 @@ fun CadastroEditorDialog(
             it.tipo in setOf("celular", "fixo", "whatsapp") && it.valor.isNotBlank()
         }
         if (telefones.isEmpty()) return "Adicione pelo menos um telefone."
+
+        val cepDigits = enderecoCep.filter(Char::isDigit).take(8)
+        if (cepDigits.length != 8) return "CEP obrigatorio. Informe 8 digitos."
+        if (enderecoLogradouro.isBlank()) return "Logradouro obrigatorio."
+        if (enderecoNumero.isBlank()) return "Numero do endereco obrigatorio."
+        if (enderecoBairro.isBlank()) return "Bairro obrigatorio."
+        if (enderecoCidade.isBlank()) return "Cidade obrigatoria."
+        if (enderecoUf.trim().length != 2) return "UF obrigatoria."
 
         if (dependentes.isEmpty()) return "Adicione ao menos o titular e um plano."
         val titular = dependentes.firstOrNull()
@@ -903,12 +1023,22 @@ fun CadastroEditorDialog(
     }
 
     suspend fun submitCadastro() {
+        val submitTraceId = "ui-submit-${cadastro.id.take(8)}-${System.currentTimeMillis()}"
+        Log.i("CadastroEditorDialog", "[$submitTraceId] clickCadastrar saving=$saving sending=${state.sendingCadastro} uploading=$uploading")
         if (saving || state.sendingCadastro) {
+            Log.i("CadastroEditorDialog", "[$submitTraceId] ignored busyState")
             return
         }
         saving = true
         if (uploading) {
             localMessage = "Aguarde o upload do arquivo finalizar antes de cadastrar."
+            Log.w("CadastroEditorDialog", "[$submitTraceId] blocked uploadingInProgress")
+            saving = false
+            return
+        }
+        if (arquivoPath.isBlank()) {
+            localMessage = "Anexo obrigatorio. Selecione um arquivo antes de finalizar."
+            Log.w("CadastroEditorDialog", "[$submitTraceId] blocked missingArquivoPath cadastroId=${cadastro.id}")
             saving = false
             return
         }
@@ -916,21 +1046,34 @@ fun CadastroEditorDialog(
         if (validation != null) {
             localMessage = validation
             currentStep = 1
+            Log.w("CadastroEditorDialog", "[$submitTraceId] blocked validationStepOne msg=$validation")
             saving = false
             return
         }
 
         val payload = buildPayload(requireStatus = false)
         if (payload == null) {
+            Log.w("CadastroEditorDialog", "[$submitTraceId] blocked payloadNull")
             saving = false
             return
         }
+        val payloadCpf = runCatching {
+            payload["cpf"]?.jsonPrimitive?.contentOrNull
+                ?.filter(Char::isDigit)
+                ?.takeIf { it.length == 11 }
+        }.getOrNull().orEmpty()
+        val payloadCpfMask = if (payloadCpf.length == 11) "***${payloadCpf.takeLast(4)}" else "-"
+        Log.i(
+            "CadastroEditorDialog",
+            "[$submitTraceId] dispatch sendSelectedCadastro id=${cadastro.id} cpf=$payloadCpfMask hasArquivo=${arquivoPath.isNotBlank()}",
+        )
         runCatching {
             viewModel.sendSelectedCadastro(
                 cadastroSnapshot = cadastro,
                 payloadHint = payload,
             )
         }.onFailure { throwable ->
+            Log.e("CadastroEditorDialog", "[$submitTraceId] sendSelectedCadastro threw synchronously", throwable)
             localMessage = CadastroApiErrorMapper.mapUserMessage(
                 throwable.message,
                 "Falha ao preparar envio.",
@@ -1038,6 +1181,11 @@ fun CadastroEditorDialog(
         }
     }
 
+    val editorScrollState = rememberScrollState()
+    LaunchedEffect(cadastro.id, currentStep) {
+        editorScrollState.scrollTo(0)
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
@@ -1050,9 +1198,7 @@ fun CadastroEditorDialog(
                 modifier = Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
-                    .padding(16.dp)
-                    .navigationBarsPadding()
-                    .imePadding(),
+                    .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Row(
@@ -1090,205 +1236,206 @@ fun CadastroEditorDialog(
                         }
                     }
                 }
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
+                )
 
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .verticalScroll(rememberScrollState()),
+                        .padding(bottom = keyboardAwareFooter.contentBottomPadding)
+                        .verticalScroll(editorScrollState),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     if (currentStep == 1) {
-                        WebCard {
-                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            OutlinedTextField(
+                                value = nome,
+                                onValueChange = { nome = it },
+                                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                                label = { Text("Nome Completo") },
+                                colors = enderecoFieldColors,
+                            )
+                            OutlinedTextField(
+                                value = formatCpf(cadastro.cpf),
+                                onValueChange = {},
+                                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                                label = { Text("CPF") },
+                                enabled = false,
+                                colors = enderecoFieldColors,
+                            )
+                            OutlinedTextField(
+                                value = dataNascimentoField,
+                                onValueChange = { input ->
+                                    val digits = input.text.filter(Char::isDigit).take(8)
+                                    dataNascimentoField = TextFieldValue(digits, TextRange(digits.length))
+                                },
+                                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                                label = { Text("Data de Nascimento") },
+                                placeholder = { Text("dd/mm/aaaa") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                visualTransformation = DateVisualTransformation(),
+                                singleLine = true,
+                                colors = enderecoFieldColors,
+                            )
+                            SelectionField(
+                                label = "Sexo",
+                                value = when (sexoCodigo) {
+                                    "1" -> "Masculino"
+                                    "0" -> "Feminino"
+                                    else -> "Selecione"
+                                },
+                                options = listOf("" to "Selecione", "1" to "Masculino", "0" to "Feminino"),
+                                onSelected = { sexoCodigo = it },
+                            )
+                            OutlinedTextField(
+                                value = nomeMae,
+                                onValueChange = { nomeMae = it },
+                                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                                label = { Text("Nome da Mae") },
+                                colors = enderecoFieldColors,
+                            )
+                            if (cadastro.empresaExigeMatricula == 1) {
                                 OutlinedTextField(
-                                    value = nome,
-                                    onValueChange = { nome = it },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("Nome Completo") },
+                                    value = numeroMatricula,
+                                    onValueChange = { numeroMatricula = it },
+                                    modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                                    label = { Text("Matricula") },
                                     colors = enderecoFieldColors,
                                 )
+                            }
+
+                            if (canChooseVendedor) {
+                                SelectionField(
+                                    label = "Vendedor",
+                                    value = state.vendedores
+                                        .firstOrNull { it.id == selectedVendedorId }
+                                        ?.toTeamSelectionLabel()
+                                        ?: "Selecione um vendedor",
+                                    options = state.vendedores.map { it.id to it.toTeamSelectionLabel() },
+                                    onSelected = { selectedVendedorId = it },
+                                )
+                                if (state.vendedores.isEmpty()) {
+                                    Text(
+                                        text = "Nenhum vendedor disponível. Entre em contato com o administrador.",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
+                            } else if (profile?.role == "VENDEDOR") {
                                 OutlinedTextField(
-                                    value = formatCpf(cadastro.cpf),
+                                    value = profile.toTeamSelectionLabel(),
                                     onValueChange = {},
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("CPF") },
+                                    modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                                    label = { Text("Vendedor") },
                                     enabled = false,
                                     colors = enderecoFieldColors,
                                 )
-                                OutlinedTextField(
-                                    value = dataNascimentoField,
-                                    onValueChange = { input ->
-                                        val digits = input.text.filter(Char::isDigit).take(8)
-                                        dataNascimentoField = TextFieldValue(digits, TextRange(digits.length))
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("Data de Nascimento") },
-                                    placeholder = { Text("dd/mm/aaaa") },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    visualTransformation = DateVisualTransformation(),
-                                    singleLine = true,
-                                    colors = enderecoFieldColors,
-                                )
-                                SelectionField(
-                                    label = "Sexo",
-                                    value = when (sexoCodigo) {
-                                        "1" -> "Masculino"
-                                        "0" -> "Feminino"
-                                        else -> "Selecione"
-                                    },
-                                    options = listOf("" to "Selecione", "1" to "Masculino", "0" to "Feminino"),
-                                    onSelected = { sexoCodigo = it },
-                                )
-                                OutlinedTextField(
-                                    value = nomeMae,
-                                    onValueChange = { nomeMae = it },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("Nome da Mae") },
-                                    colors = enderecoFieldColors,
-                                )
-                                if (cadastro.empresaExigeMatricula == 1) {
-                                    OutlinedTextField(
-                                        value = numeroMatricula,
-                                        onValueChange = { numeroMatricula = it },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        label = { Text("Matricula") },
-                                        colors = enderecoFieldColors,
-                                    )
-                                }
-
-                                if (canChooseVendedor) {
-                                    SelectionField(
-                                        label = "Vendedor",
-                                        value = state.vendedores
-                                            .firstOrNull { it.id == selectedVendedorId }
-                                            ?.toTeamSelectionLabel()
-                                            ?: "Selecione um vendedor",
-                                        options = state.vendedores.map { it.id to it.toTeamSelectionLabel() },
-                                        onSelected = { selectedVendedorId = it },
-                                    )
-                                    if (state.vendedores.isEmpty()) {
-                                        Text(
-                                            text = "Nenhum vendedor disponível. Entre em contato com o administrador.",
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            style = MaterialTheme.typography.bodySmall,
-                                        )
-                                    }
-                                } else if (profile?.role == "VENDEDOR") {
-                                    OutlinedTextField(
-                                        value = profile.toTeamSelectionLabel(),
-                                        onValueChange = {},
-                                        modifier = Modifier.fillMaxWidth(),
-                                        label = { Text("Vendedor") },
-                                        enabled = false,
-                                        colors = enderecoFieldColors,
-                                    )
-                                }
-
-                                if (canChooseAdesionista) {
-                                    SelectionField(
-                                        label = "Adesionista",
-                                        value = state.adesionistas
-                                            .firstOrNull { it.id == selectedAdesionistaId }
-                                            ?.toTeamSelectionLabel()
-                                            ?: "Selecione um adesionista",
-                                        options = listOf("" to "Nenhum adesionista") + state.adesionistas.map { it.id to it.toTeamSelectionLabel() },
-                                        onSelected = { selectedAdesionistaId = it },
-                                    )
-                                }
-
-                                Text("Endereco", fontWeight = FontWeight.SemiBold)
-                                OutlinedTextField(
-                                    value = enderecoCep,
-                                    onValueChange = {
-                                        val cepNormalizado = it.filter(Char::isDigit).take(8)
-                                        enderecoCepTouched = true
-                                        enderecoCep = cepNormalizado
-                                        cepLookupError = null
-                                        if (cepNormalizado.length < 8) {
-                                            ultimoCepConsultado = ""
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("CEP") },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    singleLine = true,
-                                    colors = enderecoFieldColors,
-                                )
-                                if (cepLookupLoading) {
-                                    Text(
-                                        text = "Consultando CEP no S4E...",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                                cepLookupError?.let { erroCep ->
-                                    Text(
-                                        text = erroCep,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.error,
-                                    )
-                                }
-                                OutlinedTextField(
-                                    value = enderecoTipoLogradouro,
-                                    onValueChange = { enderecoTipoLogradouro = it },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("Tipo Logradouro") },
-                                    singleLine = true,
-                                    colors = enderecoFieldColors,
-                                )
-                                OutlinedTextField(
-                                    value = enderecoLogradouro,
-                                    onValueChange = { enderecoLogradouro = it },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("Logradouro") },
-                                    singleLine = true,
-                                    colors = enderecoFieldColors,
-                                )
-                                OutlinedTextField(
-                                    value = enderecoNumero,
-                                    onValueChange = { enderecoNumero = it },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("Numero") },
-                                    singleLine = true,
-                                    colors = enderecoFieldColors,
-                                )
-                                OutlinedTextField(
-                                    value = enderecoComplemento,
-                                    onValueChange = { enderecoComplemento = it },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("Complemento") },
-                                    singleLine = true,
-                                    colors = enderecoFieldColors,
-                                )
-                                OutlinedTextField(
-                                    value = enderecoBairro,
-                                    onValueChange = { enderecoBairro = it },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("Bairro") },
-                                    singleLine = true,
-                                    colors = enderecoFieldColors,
-                                )
-                                OutlinedTextField(
-                                    value = enderecoCidade,
-                                    onValueChange = { enderecoCidade = it },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("Cidade") },
-                                    singleLine = true,
-                                    colors = enderecoFieldColors,
-                                )
-                                OutlinedTextField(
-                                    value = enderecoUf,
-                                    onValueChange = {
-                                        enderecoUf = it.uppercase(Locale.ROOT).filter(Char::isLetter).take(2)
-                                        enderecoUfSigla = enderecoUf
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("UF") },
-                                    singleLine = true,
-                                    colors = enderecoFieldColors,
-                                )
-
                             }
+
+                            if (canChooseAdesionista) {
+                                SelectionField(
+                                    label = "Adesionista",
+                                    value = state.adesionistas
+                                        .firstOrNull { it.id == selectedAdesionistaId }
+                                        ?.toTeamSelectionLabel()
+                                        ?: "Selecione um adesionista",
+                                    options = listOf("" to "Nenhum adesionista") + state.adesionistas.map { it.id to it.toTeamSelectionLabel() },
+                                    onSelected = { selectedAdesionistaId = it },
+                                )
+                            }
+
+                            Text("Endereco", fontWeight = FontWeight.SemiBold)
+                            OutlinedTextField(
+                                value = enderecoCep,
+                                onValueChange = {
+                                    val cepNormalizado = it.filter(Char::isDigit).take(8)
+                                    enderecoCepTouched = true
+                                    enderecoCep = cepNormalizado
+                                    cepLookupError = null
+                                    if (cepNormalizado.length < 8) {
+                                        ultimoCepConsultado = ""
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                                label = { Text("CEP") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                colors = enderecoFieldColors,
+                            )
+                            if (cepLookupLoading) {
+                                Text(
+                                    text = "Consultando CEP no S4E...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            cepLookupError?.let { erroCep ->
+                                Text(
+                                    text = erroCep,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                            OutlinedTextField(
+                                value = enderecoTipoLogradouro,
+                                onValueChange = { enderecoTipoLogradouro = it },
+                                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                                label = { Text("Tipo Logradouro") },
+                                singleLine = true,
+                                colors = enderecoFieldColors,
+                            )
+                            OutlinedTextField(
+                                value = enderecoLogradouro,
+                                onValueChange = { enderecoLogradouro = it },
+                                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                                label = { Text("Logradouro") },
+                                singleLine = true,
+                                colors = enderecoFieldColors,
+                            )
+                            OutlinedTextField(
+                                value = enderecoNumero,
+                                onValueChange = { enderecoNumero = it },
+                                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                                label = { Text("Numero") },
+                                singleLine = true,
+                                colors = enderecoFieldColors,
+                            )
+                            OutlinedTextField(
+                                value = enderecoComplemento,
+                                onValueChange = { enderecoComplemento = it },
+                                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                                label = { Text("Complemento") },
+                                singleLine = true,
+                                colors = enderecoFieldColors,
+                            )
+                            OutlinedTextField(
+                                value = enderecoBairro,
+                                onValueChange = { enderecoBairro = it },
+                                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                                label = { Text("Bairro") },
+                                singleLine = true,
+                                colors = enderecoFieldColors,
+                            )
+                            OutlinedTextField(
+                                value = enderecoCidade,
+                                onValueChange = { enderecoCidade = it },
+                                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                                label = { Text("Cidade") },
+                                singleLine = true,
+                                colors = enderecoFieldColors,
+                            )
+                            OutlinedTextField(
+                                value = enderecoUf,
+                                onValueChange = {
+                                    enderecoUf = it.uppercase(Locale.ROOT).filter(Char::isLetter).take(2)
+                                    enderecoUfSigla = enderecoUf
+                                },
+                                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                                label = { Text("UF") },
+                                singleLine = true,
+                                colors = enderecoFieldColors,
+                            )
                         }
 
                         WebCard {
@@ -1367,7 +1514,7 @@ fun CadastroEditorDialog(
                                     onValueChange = { value ->
                                         novoContatoValorField = normalizeContatoEditingValue(novoContatoTipo, value)
                                     },
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                                     label = { Text("Contato") },
                                     keyboardOptions = KeyboardOptions(
                                         keyboardType = if (novoContatoTipo == "email") KeyboardType.Email else KeyboardType.Number,
@@ -1456,7 +1603,7 @@ fun CadastroEditorDialog(
                                                 onValueChange = { value ->
                                                     dependentes[index] = dependentes[index].copy(nome = value)
                                                 },
-                                                modifier = Modifier.fillMaxWidth(),
+                                                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                                                 label = { Text("Nome") },
                                                 enabled = !isTitular,
                                                 colors = enderecoFieldColors,
@@ -1469,8 +1616,31 @@ fun CadastroEditorDialog(
                                                     dependentes[index] = dependentes[index].copy(
                                                         cpf = TextFieldValue(digits, TextRange(digits.length)),
                                                     )
+                                                    when {
+                                                        digits.isBlank() || digits.length < 11 -> {
+                                                            cpfValidationErrors.remove(index)
+                                                            consultedCpfByIndex.remove(index)
+                                                        }
+
+                                                        !validateCpf(digits) -> {
+                                                            cpfValidationErrors[index] = "CPF invalido."
+                                                            consultedCpfByIndex.remove(index)
+                                                        }
+
+                                                        else -> {
+                                                            cpfValidationErrors.remove(index)
+                                                            if (state.cadastroWorkspace.config?.lemmitDependente == true &&
+                                                                consultedCpfByIndex[index] != digits
+                                                            ) {
+                                                                consultedCpfByIndex[index] = digits
+                                                                scope.launch {
+                                                                    consultarLemmitDependente(index, digits)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
                                                 },
-                                                modifier = Modifier.fillMaxWidth(),
+                                                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                                                 label = { Text("CPF") },
                                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                                 visualTransformation = CadastroDependenteCpfVisualTransformation(),
@@ -1478,6 +1648,20 @@ fun CadastroEditorDialog(
                                                 enabled = !isTitular,
                                                 colors = enderecoFieldColors,
                                             )
+                                            cpfValidationErrors[index]?.let { cpfError ->
+                                                Text(
+                                                    text = cpfError,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.error,
+                                                )
+                                            }
+                                            if (consultingLemmitIndex == index) {
+                                                Text(
+                                                    text = "Consultando Lemmit...",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
 
                                             OutlinedTextField(
                                                 value = dep.dataNascimento,
@@ -1487,7 +1671,7 @@ fun CadastroEditorDialog(
                                                         dataNascimento = TextFieldValue(digits, TextRange(digits.length)),
                                                     )
                                                 },
-                                                modifier = Modifier.fillMaxWidth(),
+                                                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                                                 label = { Text("Data de Nascimento") },
                                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                                 visualTransformation = DateVisualTransformation(),
@@ -1535,7 +1719,7 @@ fun CadastroEditorDialog(
                                                 onValueChange = { value ->
                                                     dependentes[index] = dependentes[index].copy(nomeMae = value)
                                                 },
-                                                modifier = Modifier.fillMaxWidth(),
+                                                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                                                 label = { Text("Nome da Mae") },
                                                 enabled = !isTitular,
                                                 colors = enderecoFieldColors,
@@ -1669,21 +1853,20 @@ fun CadastroEditorDialog(
                     }
                 }
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
-                        .navigationBarsPadding()
-                        .padding(bottom = footerSafeBottomPadding),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                Box(
+                    modifier = keyboardAwareFooter.containerModifier.fillMaxWidth(),
                 ) {
+                    Row(
+                        modifier = keyboardAwareFooter.footerModifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                     if (
                         state.profile?.role in setOf("ADMINISTRADOR", "ADMIN", "VENDEDOR") &&
                         currentStep == 1 &&
                         isPendingCadastroStatus(cadastro.status)
                     ) {
-                        TextButton(
+                        IconButton(
                             onClick = {
                                 viewModel.resolveCadastroOverlay(
                                     CadastroModalSignal(
@@ -1693,75 +1876,65 @@ fun CadastroEditorDialog(
                                 )
                             },
                         ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Delete,
-                                    contentDescription = null,
-                                )
-                                Text("Excluir")
-                            }
+                            Icon(
+                                imageVector = Icons.Rounded.Delete,
+                                contentDescription = "Excluir",
+                            )
                         }
                     }
 
-                    TextButton(
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    IconButton(
                         onClick = { requestCloseEditor() },
                     ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Close,
-                                contentDescription = null,
-                            )
-                            Text("Cancelar")
-                        }
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "Cancelar",
+                        )
                     }
 
                     if (currentStep == 1) {
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    if (uploading) {
-                                        localMessage = "Aguarde o upload do arquivo finalizar antes de salvar."
-                                        return@launch
-                                    }
-                                    val validation = validateStepOne()
-                                    if (validation != null) {
-                                        localMessage = validation
-                                        return@launch
-                                    }
-                                    val payload = buildPayload(requireStatus = false) ?: return@launch
-                                    saving = true
-                                    runCatching { viewModel.updateCadastroRecord(cadastro.id, payload) }
-                                        .onSuccess { localMessage = "Cadastro salvo com sucesso." }
-                                        .onFailure { throwable ->
-                                            localMessage = CadastroApiErrorMapper.mapUserMessage(
-                                                throwable.message,
-                                                "Falha ao salvar cadastro.",
-                                            )
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        if (uploading) {
+                                            localMessage = "Aguarde o upload do arquivo finalizar antes de salvar."
+                                            return@launch
                                         }
-                                    saving = false
-                                }
-                            },
-                            enabled = !saving && !uploading && !state.sendingCadastro,
-                        ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
+                                        val validation = validateStepOne()
+                                        if (validation != null) {
+                                            localMessage = validation
+                                            return@launch
+                                        }
+                                        val payload = buildPayload(requireStatus = false) ?: return@launch
+                                        saving = true
+                                        runCatching { viewModel.updateCadastroRecord(cadastro.id, payload) }
+                                            .onSuccess { localMessage = "Cadastro salvo com sucesso." }
+                                            .onFailure { throwable ->
+                                                localMessage = CadastroApiErrorMapper.mapUserMessage(
+                                                    throwable.message,
+                                                    "Falha ao salvar cadastro.",
+                                                )
+                                            }
+                                        saving = false
+                                    }
+                                },
+                                enabled = !saving && !uploading && !state.sendingCadastro,
                             ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.CheckCircle,
-                                    contentDescription = null,
-                                )
-                                Text("Salvar")
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.CheckCircle,
+                                        contentDescription = null,
+                                    )
+                                    Text("Salvar", maxLines = 1, softWrap = false)
+                                }
                             }
-                        }
 
-                        Button(
+                        IconButton(
                             onClick = {
                                 scope.launch {
                                     val validation = validateStepOne()
@@ -1790,20 +1963,14 @@ fun CadastroEditorDialog(
                             )
                         }
                     } else {
-                        TextButton(
+                        IconButton(
                             onClick = { currentStep = 1 },
                             enabled = !saving && !uploading && !state.sendingCadastro,
                         ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                                    contentDescription = null,
-                                )
-                                Text("Voltar")
-                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = "Voltar",
+                            )
                         }
 
                         Button(
@@ -1834,8 +2001,9 @@ fun CadastroEditorDialog(
                         }
                     }
                 }
-            }
+                }
         }
+    }
     }
 
     if (showArquivoSourceModal) {
@@ -1963,7 +2131,7 @@ fun CadastroEditorDialog(
                             imageVector = Icons.Rounded.CheckCircle,
                             contentDescription = null,
                         )
-                        Text("Salvar e fechar")
+                        Text("Salvar e fechar", maxLines = 1, softWrap = false)
                     }
                 }
             },
@@ -2022,6 +2190,68 @@ private fun toIsoDateOrNull(value: String): String? {
     val year = digits.substring(4, 8).toIntOrNull() ?: return null
     if (day !in 1..31 || month !in 1..12 || year !in 1900..2100) return null
     return "%04d-%02d-%02d".format(year, month, day)
+}
+
+private fun shouldRetryLemmitRequest(message: String?): Boolean {
+    val normalized = message
+        ?.lowercase(Locale.ROOT)
+        ?.trim()
+        .orEmpty()
+    if (normalized.isBlank()) return true
+    if (normalized.contains("cpf invalido")) return false
+    if (normalized.contains("nao encontrado")) return false
+    if (normalized.contains("não encontrado")) return false
+    if (normalized.contains("forbidden") || normalized.contains("unauthorized")) return false
+
+    return listOf(
+        "timeout",
+        "timed out",
+        "tempo limite",
+        "indisponivel",
+        "indisponível",
+        "temporar",
+        "service unavailable",
+        "bad gateway",
+        "gateway timeout",
+        "failed to connect",
+        "connection reset",
+        "network",
+        "socket",
+        "i/o",
+        "status: 5",
+        "status 5",
+        "429",
+    ).any { normalized.contains(it) }
+}
+
+private fun resolveLemmitDateDigits(rawValue: String?): String? {
+    val iso = rawValue
+        ?.trim()
+        ?.substringBefore('T')
+        ?.takeIf { Regex("""\d{4}-\d{2}-\d{2}""").matches(it) }
+        ?: return null
+    val parts = iso.split("-")
+    if (parts.size != 3) return null
+    return "${parts[2]}${parts[1]}${parts[0]}"
+}
+
+private fun resolveLemmitSexoCodigo(rawValue: String?): Int? {
+    val normalized = rawValue
+        ?.trim()
+        ?.lowercase(Locale.ROOT)
+        ?.normalizeForComparison()
+        ?: return null
+    return when {
+        normalized.contains("masculino") || normalized == "m" || normalized == "1" -> 1
+        normalized.contains("feminino") || normalized == "f" || normalized == "0" || normalized == "2" -> 0
+        else -> null
+    }
+}
+
+private fun String.normalizeForComparison(): String {
+    return java.text.Normalizer
+        .normalize(this, java.text.Normalizer.Form.NFD)
+        .replace(Regex("\\p{M}+"), "")
 }
 
 private fun isUnder18(isoDate: String): Boolean {

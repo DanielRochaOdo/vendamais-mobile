@@ -45,6 +45,7 @@ import br.com.vendamais.mobile.ui.components.OdontoartBadge
 import br.com.vendamais.mobile.ui.components.VendaBrandWordmark
 import br.com.vendamais.mobile.ui.theme.BrandLime
 import br.com.vendamais.mobile.ui.theme.BrandOrange
+import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 
 @Composable
 fun LoginScreen(
@@ -107,7 +108,7 @@ fun LoginScreen(
                         OutlinedTextField(
                             value = state.email,
                             onValueChange = onEmailChange,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                             placeholder = { Text("seu@email.com") },
                             keyboardOptions = KeyboardOptions(
                                 keyboardType = KeyboardType.Email,
@@ -128,7 +129,7 @@ fun LoginScreen(
                         OutlinedTextField(
                             value = state.password,
                             onValueChange = onPasswordChange,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                             placeholder = { Text("********") },
                             visualTransformation = PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(
