@@ -40,9 +40,63 @@ $env:Path="$env:JAVA_HOME\bin;$env:Path"
 .\gradlew.bat assembleDebug
 ```
 
-APK gerado em:
+APK de debug gerado em:
 
 `android-app/app/build/outputs/apk/debug/app-debug.apk`
+
+## Release para Play Store
+
+Para publicar na Google Play, gere o bundle de release:
+
+```powershell
+cd android-app
+.\gradlew.bat bundleRelease
+```
+
+Bundle gerado em:
+
+`android-app/app/build/outputs/bundle/release/app-release.aab`
+
+Antes do envio, confirme:
+
+- `local.properties` com `releaseStoreFile`, `releaseStorePassword`, `releaseKeyAlias` e `releaseKeyPassword`
+- `supabaseUrl`, `supabaseAnonKey` e `publicAppUrl` apontando para ambiente de producao
+- `updateMetadataUrl` apontando para um JSON publico com os dados da versao
+- `updateApkUrl` apontando para o APK publico de fallback
+- `version.properties` com `VERSION_CODE` sempre maior que o envio anterior
+- assinatura de release valida e testada
+- politica de privacidade publica e ficha Data Safety preenchida no Console do Google Play
+
+## Atualizacao propria
+
+O app pode checar um JSON publico com este formato:
+
+```json
+{
+  "versionCode": 85,
+  "versionName": "1.0.85",
+  "apkUrl": "https://seudominio.com/updates/vendamais-mobile-v1.0.85.apk",
+  "notes": "Atualizacao da versao 1.0.85"
+}
+```
+
+Se a `versionCode` for maior que a atual, o app mostra um aviso, baixa o APK e abre o instalador do Android.
+
+### Hospedagem na HostGator
+
+Use uma pasta publica dentro de `public_html`, por exemplo:
+
+- `https://seudominio.com/updates/android-update.json`
+- `https://seudominio.com/updates/vendamais-mobile-v1.0.85.apk`
+
+No `android-app/local.properties`, configure:
+
+```properties
+updateMetadataUrl=https://seudominio.com/updates/android-update.json
+updateApkUrl=https://seudominio.com/updates/vendamais-mobile-v1.0.85.apk
+```
+
+O ideal e manter `android-update.json` com URL fixa e trocar apenas o conteudo interno a cada versao.
 
 ## Estrategia de migracao
 

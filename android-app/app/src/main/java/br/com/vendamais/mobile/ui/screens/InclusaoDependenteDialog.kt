@@ -36,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -818,8 +819,22 @@ fun InclusaoDependenteDialog(
                     WebCard {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(onClick = { tipoBusca = InclusaoBuscaTipo.CODIGO }, enabled = tipoBusca != InclusaoBuscaTipo.CODIGO) { Text("Codigo") }
-                                Button(onClick = { tipoBusca = InclusaoBuscaTipo.CPF }, enabled = tipoBusca != InclusaoBuscaTipo.CPF) { Text("CPF") }
+                                val codigoSelecionado = tipoBusca == InclusaoBuscaTipo.CODIGO
+                                val cpfSelecionado = tipoBusca == InclusaoBuscaTipo.CPF
+                                Button(
+                                    onClick = { tipoBusca = InclusaoBuscaTipo.CODIGO },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (codigoSelecionado) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = if (codigoSelecionado) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    ),
+                                ) { Text("Codigo") }
+                                Button(
+                                    onClick = { tipoBusca = InclusaoBuscaTipo.CPF },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (cpfSelecionado) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = if (cpfSelecionado) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    ),
+                                ) { Text("CPF") }
                             }
                             OutlinedTextField(
                                 value = valorBusca,

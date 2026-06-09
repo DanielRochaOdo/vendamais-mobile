@@ -2,6 +2,7 @@ package br.com.vendamais.mobile.data.remote
 
 import com.google.common.truth.Truth.assertThat
 import br.com.vendamais.mobile.data.models.CadastroEndereco
+import kotlinx.serialization.json.Json
 import org.junit.Test
 import org.junit.Assert.assertThrows
 
@@ -76,5 +77,22 @@ class CadastroWorkflowRepositoryMatriculaTest {
     @Test
     fun `validateEnderecoCepForErp should accept masked cep with eight digits`() {
         validateEnderecoCepForErp(CadastroEndereco(cep = "60.110-140"))
+    }
+
+    @Test
+    fun `validateEnderecoCepForErp should accept nested raw endereco json with cep`() {
+        val raw = Json.parseToJsonElement(
+            """
+            {
+              "endereco": {
+                "dados": {
+                  "codigoPostal": "60110140"
+                }
+              }
+            }
+            """.trimIndent(),
+        )
+
+        validateEnderecoCepForErp(raw)
     }
 }

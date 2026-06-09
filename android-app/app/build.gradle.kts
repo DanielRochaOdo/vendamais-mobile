@@ -1,6 +1,8 @@
-import com.android.build.gradle.internal.api.BaseVariantOutputImpl
 import java.net.URI
 import java.util.Properties
+import org.gradle.api.tasks.Copy
+import org.gradle.api.tasks.Delete
+import org.gradle.api.tasks.WriteProperties
 
 plugins {
     id("com.android.application")
@@ -53,7 +55,6 @@ val resolvedPublicAppHost = localProperties.getProperty("publicAppHost")
     ?.trim()
     ?.takeIf { it.isNotBlank() }
     ?: resolvePublicAppHost(resolvedPublicAppUrl)
-
 data class AppVersion(
     val code: Int,
     val name: String,
@@ -102,6 +103,31 @@ val appVersion = if (releaseBuildRequested) {
     AppVersion(baseVersionCode, baseVersionName)
 }
 
+fun resolveReleaseArtifactBaseUrl(): String {
+    val configured = localProperties.getProperty("updateArtifactBaseUrl")
+        ?.trim()
+        ?.takeIf { it.isNotBlank() }
+    if (configured != null) return configured.removeSuffix("/")
+
+    val configuredUpdateApkUrl = localProperties.getProperty("updateApkUrl")
+        ?.trim()
+        ?.takeIf { it.isNotBlank() }
+    if (configuredUpdateApkUrl != null) {
+        return configuredUpdateApkUrl
+            .substringBeforeLast('/')
+            .removeSuffix("/")
+    }
+
+    return "https://odontoart.com/vendaMais/updates"
+}
+
+val resolvedUpdateMetadataUrl = localProperties.getProperty("updateMetadataUrl")
+    ?.trim()
+    ?.takeIf { it.isNotBlank() }
+    ?: ""
+val releaseArtifactBaseUrl = resolveReleaseArtifactBaseUrl()
+val resolvedUpdateApkUrl = "$releaseArtifactBaseUrl/vendamais-mobile-v${appVersion.name}.apk"
+
 android {
     namespace = "br.com.vendamais.mobile"
     compileSdk = 35
@@ -116,6 +142,8 @@ android {
         buildConfigField("String", "SUPABASE_URL", quoted(localProperties.getProperty("supabaseUrl", "")))
         buildConfigField("String", "SUPABASE_ANON_KEY", quoted(localProperties.getProperty("supabaseAnonKey", "")))
         buildConfigField("String", "PUBLIC_APP_URL", quoted(resolvedPublicAppUrl))
+        buildConfigField("String", "UPDATE_METADATA_URL", quoted(resolvedUpdateMetadataUrl))
+        buildConfigField("String", "UPDATE_APK_URL", quoted(resolvedUpdateApkUrl))
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -169,13 +197,58 @@ android {
         }
     }
 }
-android.applicationVariants.all {
-    if (buildType.name == "release") {
-        outputs.all {
-            val outputImpl = this as BaseVariantOutputImpl
-            outputImpl.outputFileName = "vendamais-mobile-v${versionName}.apk"
-        }
+
+tasks.register<Delete>("cleanReleaseApkOutputs") {
+    delete(layout.buildDirectory.dir("outputs/apk/release"))
+}
+
+tasks.matching { it.name == "bundleRelease" }.configureEach {
+    dependsOn("cleanReleaseApkOutputs")
+}
+
+tasks.register<Copy>("renameReleaseBundle") {
+    dependsOn("bundleRelease")
+    from(layout.buildDirectory.file("outputs/bundle/release/app-release.aab"))
+    into(layout.buildDirectory.dir("outputs/release-artifacts"))
+    rename { "vendamais-mobile-v${android.defaultConfig.versionName}.aab" }
+}
+
+tasks.register<Copy>("renameReleaseApk") {
+    dependsOn("assembleRelease")
+    from(layout.buildDirectory.dir("outputs/apk/release")) {
+        include("*.apk")
+        exclude("*.idsig")
     }
+    into(layout.buildDirectory.dir("outputs/release-artifacts"))
+    rename { "vendamais-mobile-v${android.defaultConfig.versionName}.apk" }
+}
+
+tasks.register("generateReleaseUpdateJson") {
+    dependsOn("bundleRelease")
+    doLast {
+        val outputDir = layout.buildDirectory.dir("outputs/release-artifacts").get().asFile
+        outputDir.mkdirs()
+        val versionName = android.defaultConfig.versionName.orEmpty()
+        val versionCode = android.defaultConfig.versionCode ?: 0
+        val json = """
+            {
+              "versionCode": $versionCode,
+              "versionName": "$versionName",
+              "apkUrl": "$resolvedUpdateApkUrl",
+              "notes": "Atualizacao da versao $versionName"
+            }
+        """.trimIndent() + System.lineSeparator()
+        file("${outputDir.absolutePath}/android-update.json").writeText(json)
+        file("${outputDir.absolutePath}/android-update-v$versionName.json").writeText(json)
+    }
+}
+
+tasks.named("renameReleaseBundle") {
+    dependsOn("generateReleaseUpdateJson")
+}
+
+tasks.named("renameReleaseApk") {
+    dependsOn("generateReleaseUpdateJson")
 }
 
 dependencies {

@@ -481,6 +481,7 @@ class CadastroWorkflowRepository(
         config: CadastroConfig?,
         cadastroId: String,
         cadastroPrefetched: CadastroDetalhe? = null,
+        enderecoHint: JsonElement? = null,
         arquivoPathHint: String? = null,
         dependentesHint: JsonElement? = null,
         nomeHint: String? = null,
@@ -504,7 +505,8 @@ class CadastroWorkflowRepository(
                 cadastroOriginal = cadastroOriginal,
                 cadastroAtual = cadastroCore,
             )
-            val cadastroComDependentes = withDependentesHint(cadastroComMatricula, dependentesHint)
+            val cadastroComEndereco = withEnderecoHint(cadastroComMatricula, enderecoHint)
+            val cadastroComDependentes = withDependentesHint(cadastroComEndereco, dependentesHint)
             val cadastroComArquivoHint = withArquivoPathHint(cadastroComDependentes, arquivoPathHint)
 
             val cadastro = persistArquivoPathBeforeSend(
@@ -646,6 +648,14 @@ class CadastroWorkflowRepository(
         val hintArray = runCatching { dependentesHint?.jsonArray }.getOrNull()
         if (hintArray.isNullOrEmpty()) return cadastro
         return cadastro.copy(dependentes = dependentesHint)
+    }
+
+    private fun withEnderecoHint(
+        cadastro: CadastroDetalhe,
+        enderecoHint: JsonElement?,
+    ): CadastroDetalhe {
+        val hintObject = runCatching { enderecoHint?.jsonObject }.getOrNull() ?: return cadastro
+        return cadastro.copy(endereco = hintObject)
     }
 
     private fun withCoreFieldHints(
@@ -1305,7 +1315,10 @@ class CadastroWorkflowRepository(
         if (cadastro.nome.isNullOrBlank()) throw IllegalStateException("Cadastro sem nome.")
         if (cadastro.dataNascimento.isNullOrBlank()) throw IllegalStateException("Cadastro sem data de nascimento.")
         if ((cadastro.empresaId ?: cadastro.empresaCodigo) == null) throw IllegalStateException("Selecione uma empresa antes de enviar.")
-        validateEnderecoCepForErp(parseCadastroEnderecoFlex(cadastro.endereco))
+        if (cadastro.arquivoPath.isNullOrBlank()) {
+            throw IllegalStateException("Anexo obrigatorio. Selecione um arquivo antes de finalizar.")
+        }
+        validateEnderecoCepForErp(cadastro.endereco)
         if (cadastro.empresaExigeMatricula == 1 && cadastro.numeroMatricula.isNullOrBlank()) {
             throw IllegalStateException("Matricula obrigatoria para esta empresa.")
         }
@@ -1460,7 +1473,15 @@ class CadastroWorkflowRepository(
             put("created_by", session.userId)
         }
 
+        Log.i(
+            logTag,
+            "syncCadastroAfterSend patch cadastroId=$cadastroId status=$statusPersistido cpf=${maskCpfForLog(cpfForSync)} hasPayload=${payload is JsonObject || payload is JsonArray} hasResponse=${response is JsonObject || response is JsonArray}",
+        )
         patchCadastroById(session, cadastroId, body)
+        Log.i(
+            logTag,
+            "syncCadastroAfterSend patch success cadastroId=$cadastroId status=$statusPersistido cpf=${maskCpfForLog(cpfForSync)}",
+        )
     }
 
     private suspend fun syncCadastroAfterSendSafely(
@@ -1509,53 +1530,17 @@ class CadastroWorkflowRepository(
         if (cpfDigits.isNullOrBlank()) {
             Log.w(
                 logTag,
-                "syncCadastroAfterSend nao conseguiu reconciliar conflito sem CPF id=$cadastroId success=$success",
+                "syncCadastroAfterSend detected duplicate conflict sem cpf para reconciliar automaticamente id=$cadastroId success=$success",
                 throwable,
             )
-            if (success) throw throwable
             return
         }
-
-        val reconciledId = runCatching {
-            resolvePendingCadastroConflictIdByCpf(
-                session = session,
-                currentUserId = session.userId,
-                cpfDigits = cpfDigits,
-                excludeCadastroId = cadastroId,
-            )
-        }.getOrNull()
-
-        if (reconciledId.isNullOrBlank()) {
-            Log.w(
-                logTag,
-                "syncCadastroAfterSend conflito de unicidade sem pendente acessivel para reconciliar id=$cadastroId cpf=$cpfDigits success=$success",
-                throwable,
-            )
-            if (success) throw throwable
-            return
-        }
-
         Log.w(
             logTag,
-            "syncCadastroAfterSend reconciliando conflito de unicidade idAnterior=$cadastroId idAtual=$reconciledId cpf=$cpfDigits success=$success",
+            "syncCadastroAfterSend detected duplicate conflict; automatic reconciliation disabled id=$cadastroId cpf=$cpfDigits success=$success",
             throwable,
         )
-        runCatching {
-            syncCadastroAfterSend(
-                session = session,
-                cadastroId = reconciledId,
-                payload = payload,
-                response = response,
-                success = success,
-            )
-        }.onFailure { retryThrowable ->
-            Log.w(
-                logTag,
-                "syncCadastroAfterSend falhou ao reaplicar sincronizacao no pendente reconciliado idAtual=$reconciledId",
-                retryThrowable,
-            )
-            if (success) throw retryThrowable
-        }
+        if (success) throw throwable
     }
 
     private suspend fun markCadastroAsEnviado(
@@ -1605,6 +1590,12 @@ class CadastroWorkflowRepository(
         }.getOrNull()
 
         return cpfDependente
+    }
+
+    private fun maskCpfForLog(cpf: String?): String {
+        val digits = cpf?.filter(Char::isDigit).orEmpty()
+        if (digits.length != 11) return "-"
+        return "***${digits.takeLast(4)}"
     }
 
     private suspend fun createOrUpdateRascunho(
@@ -2551,6 +2542,13 @@ internal fun validateEnderecoCepForErp(endereco: CadastroEndereco?) {
     }
 }
 
+internal fun validateEnderecoCepForErp(rawEndereco: JsonElement?) {
+    val cepDigits = extractCepDigitsFromEndereco(rawEndereco)
+    if (cepDigits.length != 8) {
+        throw IllegalStateException("Informe um CEP valido de 8 digitos antes de cadastrar.")
+    }
+}
+
 private fun parseEnderecoFromErpAssociado(raw: JsonElement?): CadastroEndereco? {
     val root = raw.asJsonObjectFlexible() ?: return null
     val dados = root.jsonArrayFlexible("dados", "data")
@@ -2587,4 +2585,26 @@ private fun JsonObject.readInt(vararg keys: String): Int? {
             ?.let { return it }
     }
     return null
+}
+
+private fun extractCepDigitsFromEndereco(raw: JsonElement?): String {
+    val normalized = decodeEmbeddedJsonElement(raw) ?: return ""
+    return when (normalized) {
+        is JsonObject -> {
+            val direct = normalized.readString("cep", "CEP", "codigoPostal", "postalCode")
+            if (!direct.isNullOrBlank()) {
+                CadastroPayloadBuilder.normalizeDigits(direct).take(8)
+            } else {
+                normalized.values.asSequence()
+                    .map { extractCepDigitsFromEndereco(it) }
+                    .firstOrNull { it.isNotBlank() }
+                    .orEmpty()
+            }
+        }
+        is JsonArray -> normalized.asSequence()
+            .map { extractCepDigitsFromEndereco(it) }
+            .firstOrNull { it.isNotBlank() }
+            .orEmpty()
+        else -> ""
+    }
 }

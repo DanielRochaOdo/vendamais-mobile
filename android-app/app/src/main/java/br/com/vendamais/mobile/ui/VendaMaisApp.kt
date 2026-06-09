@@ -138,6 +138,61 @@ fun VendaMaisApp(
             ?.let(viewModel::openPublicTokenFlow)
     }
 
+    state.appUpdateInfo?.let { update ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissAppUpdate,
+            title = { Text("Atualizacao disponivel") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Versao nova: ${update.versionName}")
+                    update.notes?.takeIf { it.isNotBlank() }?.let { Text(it) }
+                    Text("A instalacao vai baixar o APK e abrir o instalador do Android.")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissAppUpdate) {
+                    Text("Agora nao")
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.dismissAppUpdate()
+                        viewModel.installAppUpdate(
+                            onInstallIntent = { intent ->
+                                runCatching { context.startActivity(intent) }
+                                    .onFailure {
+                                        viewModel.dismissAppUpdate()
+                                    }
+                            },
+                            context = context,
+                        )
+                    },
+                    enabled = !state.appUpdateDownloading,
+                ) {
+                    if (state.appUpdateDownloading) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Atualizar")
+                    }
+                }
+            },
+        )
+    }
+
+    state.appUpdateError?.let { message ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissAppUpdate,
+            title = { Text("Atualizacao") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = viewModel::dismissAppUpdate) {
+                    Text("OK")
+                }
+            },
+        )
+    }
+
     state.publicToken?.let { token ->
         PublicAdesaoTokenScreen(
             token = token,
@@ -255,6 +310,12 @@ fun VendaMaisApp(
                         onLogout = viewModel::logout,
                         onRefresh = viewModel::refresh,
                         onToggleDarkMode = viewModel::setDarkModeEnabled,
+                        onCheckAndInstallUpdate = {
+                            viewModel.checkAndInstallAppUpdate(
+                                context = context,
+                                onInstallIntent = { intent -> context.startActivity(intent) },
+                            )
+                        },
                     )
                 }
 

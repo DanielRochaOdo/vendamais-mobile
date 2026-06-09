@@ -1036,6 +1036,12 @@ fun CadastroEditorDialog(
             saving = false
             return
         }
+        if (arquivoPath.isBlank()) {
+            localMessage = "Anexo obrigatorio. Selecione um arquivo antes de finalizar."
+            Log.w("CadastroEditorDialog", "[$submitTraceId] blocked missingArquivoPath cadastroId=${cadastro.id}")
+            saving = false
+            return
+        }
         val validation = validateStepOne()
         if (validation != null) {
             localMessage = validation

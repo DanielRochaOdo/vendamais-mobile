@@ -38,6 +38,8 @@ import br.com.vendamais.mobile.data.models.ResetStuckQueueResult
 import br.com.vendamais.mobile.data.models.StatusAdesao
 import br.com.vendamais.mobile.data.models.SystemOverview
 import br.com.vendamais.mobile.data.models.TeamMemberOption
+import br.com.vendamais.mobile.data.update.AppUpdateInfo
+import br.com.vendamais.mobile.data.update.AppUpdateRepository
 import br.com.vendamais.mobile.data.models.VendedorStats
 import br.com.vendamais.mobile.domain.cadastro.CadastroApiErrorMapper
 import br.com.vendamais.mobile.domain.cadastro.CadastroErpError
@@ -80,6 +82,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.util.Locale
+import java.io.File
 
 enum class MainTab {
     DASHBOARD,
@@ -190,6 +193,10 @@ data class AppUiState(
     val noticeMessage: String? = null,
     val pendingCadastroPrompt: PendingCadastroPrompt? = null,
     val pendingCadastroActionLoading: Boolean = false,
+    val appUpdateInfo: AppUpdateInfo? = null,
+    val appUpdateChecking: Boolean = false,
+    val appUpdateDownloading: Boolean = false,
+    val appUpdateError: String? = null,
     val activeTab: MainTab = MainTab.DASHBOARD,
     val cadastroTab: CadastroAreaTab = CadastroAreaTab.NOVO,
     val cadastroFiltro: CadastroFiltro = CadastroFiltro.PENDENTES,
@@ -200,6 +207,7 @@ class AppViewModel(
     private val authService: SupabaseAuthService,
     private val repository: SupabaseRepository,
     private val workflowRepository: CadastroWorkflowRepository,
+    private val appUpdateRepository: AppUpdateRepository,
 ) : ViewModel() {
     private val logTag = "VendaMaisApp"
     private val _uiState = MutableStateFlow(AppUiState())
@@ -244,6 +252,10 @@ class AppViewModel(
                             rememberConnected = it.rememberConnected,
                             loading = false,
                             configurationMissing = !AppConfig.isConfigured(),
+                            appUpdateInfo = it.appUpdateInfo,
+                            appUpdateChecking = it.appUpdateChecking,
+                            appUpdateDownloading = it.appUpdateDownloading,
+                            appUpdateError = it.appUpdateError,
                         )
                     }
                 } else {
@@ -252,6 +264,8 @@ class AppViewModel(
                 }
             }
         }
+
+        checkForAppUpdate()
     }
 
     fun updateEmail(value: String) {
@@ -505,6 +519,110 @@ class AppViewModel(
     fun refresh() {
         currentSession?.let { session ->
             viewModelScope.launch { refreshAll(session) }
+        }
+        checkForAppUpdate(force = true)
+    }
+
+    fun checkForAppUpdate(force: Boolean = false) {
+        if (!force && _uiState.value.appUpdateChecking) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(appUpdateChecking = true, appUpdateError = null) }
+            val currentVersionCode = runCatching { br.com.vendamais.mobile.BuildConfig.VERSION_CODE }.getOrDefault(0)
+            val updateInfo = withContext(Dispatchers.IO) {
+                appUpdateRepository.fetchUpdateInfo(AppConfig.updateMetadataUrl)
+            }
+            val availableUpdate = updateInfo?.takeIf { it.versionCode > currentVersionCode }
+            _uiState.update {
+                it.copy(
+                    appUpdateInfo = availableUpdate,
+                    appUpdateChecking = false,
+                )
+            }
+        }
+    }
+
+    fun dismissAppUpdate() {
+        _uiState.update { it.copy(appUpdateInfo = null, appUpdateError = null) }
+    }
+
+    fun installAppUpdate(onInstallIntent: (android.content.Intent) -> Unit, context: Context) {
+        val update = _uiState.value.appUpdateInfo ?: return
+        installAppUpdate(update, onInstallIntent, context)
+    }
+
+    private fun installAppUpdate(
+        update: AppUpdateInfo,
+        onInstallIntent: (android.content.Intent) -> Unit,
+        context: Context,
+    ) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(appUpdateDownloading = true, appUpdateError = null) }
+            Log.d(logTag, "Iniciando download da atualizacao ${update.versionName} (${update.versionCode}) em ${update.apkUrl}")
+            val apkFile = withContext(Dispatchers.IO) {
+                val cacheDir = File(context.cacheDir, "updates").apply { mkdirs() }
+                val target = File(cacheDir, "vendamais-update.apk")
+                appUpdateRepository.downloadApk(update.apkUrl, target)
+            }
+            _uiState.update { it.copy(appUpdateDownloading = false) }
+            if (apkFile != null) {
+                Log.d(logTag, "APK baixado em ${apkFile.absolutePath} tamanho=${apkFile.length()}")
+                val uri = androidx.core.content.FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    apkFile,
+                )
+                Log.d(logTag, "URI gerada para instalacao: $uri")
+                val intent = android.content.Intent(android.content.Intent.ACTION_INSTALL_PACKAGE).apply {
+                    setDataAndType(uri, "application/vnd.android.package-archive")
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    putExtra(android.content.Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+                }
+                runCatching { onInstallIntent(intent) }
+                    .onFailure { throwable ->
+                        Log.e(logTag, "Falha ao iniciar instalador", throwable)
+                        _uiState.update { it.copy(appUpdateError = throwable.message ?: "Falha ao iniciar instalador.") }
+                    }
+            } else {
+                Log.e(logTag, "Falha ao baixar o APK da atualizacao.")
+                _uiState.update { it.copy(appUpdateError = "Nao foi possivel baixar a atualizacao.") }
+            }
+        }
+    }
+
+    fun checkAndInstallAppUpdate(
+        context: Context,
+        onInstallIntent: (android.content.Intent) -> Unit,
+    ) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(appUpdateChecking = true, appUpdateError = null) }
+            val currentVersionCode = runCatching { br.com.vendamais.mobile.BuildConfig.VERSION_CODE }.getOrDefault(0)
+            val updateInfo = withContext(Dispatchers.IO) {
+                appUpdateRepository.fetchUpdateInfo(AppConfig.updateMetadataUrl)
+            }
+            val availableUpdate = updateInfo?.takeIf { it.versionCode > currentVersionCode }
+            _uiState.update {
+                it.copy(
+                    appUpdateInfo = availableUpdate,
+                    appUpdateChecking = false,
+                )
+            }
+
+            if (availableUpdate != null) {
+                installAppUpdate(
+                    update = availableUpdate,
+                    onInstallIntent = onInstallIntent,
+                    context = context,
+                )
+            } else {
+                _uiState.update {
+                    it.copy(
+                        appUpdateChecking = false,
+                        appUpdateError = null,
+                        noticeMessage = "Nao ha atualizacoes disponiveis.",
+                    )
+                }
+            }
         }
     }
 
@@ -1103,11 +1221,12 @@ class AppViewModel(
             }
             else -> cadastroSnapshot ?: return
         }
-        val sendTraceId = "send-${cadastro.id.take(8)}-${System.currentTimeMillis()}"
+        val originalCadastroId = cadastro.id
+        val sendTraceId = "send-${originalCadastroId.take(8)}-${System.currentTimeMillis()}"
         val fluxoContinuacaoPendente = cadastro.tipoCadastro == "cadastro" && isPendingCadastroStatus(cadastro.status)
         Log.i(
             logTag,
-            "[$sendTraceId] clickCadastrar received id=${cadastro.id} status=${cadastro.status ?: "-"} tipo=${cadastro.tipoCadastro} continuarPendente=$fluxoContinuacaoPendente hasPayloadHint=${payloadHint != null}",
+            "[$sendTraceId] clickCadastrar received originalCadastroId=$originalCadastroId status=${cadastro.status ?: "-"} tipo=${cadastro.tipoCadastro} continuarPendente=$fluxoContinuacaoPendente hasPayloadHint=${payloadHint != null}",
         )
 
         _uiState.update { it.copy(sendingCadastro = true, errorMessage = null) }
@@ -1206,6 +1325,10 @@ class AppViewModel(
                 }.getOrNull()
                 val cpfFromSnapshot = CadastroPayloadBuilder.normalizeDigits(cadastro.cpf).takeIf { it.length == 11 }
                 val cpfForUpdate = cpfFromPayload ?: cpfFromTitularPayload ?: cpfFromSnapshot
+                val arquivoPathForSend = arquivoPathFromPayload
+                    ?: cadastro.arquivoPath
+                        ?.trim()
+                        ?.takeIf { it.isNotBlank() }
                 val numeroMatriculaFromSnapshot = cadastro.numeroMatricula
                     ?.trim()
                     ?.takeIf { it.isNotBlank() }
@@ -1215,15 +1338,38 @@ class AppViewModel(
                     !numeroMatriculaFromSnapshot.isNullOrBlank() -> "cadastro_snapshot"
                     else -> "ausente"
                 }
+                val cpfDigitsForConflictCheck = cpfForUpdate
+                    ?.let(CadastroPayloadBuilder::normalizeDigits)
+                    ?.takeIf { it.length == 11 }
+                val foreignConflict = cpfDigitsForConflictCheck?.let { cpfDigits ->
+                    workflowRepository.inspectCpfExistente(
+                        session = activeSession,
+                        userId = profile.id,
+                        cpf = cpfDigits,
+                    )
+                }
+                val foreignConflictId = foreignConflict
+                    ?.cadastroId
+                    ?.trim()
+                    .orEmpty()
+                if (foreignConflict?.exists == true && foreignConflictId != originalCadastroId) {
+                    Log.w(
+                        logTag,
+                        "[$sendTraceId] blocked foreignCpfConflict originalCadastroId=$originalCadastroId conflictId=${foreignConflictId.ifBlank { "-" }} cpf=${maskCpfForLog(cpfDigitsForConflictCheck)} status=${foreignConflict.status ?: "-"} canContinue=${foreignConflict.canContinue} arquivoPath=${arquivoPathForSend.orEmpty()}",
+                    )
+                    throw IllegalStateException(
+                        "Detectamos outro cadastro ativo para este CPF. Reabra o cadastro correto ou consolide os registros antes de finalizar.",
+                    )
+                }
                 Log.i(
                     logTag,
-                    "[$sendTraceId] preflight operation=update id=${cadastro.id} continuarPendente=$fluxoContinuacaoPendente tipo=${cadastro.tipoCadastro} status=${cadastro.status ?: "-"} cpf=${maskCpfForLog(cpfForUpdate)} hasMatricula=${!numeroMatriculaForUpdate.isNullOrBlank()} matriculaLength=${numeroMatriculaForUpdate?.length ?: 0} matriculaSource=$origemMatricula arquivoPathPayload=${!arquivoPathFromPayload.isNullOrBlank()} arquivoPathSnapshot=${!cadastro.arquivoPath.isNullOrBlank()} titularPlanoPayload=${titularPlanoFromPayload ?: 0}",
+                    "[$sendTraceId] preflight operation=update originalCadastroId=$originalCadastroId status=${cadastro.status ?: "-"} cpf=${maskCpfForLog(cpfForUpdate)} hasMatricula=${!numeroMatriculaForUpdate.isNullOrBlank()} matriculaLength=${numeroMatriculaForUpdate?.length ?: 0} matriculaSource=$origemMatricula arquivoPath=${arquivoPathForSend.orEmpty().isNotBlank()} titularPlanoPayload=${titularPlanoFromPayload ?: 0}",
                 )
 
                 val cadastroBase = runCatching {
                     workflowRepository.updateCadastro(
                         session = activeSession,
-                        id = cadastro.id,
+                        id = originalCadastroId,
                         payload = buildJsonObject {
                             put("created_by", profile.id)
                             profile.teamId?.takeIf { it.isNotBlank() }?.let { put("team_id", it) }
@@ -1349,9 +1495,9 @@ class AppViewModel(
                     val detalheAtual = runCatching {
                         workflowRepository.fetchCadastroDetalhe(activeSession, cadastro.id)
                     }.getOrNull()
-                    val cpfDetalheAtual = CadastroPayloadBuilder.normalizeDigits(detalheAtual?.cpf).takeIf { it.length == 11 }
-                    val selfPendingByContext =
-                        detalheAtual?.tipoCadastro == "cadastro" &&
+                val cpfDetalheAtual = CadastroPayloadBuilder.normalizeDigits(detalheAtual?.cpf).takeIf { it.length == 11 }
+                val selfPendingByContext =
+                    detalheAtual?.tipoCadastro == "cadastro" &&
                             isPendingCadastroStatus(detalheAtual.status) &&
                             !cpfConflito.isNullOrBlank() &&
                             cpfDetalheAtual == cpfConflito
@@ -1388,16 +1534,19 @@ class AppViewModel(
 
                     throw throwable
                 }
-                val targetCadastroId = cadastroBase.id.ifBlank { cadastro.id }
-                if (targetCadastroId != cadastro.id) {
+                if (cadastroBase.id != originalCadastroId) {
                     Log.w(
                         logTag,
-                        "[$sendTraceId] targetCadastroId changed idAnterior=${cadastro.id} idAtual=$targetCadastroId",
+                        "[$sendTraceId] blocked targetIdChange originalCadastroId=$originalCadastroId currentId=${cadastroBase.id}",
+                    )
+                    throw IllegalStateException(
+                        "Detectamos reconciliação para outro cadastro durante a finalização. Reabra o cadastro correto ou consolide os registros antes de finalizar.",
                     )
                 }
+                val targetCadastroId = originalCadastroId
                 Log.i(
                     logTag,
-                    "[$sendTraceId] afterUpdate id=$targetCadastroId arquivoPathPersisted=${!cadastroBase.arquivoPath.isNullOrBlank()}",
+                    "[$sendTraceId] afterUpdate originalCadastroId=$originalCadastroId targetCadastroId=$targetCadastroId statusBeforeSend=${cadastroBase.status ?: "-"} arquivoPathPersisted=${!cadastroBase.arquivoPath.isNullOrBlank()}",
                 )
                 val cadastroComEmpresa = ensureCadastroEmpresaBeforeSend(
                     session = activeSession,
@@ -1405,13 +1554,23 @@ class AppViewModel(
                     fallbackEmpresa = _uiState.value.cadastroWorkspace.selectedEmpresa,
                     cachedCadastro = cadastroBase,
                 )
+                if (cadastroComEmpresa.id != originalCadastroId) {
+                    Log.w(
+                        logTag,
+                        "[$sendTraceId] blocked empresaReconciliation originalCadastroId=$originalCadastroId currentId=${cadastroComEmpresa.id}",
+                    )
+                    throw IllegalStateException(
+                        "Detectamos reconciliação para outro cadastro antes do envio. Reabra o cadastro correto ou consolide os registros antes de finalizar.",
+                    )
+                }
                 val detalheAtualizado = workflowRepository.sendCadastroToErp(
                     session = activeSession,
                     profile = profile,
                     config = _uiState.value.cadastroWorkspace.config,
                     cadastroId = targetCadastroId,
                     cadastroPrefetched = cadastroComEmpresa,
-                    arquivoPathHint = arquivoPathFromPayload ?: cadastroComEmpresa.arquivoPath,
+                    enderecoHint = enderecoFromPayload,
+                    arquivoPathHint = arquivoPathForSend ?: cadastroComEmpresa.arquivoPath,
                     dependentesHint = dependentesFromPayload ?: cadastroComEmpresa.dependentes,
                     nomeHint = nomeFromPayload ?: cadastroComEmpresa.nome,
                     dataNascimentoHint = dataNascimentoFromPayload ?: cadastroComEmpresa.dataNascimento,
@@ -1424,7 +1583,10 @@ class AppViewModel(
                             ?.takeIf { it.isNotBlank() },
                     flowContext = if (fluxoContinuacaoPendente) "pending_continuation" else "regular_send",
                 )
-                Log.i(logTag, "[$sendTraceId] sendCadastroToErp finished id=$targetCadastroId")
+                Log.i(
+                    logTag,
+                    "[$sendTraceId] sendCadastroToErp finished originalCadastroId=$originalCadastroId targetCadastroId=$targetCadastroId statusAfterSend=${detalheAtualizado.status ?: "-"} arquivoPath=${arquivoPathForSend.orEmpty()}",
+                )
                 val cadastrosResult = runCatching { repository.fetchCadastros(activeSession) }
                 val statsResult = runCatching { repository.fetchCadastroStats(activeSession) }
                 val notice = buildString {
@@ -1542,12 +1704,22 @@ class AppViewModel(
                     fallbackEmpresa = _uiState.value.cadastroWorkspace.selectedEmpresa,
                     cachedCadastro = cadastroComVendedor,
                 )
+                if (cadastroComEmpresa.id != cadastro.id) {
+                    Log.w(
+                        logTag,
+                        "retrySendSelectedCadastroWithVendedor bloqueado por troca de id originalCadastroId=${cadastro.id} currentId=${cadastroComEmpresa.id}",
+                    )
+                    throw IllegalStateException(
+                        "Detectamos reconciliação para outro cadastro antes do reenvio. Reabra o cadastro correto ou consolide os registros antes de reenviar.",
+                    )
+                }
                 val detalheAtualizado = workflowRepository.sendCadastroToErp(
                     session = activeSession,
                     profile = profile,
                     config = _uiState.value.cadastroWorkspace.config,
                     cadastroId = targetCadastroId,
                     cadastroPrefetched = cadastroComEmpresa,
+                    enderecoHint = cadastroComEmpresa.endereco,
                     arquivoPathHint = cadastroComEmpresa.arquivoPath,
                     dependentesHint = cadastroComEmpresa.dependentes,
                     nomeHint = cadastroComEmpresa.nome,
@@ -2790,6 +2962,10 @@ class AppViewModel(
                         rememberConnected = it.rememberConnected,
                         loading = false,
                         configurationMissing = !AppConfig.isConfigured(),
+                        appUpdateInfo = it.appUpdateInfo,
+                        appUpdateChecking = it.appUpdateChecking,
+                        appUpdateDownloading = it.appUpdateDownloading,
+                        appUpdateError = it.appUpdateError,
                         errorMessage = "Sua sessao expirou. Faca login novamente para continuar.",
                     )
                 }
@@ -2952,6 +3128,7 @@ class AppViewModel(
             val authService = SupabaseAuthService(client = client, json = json)
             val repository = SupabaseRepository(client = client, json = json)
             val workflowRepository = CadastroWorkflowRepository(client = client, json = json)
+            val appUpdateRepository = AppUpdateRepository(client = client)
 
             return object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -2960,12 +3137,13 @@ class AppViewModel(
                         sessionStore = sessionStore,
                         authService = authService,
                         repository = repository,
-                        workflowRepository = workflowRepository,
-                    ) as T
-                }
+                    workflowRepository = workflowRepository,
+                    appUpdateRepository = appUpdateRepository,
+                ) as T
             }
         }
     }
+}
 }
 
 private data class CriticalSessionData(
