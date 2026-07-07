@@ -75,6 +75,7 @@ import br.com.vendamais.mobile.data.remote.UploadedTempFile
 import br.com.vendamais.mobile.domain.cadastro.CadastroApiErrorMapper
 import br.com.vendamais.mobile.domain.cadastro.CadastroOverlayIntent
 import br.com.vendamais.mobile.domain.cadastro.CadastroModalSignal
+import br.com.vendamais.mobile.domain.cadastro.LemmitAgePolicy
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
 import br.com.vendamais.mobile.ui.components.rememberKeyboardAwareFooterState
@@ -480,6 +481,12 @@ fun InclusaoDependenteDialog(
                         return
                     }
 
+                    if (LemmitAgePolicy.shouldShowUnderageNotice(lemmitData)) {
+                        consultedCpfByIndex.remove(index)
+                        cpfValidationErrors.remove(index)
+                        localNotice = LemmitAgePolicy.UNDERAGE_NOTICE
+                        return
+                    }
                     val dataNascimentoRaw = pessoa.dataNascimento
                         ?.trim()
                         ?.takeIf { it.isNotBlank() }

@@ -926,9 +926,18 @@ class AppViewModel(
                         Log.w(logTag, "Rascunho criado, mas falhou o refresh da lista", it)
                         currentCadastros
                     }
+                    val warning = result.warningMessage.orEmpty()
                     val postSuccessNotice = buildList {
-                        result.warningMessage?.takeIf { it.isNotBlank() }?.let { add(it) }
-                        if (cadastrosRefreshResult.isFailure) {
+                        if (warning.isBlank()) {
+                            if (cadastrosRefreshResult.isFailure) {
+                                add("Rascunho criado, mas houve falha ao atualizar a lista de cadastros.")
+                            }
+                        } else if (!warning.contains("Lemit", ignoreCase = true) && !warning.contains("Lemmit", ignoreCase = true)) {
+                            add(warning)
+                            if (cadastrosRefreshResult.isFailure) {
+                                add("Rascunho criado, mas houve falha ao atualizar a lista de cadastros.")
+                            }
+                        } else if (cadastrosRefreshResult.isFailure) {
                             add("Rascunho criado, mas houve falha ao atualizar a lista de cadastros.")
                         }
                     }.joinToString("\n\n").ifBlank { null }
@@ -947,7 +956,6 @@ class AppViewModel(
                             pendingCadastroActionLoading = false,
                         )
                     }
-                    val warning = result.warningMessage.orEmpty()
                     if (warning.contains("Limite mensal da Lemmit atingido", ignoreCase = true)) {
                         resolveCadastroOverlay(
                             CadastroModalSignal(

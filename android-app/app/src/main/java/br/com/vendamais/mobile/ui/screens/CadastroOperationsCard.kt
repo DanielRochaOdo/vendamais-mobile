@@ -7,6 +7,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
@@ -49,6 +52,7 @@ import br.com.vendamais.mobile.ui.theme.Emerald
 import br.com.vendamais.mobile.ui.theme.EmeraldSoft
 import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CadastroOperationsCard(
     profile: MobileProfile?,
@@ -86,6 +90,9 @@ fun CadastroOperationsCard(
 
     var cpfFieldValue by remember {
         mutableStateOf(TextFieldValue(""))
+    }
+    val firstSearchResultBringIntoViewRequester = remember(workspace.empresaSearchResults) {
+        BringIntoViewRequester()
     }
     val cpfDigitsFromState = workspace.cpfValue.filter(Char::isDigit).take(11)
     LaunchedEffect(cpfDigitsFromState) {
@@ -172,16 +179,21 @@ fun CadastroOperationsCard(
 
                     if (workspace.empresaSearchResults.isNotEmpty()) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            workspace.empresaSearchResults.forEach { empresa ->
+                            workspace.empresaSearchResults.forEachIndexed { index, empresa ->
                                 Surface(
                                     onClick = { onSelectEmpresa(empresa) },
                                     shape = RoundedCornerShape(16.dp),
                                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                    modifier = if (index == 0) {
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .bringIntoViewRequester(firstSearchResultBringIntoViewRequester)
+                                    } else {
+                                        Modifier.fillMaxWidth()
+                                    },
                                 ) {
                                     Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(14.dp),
+                                        modifier = Modifier.padding(14.dp),
                                         verticalArrangement = Arrangement.spacedBy(4.dp),
                                     ) {
                                         Text(
@@ -206,6 +218,9 @@ fun CadastroOperationsCard(
                                         )
                                     }
                                 }
+                            }
+                            LaunchedEffect(workspace.empresaSearchResults.firstOrNull()?.id) {
+                                firstSearchResultBringIntoViewRequester.bringIntoView()
                             }
                         }
                     }

@@ -84,6 +84,7 @@ import br.com.vendamais.mobile.data.models.MobileProfile
 import br.com.vendamais.mobile.data.models.TeamMemberOption
 import br.com.vendamais.mobile.domain.cadastro.CadastroApiErrorMapper
 import br.com.vendamais.mobile.domain.cadastro.CadastroModalSignal
+import br.com.vendamais.mobile.domain.cadastro.LemmitAgePolicy
 import br.com.vendamais.mobile.domain.cadastro.isPendingCadastroStatus
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
@@ -751,6 +752,12 @@ fun CadastroEditorDialog(
                         return
                     }
 
+                    if (LemmitAgePolicy.shouldShowUnderageNotice(lemmitData)) {
+                        consultedCpfByIndex.remove(index)
+                        cpfValidationErrors.remove(index)
+                        localMessage = LemmitAgePolicy.UNDERAGE_NOTICE
+                        return
+                    }
                     val dataNascimentoRaw = pessoa.dataNascimento
                         ?.trim()
                         ?.takeIf { it.isNotBlank() }
