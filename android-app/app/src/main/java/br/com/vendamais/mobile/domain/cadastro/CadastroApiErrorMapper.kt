@@ -37,7 +37,10 @@ object CadastroApiErrorMapper {
             .trim()
         if (raw.isBlank()) return fallback
 
+        val normalized = normalize(raw).lowercase()
         return when {
+            normalized.contains("error in workflow") ->
+                LemmitAgePolicy.UNDERAGE_NOTICE
             isPendingCadastroConstraintViolation(raw) ->
                 "Ja existe um cadastro pendente para este CPF. Abra o pendente e continue por ele."
             isErpTechnicalFailure(raw) -> erpTechnicalFailureMessage

@@ -574,7 +574,6 @@ class CadastroWorkflowRepository(
                 logTag,
                 "Cadastro ERP payload check: cadastroId=$targetCadastroId flow=$flowLabel tipo=${cadastro.tipoCadastro} status=${cadastro.status} hasMatricula=${!matriculaFinalNormalizada.isNullOrBlank()} matriculaLength=${matriculaFinalNormalizada?.length ?: 0} hasDataApresentacao=${!payloadDataApresentacao.isNullOrBlank()} hasResponsavelFinanceiroMatricula=${!payloadMatricula.isNullOrBlank()} matriculaPayloadLength=${payloadMatricula?.length ?: 0} matriculaSource=$matriculaSource",
             )
-
             val response = enviarParaErp(session, targetCadastroId, payload)
             val firstDependenteId = CadastroPayloadBuilder.firstDependenteCodigo(response)
             if (cadastro.arquivoPath != null && firstDependenteId != null && funcionarioCadastroId != null) {
