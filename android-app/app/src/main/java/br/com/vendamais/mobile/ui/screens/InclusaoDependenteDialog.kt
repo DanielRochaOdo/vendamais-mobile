@@ -230,6 +230,42 @@ fun InclusaoDependenteDialog(
     val cpfValidationErrors = remember { mutableStateMapOf<Int, String>() }
     val consultedCpfByIndex = remember { mutableStateMapOf<Int, String>() }
 
+    suspend fun persistInclusaoDraftNow() {
+        val cadastroAtual = cadastro ?: return
+        val responsavelAtual = responsavelSelecionado ?: return
+        val vendedorAtual = if (profile?.role == "VENDEDOR") {
+            TeamMemberOption(profile.id, profile.name, profile.email, profile.externalId)
+        } else {
+            state.vendedores.firstOrNull { it.id == selectedVendedorId } ?: return
+        }
+        val adesionistaAtual = if (profile?.role == "ADESIONISTA") {
+            TeamMemberOption(profile.id, profile.name, profile.email, profile.externalId)
+        } else {
+            state.adesionistas.firstOrNull { it.id == selectedAdesionistaId }
+        }
+        val empresaCodigoAtual = when {
+            empresaCodigo > 0 -> empresaCodigo
+            responsavelAtual.codigoEmpresa != null && responsavelAtual.codigoEmpresa > 0 -> responsavelAtual.codigoEmpresa
+            else -> 0
+        }
+        val empresaNomeAtual = empresaNome.takeIf { it.isNotBlank() } ?: responsavelAtual.empresa.orEmpty()
+        val payload = buildCadastroPayload(
+            profileId = profile?.id.orEmpty(),
+            teamId = profile?.teamId,
+            responsavel = responsavelAtual,
+            empresaCodigo = empresaCodigoAtual,
+            empresaNome = empresaNomeAtual,
+            empresaRaw = empresaRaw,
+            planosRaw = empresaPlanosRaw ?: extractPlanosRawFromEmpresa(empresaRaw),
+            status = cadastroAtual.status.ifBlank { "incompleto" },
+            statusAdesaoId = selectedStatusId.takeIf { it.isNotBlank() },
+            vendedor = vendedorAtual,
+            adesionista = adesionistaAtual,
+            dependentes = dependentes.toList(),
+        )
+        viewModel.updateCadastroRecord(cadastroAtual.id, payload)
+    }
+
     suspend fun uploadDependenteArquivo(
         index: Int,
         fileName: String,
@@ -248,6 +284,7 @@ fun InclusaoDependenteDialog(
             prefix = if (isContinuacao) "dependentes-continuar/$cpf" else "dependentes-temp/$cpf",
         )
         updateDependente(dependentes, index) { it.copy(arquivo = uploaded, uploading = false, saved = false) }
+        runCatching { persistInclusaoDraftNow() }
         localNotice = "Arquivo carregado com sucesso."
     }
 
@@ -568,22 +605,9 @@ fun InclusaoDependenteDialog(
             return
         }
 
-        val dependentesNaoSalvos = if (isContinuacao) {
-            emptyList()
-        } else {
-            dependentes
-                .mapIndexedNotNull { index, dep ->
-                    if (dep.saved) null else index + 1
-                }
-        }
-        if (dependentesNaoSalvos.isNotEmpty()) {
-            localError = "Existem dependentes nao salvos (${dependentesNaoSalvos.joinToString(", ")}). Salve ou remova antes de continuar."
-            return
-        }
-
-        val base = if (isContinuacao) dependentes.toList() else dependentes.filter { it.saved }
+        val base = dependentes.toList()
         if (base.isEmpty()) {
-            localError = if (isContinuacao) "Adicione dependentes." else "Salve pelo menos um dependente."
+            localError = "Adicione dependentes."
             return
         }
         base.forEachIndexed { index, dep ->
@@ -640,20 +664,7 @@ fun InclusaoDependenteDialog(
             return
         }
 
-        val dependentesNaoSalvos = if (isContinuacao) {
-            emptyList()
-        } else {
-            dependentes
-                .mapIndexedNotNull { index, dep ->
-                    if (dep.saved) null else index + 1
-                }
-        }
-        if (dependentesNaoSalvos.isNotEmpty()) {
-            localError = "Existem dependentes nao salvos (${dependentesNaoSalvos.joinToString(", ")}). Salve ou remova antes de incluir."
-            return
-        }
-
-        val base = if (isContinuacao) dependentes.toList() else dependentes.filter { it.saved }
+        val base = dependentes.toList()
         if (base.isEmpty()) {
             localError = "Nenhum dependente valido para envio."
             return
@@ -765,6 +776,48 @@ fun InclusaoDependenteDialog(
             planosMap = state.planosMap,
             planosOcultos = state.cadastroWorkspace.config?.planosOcultos.orEmpty(),
         )
+    }
+
+    val autosaveSignature = buildString {
+        append(cadastro?.id.orEmpty())
+        append('|')
+        append(selectedVendedorId)
+        append('|')
+        append(selectedAdesionistaId)
+        append('|')
+        append(selectedStatusId)
+        append('|')
+        append(empresaCodigo)
+        append('|')
+        append(empresaNome)
+        dependentes.forEach { dep ->
+            append("|d:")
+            append(dep.nome)
+            append(':')
+            append(dep.cpf.text)
+            append(':')
+            append(dep.dataNascimento.text)
+            append(':')
+            append(dep.sexo)
+            append(':')
+            append(dep.parentesco)
+            append(':')
+            append(dep.plano)
+            append(':')
+            append(dep.planoValor)
+            append(':')
+            append(dep.nomeMae)
+            append(':')
+            append(dep.arquivo?.path.orEmpty())
+        }
+    }
+
+    LaunchedEffect(cadastro?.id, autosaveSignature) {
+        val cadastroAtual = cadastro ?: return@LaunchedEffect
+        if (salvando || enviando || targetUploadIndex != null) return@LaunchedEffect
+        delay(1200)
+        if (salvando || enviando || targetUploadIndex != null) return@LaunchedEffect
+        scope.launch { runCatching { persistInclusaoDraftNow() } }
     }
 
     LaunchedEffect(successDialogMessage) {
@@ -1153,13 +1206,14 @@ fun InclusaoDependenteDialog(
                                             val planoValor = selectedOption
                                                 ?.resolveValorPorRegra()
                                                 ?.let(::formatPlanoValorDot)
-                                                ?: current.planoValor
+                                                ?: "0,00"
                                             current.copy(
                                                 plano = v,
                                                 planoValor = planoValor,
                                                 saved = false,
                                             )
                                         }
+                                        scope.launch { runCatching { persistInclusaoDraftNow() } }
                                     },
                                 )
                                 OutlinedTextField(

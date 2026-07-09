@@ -50,6 +50,8 @@ import br.com.vendamais.mobile.domain.cadastro.isPendingCadastroStatus
 import br.com.vendamais.mobile.data.remote.CadastroPayloadBuilder
 import br.com.vendamais.mobile.data.remote.CadastroExistenteException
 import br.com.vendamais.mobile.data.remote.CadastroWorkflowRepository
+import br.com.vendamais.mobile.data.remote.DraftUxStateCache
+import br.com.vendamais.mobile.data.remote.DraftAttachmentStorage
 import br.com.vendamais.mobile.data.remote.InclusaoBuscaTipo
 import br.com.vendamais.mobile.data.remote.ResponsavelFinanceiroResumo
 import br.com.vendamais.mobile.data.remote.SupabaseRepository
@@ -77,6 +79,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -207,6 +210,7 @@ class AppViewModel(
     private val authService: SupabaseAuthService,
     private val repository: SupabaseRepository,
     private val workflowRepository: CadastroWorkflowRepository,
+    private val draftUxStateCache: DraftUxStateCache,
     private val appUpdateRepository: AppUpdateRepository,
 ) : ViewModel() {
     private val logTag = "VendaMaisApp"
@@ -216,6 +220,8 @@ class AppViewModel(
     private var currentSession: SavedSession? = null
     private var inMemorySessionActive: Boolean = false
     private var cadastrosSyncJob: Job? = null
+    private var cadastroDraftSaveJob: Job? = null
+    private var cadastroDraftSaveSeq: Long = 0L
     private val cadastrosSyncIntervalMs = 25_000L
     @Volatile
     private var createDraftInFlight: Boolean = false
@@ -1175,18 +1181,36 @@ class AppViewModel(
         return "***${digits.takeLast(4)}"
     }
 
+    private fun cpfHashForLog(cpf: String?): String {
+        val digits = cpf?.filter(Char::isDigit).orEmpty()
+        if (digits.length != 11) return "-"
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(digits.toByteArray(Charsets.UTF_8))
+        return digest.take(4).joinToString("") { "%02x".format(it) }
+    }
+
     fun openCadastro(id: String) {
         val session = currentSession ?: return
+        val traceId = "open-${id.take(8)}-${System.currentTimeMillis()}"
         viewModelScope.launch {
             _uiState.update { it.copy(detailLoading = true, errorMessage = null) }
             runCatching {
                 val activeSession = ensureFreshSession(session)
+                Log.i("CadastroDraftTrace", "OPEN_START trace=$traceId id=$id")
+                Log.i("CadastroDraftTrace", "OPEN_FETCH_START trace=$traceId id=$id")
                 val detalhe = workflowRepository.fetchCadastroDetalhe(activeSession, id)
-                workflowRepository.backfillCadastroMissingDataByCpf(activeSession, detalhe)
+                val detalheBackfilled = workflowRepository.backfillCadastroMissingDataByCpf(activeSession, detalhe)
+                applyDraftUxStateCache(detalheBackfilled)
             }.onSuccess { detalhe ->
+                val dependentesCount = runCatching { detalhe.dependentes?.jsonArray?.size }.getOrNull() ?: 0
+                Log.i(
+                    "CadastroDraftTrace",
+                    "OPEN_FETCH_OK trace=$traceId id=${detalhe.id} arquivoPath=${!detalhe.arquivoPath.isNullOrBlank()} arquivoNome=${!detalhe.arquivoNome.isNullOrBlank()} mime=${!detalhe.arquivoMimeType.isNullOrBlank()} tamanho=${detalhe.arquivoTamanho != null} dependentesCount=$dependentesCount",
+                )
                 _uiState.update {
                     it.copy(detailLoading = false, selectedCadastro = detalhe)
                 }
+                Log.i("CadastroDraftTrace", "OPEN_SELECTED_SET trace=$traceId id=${detalhe.id}")
             }.onFailure { throwable ->
                 Log.e(logTag, "Falha ao carregar detalhe do cadastro", throwable)
                 _uiState.update {
@@ -1337,6 +1361,34 @@ class AppViewModel(
                     ?: cadastro.arquivoPath
                         ?.trim()
                         ?.takeIf { it.isNotBlank() }
+                val arquivoNomeForSend = payloadHint
+                    ?.get("arquivo_nome")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                    ?: arquivoPathForSend?.substringAfterLast('/')
+                val arquivoMimeTypeForSend = payloadHint
+                    ?.get("arquivo_mime_type")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                    ?: "application/octet-stream"
+                val arquivoPathFinalForSend = when {
+                    arquivoPathForSend.isNullOrBlank() -> null
+                    File(arquivoPathForSend).exists() -> {
+                        val bytes = File(arquivoPathForSend).readBytes()
+                        val uploaded = uploadTempFile(
+                            fileName = arquivoNomeForSend ?: File(arquivoPathForSend).name,
+                            mimeType = arquivoMimeTypeForSend,
+                            bytes = bytes,
+                            prefix = "cadastros/${cadastro.id}",
+                        )
+                        uploaded.path
+                    }
+                    else -> arquivoPathForSend
+                }
                 val numeroMatriculaFromSnapshot = cadastro.numeroMatricula
                     ?.trim()
                     ?.takeIf { it.isNotBlank() }
@@ -1363,7 +1415,7 @@ class AppViewModel(
                 if (foreignConflict?.exists == true && foreignConflictId != originalCadastroId) {
                     Log.w(
                         logTag,
-                        "[$sendTraceId] blocked foreignCpfConflict originalCadastroId=$originalCadastroId conflictId=${foreignConflictId.ifBlank { "-" }} cpf=${maskCpfForLog(cpfDigitsForConflictCheck)} status=${foreignConflict.status ?: "-"} canContinue=${foreignConflict.canContinue} arquivoPath=${arquivoPathForSend.orEmpty()}",
+                        "[$sendTraceId] blocked foreignCpfConflict originalCadastroId=$originalCadastroId conflictId=${foreignConflictId.ifBlank { "-" }} cpf=${maskCpfForLog(cpfDigitsForConflictCheck)} status=${foreignConflict.status ?: "-"} canContinue=${foreignConflict.canContinue} arquivoPath=${arquivoPathFinalForSend.orEmpty()}",
                     )
                     throw IllegalStateException(
                         "Detectamos outro cadastro ativo para este CPF. Reabra o cadastro correto ou consolide os registros antes de finalizar.",
@@ -1371,7 +1423,7 @@ class AppViewModel(
                 }
                 Log.i(
                     logTag,
-                    "[$sendTraceId] preflight operation=update originalCadastroId=$originalCadastroId status=${cadastro.status ?: "-"} cpf=${maskCpfForLog(cpfForUpdate)} hasMatricula=${!numeroMatriculaForUpdate.isNullOrBlank()} matriculaLength=${numeroMatriculaForUpdate?.length ?: 0} matriculaSource=$origemMatricula arquivoPath=${arquivoPathForSend.orEmpty().isNotBlank()} titularPlanoPayload=${titularPlanoFromPayload ?: 0}",
+                    "[$sendTraceId] preflight operation=update originalCadastroId=$originalCadastroId status=${cadastro.status ?: "-"} cpf=${maskCpfForLog(cpfForUpdate)} hasMatricula=${!numeroMatriculaForUpdate.isNullOrBlank()} matriculaLength=${numeroMatriculaForUpdate?.length ?: 0} matriculaSource=$origemMatricula arquivoPath=${arquivoPathFinalForSend.orEmpty().isNotBlank()} titularPlanoPayload=${titularPlanoFromPayload ?: 0}",
                 )
 
                 val cadastroBase = runCatching {
@@ -1427,7 +1479,7 @@ class AppViewModel(
                                 ?: cadastro.statusAdesaoId
                                     ?.takeIf { it.isNotBlank() }
                                     ?.let { put("status_adesao_id", it) }
-                            arquivoPathFromPayload?.let { put("arquivo_path", it) } ?: cadastro.arquivoPath
+                            (arquivoPathFinalForSend ?: arquivoPathFromPayload)?.let { put("arquivo_path", it) } ?: cadastro.arquivoPath
                                 ?.takeIf { it.isNotBlank() }
                                 ?.let { put("arquivo_path", it) }
                         },
@@ -1578,7 +1630,7 @@ class AppViewModel(
                     cadastroId = targetCadastroId,
                     cadastroPrefetched = cadastroComEmpresa,
                     enderecoHint = enderecoFromPayload,
-                    arquivoPathHint = arquivoPathForSend ?: cadastroComEmpresa.arquivoPath,
+                    arquivoPathHint = arquivoPathFinalForSend ?: arquivoPathForSend ?: cadastroComEmpresa.arquivoPath,
                     dependentesHint = dependentesFromPayload ?: cadastroComEmpresa.dependentes,
                     nomeHint = nomeFromPayload ?: cadastroComEmpresa.nome,
                     dataNascimentoHint = dataNascimentoFromPayload ?: cadastroComEmpresa.dataNascimento,
@@ -1593,8 +1645,11 @@ class AppViewModel(
                 )
                 Log.i(
                     logTag,
-                    "[$sendTraceId] sendCadastroToErp finished originalCadastroId=$originalCadastroId targetCadastroId=$targetCadastroId statusAfterSend=${detalheAtualizado.status ?: "-"} arquivoPath=${arquivoPathForSend.orEmpty()}",
+                    "[$sendTraceId] sendCadastroToErp finished originalCadastroId=$originalCadastroId targetCadastroId=$targetCadastroId statusAfterSend=${detalheAtualizado.status ?: "-"} arquivoPath=${arquivoPathFinalForSend.orEmpty()}",
                 )
+                if (!arquivoPathForSend.isNullOrBlank() && File(arquivoPathForSend).exists()) {
+                    DraftAttachmentStorage.deleteDraftDirAfterSuccess(File(arquivoPathForSend).parentFile?.parentFile)
+                }
                 val cadastrosResult = runCatching { repository.fetchCadastros(activeSession) }
                 val statsResult = runCatching { repository.fetchCadastroStats(activeSession) }
                 val notice = buildString {
@@ -1615,6 +1670,7 @@ class AppViewModel(
             }.onSuccess { (payload, noticeMessage) ->
                 Log.i(logTag, "[$sendTraceId] flowSuccess")
                 val (_, cadastrosAtualizados, statsAtualizadas) = payload
+                draftUxStateCache.clear(originalCadastroId)
                 _uiState.update {
                     it.copy(
                         sendingCadastro = false,
@@ -2202,17 +2258,24 @@ class AppViewModel(
         return config
     }
     suspend fun updateCadastroRecord(id: String, payload: kotlinx.serialization.json.JsonObject): CadastroDetalhe {
+        val traceId = "close-${id.take(8)}-${System.currentTimeMillis()}"
         return runCatching {
             val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
             val profile = _uiState.value.profile
                 ?: throw IllegalStateException("Sua sessão expirou. Faça login novamente para continuar.")
             val activeSession = ensureFreshSession(session)
+            val dependentesCount = runCatching { payload["dependentes"]?.jsonArray?.size }.getOrDefault(0)
+            Log.i(
+                "CadastroDraftTrace",
+                "CLOSE_SAVE_START trace=$traceId id=$id dependentesCount=$dependentesCount arquivoPath=${!payload["arquivo_path"]?.jsonPrimitive?.contentOrNull.isNullOrBlank()} arquivoNome=${!payload["arquivo_nome"]?.jsonPrimitive?.contentOrNull.isNullOrBlank()} mime=${!payload["arquivo_mime_type"]?.jsonPrimitive?.contentOrNull.isNullOrBlank()} tamanho=${payload["arquivo_tamanho"] != null}",
+            )
             val payloadPersistencia = buildJsonObject {
                 payload.forEach { (key, value) -> put(key, value) }
                 put("created_by", profile.id)
                 profile.teamId?.takeIf { it.isNotBlank() }?.let { put("team_id", it) }
             }
             val updated = workflowRepository.updateCadastro(activeSession, id, payloadPersistencia)
+            draftUxStateCache.save(id, payloadPersistencia)
             val cadastrosAtualizados = repository.fetchCadastros(activeSession)
             _uiState.update {
                 it.copy(
@@ -2220,6 +2283,10 @@ class AppViewModel(
                     cadastros = cadastrosAtualizados,
                 )
             }
+            Log.i(
+                "CadastroDraftTrace",
+                "CLOSE_SAVE_OK trace=$traceId id=$id selectedUpdated=${_uiState.value.selectedCadastro?.id == id} listReloaded=${cadastrosAtualizados.isNotEmpty()}",
+            )
             updated
         }.getOrElse { throwable ->
             if (isDuplicatePendingConstraintError(throwable.message)) {
@@ -2317,9 +2384,47 @@ class AppViewModel(
         }
     }
 
+    private fun applyDraftUxStateCache(cadastro: CadastroDetalhe): CadastroDetalhe {
+        val draftUxState = draftUxStateCache.load(cadastro.id) ?: return cadastro
+        val dependentesFromCache = draftUxState["dependentes"]
+        val arquivoPathFromCache = draftUxState["arquivo_path"]?.jsonPrimitive?.contentOrNull
+        val arquivoNomeFromCache = draftUxState["arquivo_nome"]?.jsonPrimitive?.contentOrNull
+        val arquivoMimeTypeFromCache = draftUxState["arquivo_mime_type"]?.jsonPrimitive?.contentOrNull
+        val arquivoTamanhoFromCache = draftUxState["arquivo_tamanho"]?.jsonPrimitive?.longOrNull
+        val planoCodigoFromCache = draftUxState["plano_codigo"]?.jsonPrimitive?.intOrNull
+
+        val merged = cadastro.copy(
+            dependentes = dependentesFromCache ?: cadastro.dependentes,
+            arquivoPath = arquivoPathFromCache?.takeIf { it.isNotBlank() } ?: cadastro.arquivoPath,
+            arquivoNome = arquivoNomeFromCache?.takeIf { it.isNotBlank() } ?: cadastro.arquivoNome,
+            arquivoMimeType = arquivoMimeTypeFromCache?.takeIf { it.isNotBlank() } ?: cadastro.arquivoMimeType,
+            arquivoTamanho = arquivoTamanhoFromCache ?: cadastro.arquivoTamanho,
+            planoCodigo = planoCodigoFromCache ?: cadastro.planoCodigo,
+        )
+        if (merged != cadastro) {
+            Log.i(
+                logTag,
+                "UX_DRAFT_RESTORE id=${cadastro.id} hasDependentes=${dependentesFromCache != null} hasArquivoPath=${!arquivoPathFromCache.isNullOrBlank()} hasArquivoNome=${!arquivoNomeFromCache.isNullOrBlank()} hasArquivoMime=${!arquivoMimeTypeFromCache.isNullOrBlank()} hasArquivoTamanho=${arquivoTamanhoFromCache != null} hasPlanoCodigo=${planoCodigoFromCache != null}",
+            )
+        }
+        return merged
+    }
+
     fun persistCadastroDraftSilently(id: String, payload: JsonObject) {
         val session = currentSession ?: return
+        val traceId = "auto-${id.take(8)}-${System.currentTimeMillis()}"
+        val saveSeq = ++cadastroDraftSaveSeq
+        cadastroDraftSaveJob?.cancel()
         viewModelScope.launch {
+            cadastroDraftSaveJob = this.coroutineContext[Job]
+            val startMs = System.currentTimeMillis()
+            val dependentesCount = runCatching { payload["dependentes"]?.jsonArray?.size }.getOrDefault(0)
+            var payloadPersistencia: JsonObject? = null
+            var cpfForPersist: String? = null
+            Log.i(
+                "CadastroDraftTrace",
+                "AUTOSAVE_START seq=$saveSeq trace=$traceId id=$id dependentesCount=$dependentesCount arquivoPath=${!payload["arquivo_path"]?.jsonPrimitive?.contentOrNull.isNullOrBlank()} arquivoNome=${!payload["arquivo_nome"]?.jsonPrimitive?.contentOrNull.isNullOrBlank()} mime=${!payload["arquivo_mime_type"]?.jsonPrimitive?.contentOrNull.isNullOrBlank()} tamanho=${payload["arquivo_tamanho"] != null}",
+            )
             runCatching {
                 val activeSession = ensureFreshSession(session)
                 val profile = _uiState.value.profile
@@ -2346,16 +2451,35 @@ class AppViewModel(
                     ?.cpf
                     ?.let(CadastroPayloadBuilder::normalizeDigits)
                     ?.takeIf { it.length == 11 }
-                val cpfForPersist = cpfFromPayload ?: cpfFromDependentePayload ?: cpfFromSelectedCadastro
-                val payloadPersistencia = buildJsonObject {
-                    payload.forEach { (key, value) -> put(key, value) }
-                    put("tipo_cadastro", "cadastro")
-                    cpfForPersist?.let { put("cpf", it) }
+                cpfForPersist = cpfFromPayload ?: cpfFromDependentePayload ?: cpfFromSelectedCadastro
+                Log.i(
+                    "CadastroDraftConflict",
+                    "DRAFT_CONFLICT_PREP trace=$traceId seq=$saveSeq id=$id hasPayloadCpf=${cpfFromPayload != null} hasDepCpf=${cpfFromDependentePayload != null} hasSelectedCpf=${cpfFromSelectedCadastro != null} cpfSource=${when {
+                        cpfFromPayload != null -> "payload.cpf"
+                        cpfFromDependentePayload != null -> "dependentes[0].cpf"
+                        cpfFromSelectedCadastro != null -> "selectedCadastro.cpf"
+                        else -> "none"
+                    }} willSendTopCpf=${cpfForPersist != null} cpfHash=${cpfHashForLog(cpfForPersist)} cpfLength=${cpfForPersist?.length ?: 0} dependentesCount=${runCatching { payload["dependentes"]?.jsonArray?.size }.getOrDefault(0)} hasStatusAdesao=${!payload["status_adesao_id"]?.jsonPrimitive?.contentOrNull.isNullOrBlank()} arquivoPath=${!payload["arquivo_path"]?.jsonPrimitive?.contentOrNull.isNullOrBlank()} arquivoNome=${!payload["arquivo_nome"]?.jsonPrimitive?.contentOrNull.isNullOrBlank()}",
+                )
+                payloadPersistencia = buildJsonObject {
+                    payload.forEach { (key, value) ->
+                        if (key != "cpf" && key != "tipo_cadastro") {
+                            put(key, value)
+                        }
+                    }
                     profile?.id?.takeIf { it.isNotBlank() }?.let { put("created_by", it) }
                     profile?.teamId?.takeIf { it.isNotBlank() }?.let { put("team_id", it) }
                 }
-                workflowRepository.updateCadastro(activeSession, id, payloadPersistencia)
+                Log.i(
+                    "CadastroDraftConflict",
+                    "DRAFT_CONFLICT_SEND trace=$traceId seq=$saveSeq id=$id keys=${payloadPersistencia!!.keys.sorted()} willSendCpf=${payloadPersistencia!!.containsKey("cpf")} willSendTipoCadastro=${payloadPersistencia!!.containsKey("tipo_cadastro")} cpfHash=${cpfHashForLog(payloadPersistencia!!["cpf"]?.jsonPrimitive?.contentOrNull)} cpfLength=${payloadPersistencia!!["cpf"]?.jsonPrimitive?.contentOrNull?.filter(Char::isDigit)?.length ?: 0} statusAdesao=${!payloadPersistencia!!["status_adesao_id"]?.jsonPrimitive?.contentOrNull.isNullOrBlank()} dependentesCount=${runCatching { payloadPersistencia!!["dependentes"]?.jsonArray?.size }.getOrDefault(0)} cpfOmittedForAutosave=true tipoCadastroOmittedForAutosave=true statusOmittedForAutosave=true",
+                )
+                val updated = workflowRepository.updateCadastro(activeSession, id, payloadPersistencia!!, resolveDraftConflict = false)
+                draftUxStateCache.save(id, payloadPersistencia!!)
+                updated
             }.onSuccess { updated ->
+                val durationMs = System.currentTimeMillis() - startMs
+                Log.i("CadastroDraftTrace", "AUTOSAVE_OK seq=$saveSeq trace=$traceId id=$id durationMs=$durationMs")
                 _uiState.update { current ->
                     if (current.selectedCadastro?.id == id) {
                         current.copy(selectedCadastro = updated)
@@ -2368,6 +2492,16 @@ class AppViewModel(
                     Log.w(logTag, "Conflito de pendencia ignorado no autosave id=$id", throwable)
                 } else {
                     Log.w(logTag, "Falha ao persistir rascunho em background", throwable)
+                }
+                val durationMs = System.currentTimeMillis() - startMs
+                Log.w("CadastroDraftTrace", "AUTOSAVE_FAIL seq=$saveSeq trace=$traceId id=$id durationMs=$durationMs error=${throwable::class.java.simpleName}")
+                Log.w(
+                    "CadastroDraftConflict",
+                    "DRAFT_CONFLICT_FAIL trace=$traceId seq=$saveSeq id=$id hasCpf=${payloadPersistencia?.containsKey("cpf") ?: false} cpfHash=${cpfHashForLog(payloadPersistencia?.get("cpf")?.jsonPrimitive?.contentOrNull)} constraint=${if (isDuplicatePendingConstraintError(throwable.message)) "cadastros_cadastro_incompleto_cpf_unique_idx" else "-"} error=${throwable.message?.lineSequence()?.firstOrNull().orEmpty().take(180)}",
+                )
+            }.also {
+                if (cadastroDraftSaveJob?.isActive == false) {
+                    cadastroDraftSaveJob = null
                 }
             }
         }
@@ -3136,6 +3270,7 @@ class AppViewModel(
             val authService = SupabaseAuthService(client = client, json = json)
             val repository = SupabaseRepository(client = client, json = json)
             val workflowRepository = CadastroWorkflowRepository(client = client, json = json)
+            val draftUxStateCache = DraftUxStateCache(appContext)
             val appUpdateRepository = AppUpdateRepository(client = client)
 
             return object : ViewModelProvider.Factory {
@@ -3145,13 +3280,14 @@ class AppViewModel(
                         sessionStore = sessionStore,
                         authService = authService,
                         repository = repository,
-                    workflowRepository = workflowRepository,
-                    appUpdateRepository = appUpdateRepository,
-                ) as T
+                        workflowRepository = workflowRepository,
+                        draftUxStateCache = draftUxStateCache,
+                        appUpdateRepository = appUpdateRepository,
+                    ) as T
+                }
             }
         }
     }
-}
 }
 
 private data class CriticalSessionData(

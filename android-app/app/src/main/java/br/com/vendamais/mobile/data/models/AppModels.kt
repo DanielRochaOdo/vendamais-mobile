@@ -189,6 +189,12 @@ data class CadastroDetalhe(
     val erpResponse: JsonElement? = null,
     @SerialName("arquivo_path")
     val arquivoPath: String? = null,
+    @SerialName("arquivo_nome")
+    val arquivoNome: String? = null,
+    @SerialName("arquivo_mime_type")
+    val arquivoMimeType: String? = null,
+    @SerialName("arquivo_tamanho")
+    val arquivoTamanho: Long? = null,
     @SerialName("plano_codigo")
     val planoCodigo: Int? = null,
     @SerialName("created_at")

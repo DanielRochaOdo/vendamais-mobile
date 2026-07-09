@@ -17,8 +17,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.CleaningServices
 import androidx.compose.material.icons.rounded.DateRange
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,6 +35,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -276,6 +279,11 @@ fun CadastrosScreen(
     val profileRole = state.profile?.role.orEmpty()
     val useSupervisorGroupedView = state.cadastroTab == CadastroAreaTab.INCOMPLETOS && profileRole == "SUPERVISOR"
     val useGerenteGroupedView = state.cadastroTab == CadastroAreaTab.INCOMPLETOS && profileRole == "GERENTE"
+    LaunchedEffect(state.cadastroTab) {
+        if (state.cadastroTab == CadastroAreaTab.LINK) {
+            onTabChange(CadastroAreaTab.NOVO)
+        }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -942,11 +950,17 @@ private fun CadastrosFilterPanel(
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    TextButton(onClick = onToggleExpanded) {
-                        Text(if (expanded) "Ocultar" else "Mostrar")
+                    IconButton(onClick = onToggleExpanded) {
+                        Icon(
+                            imageVector = if (expanded) Icons.Rounded.Search else Icons.Rounded.Search,
+                            contentDescription = if (expanded) "Ocultar filtros" else "Mostrar filtros",
+                        )
                     }
-                    TextButton(onClick = onClearFilters) {
-                        Text("Limpar filtros")
+                    IconButton(onClick = onClearFilters) {
+                        Icon(
+                            imageVector = Icons.Rounded.CleaningServices,
+                            contentDescription = "Limpar filtros",
+                        )
                     }
                 }
             }
@@ -1081,12 +1095,6 @@ private fun CadastroTabBar(
                 label = "Nova Adesao",
                 selected = selectedTab == CadastroAreaTab.NOVO,
                 onClick = { onTabSelected(CadastroAreaTab.NOVO) },
-                modifier = Modifier.weight(1f),
-            )
-            CadastroTabButton(
-                label = "Link",
-                selected = selectedTab == CadastroAreaTab.LINK,
-                onClick = { onTabSelected(CadastroAreaTab.LINK) },
                 modifier = Modifier.weight(1f),
             )
         }
