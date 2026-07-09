@@ -817,7 +817,7 @@ class CadastroWorkflowRepository(
                 parameter("id", "eq.$id")
                 parameter(
                     "select",
-                    "id,status,tipo_cadastro,nome,cpf,data_nascimento,sexo_codigo,nome_mae,contatos,endereco,dependentes,empresa_id,empresa_codigo,empresa_nome,empresa_cnpj,empresa_exige_matricula,empresa_raw,planos_raw,numero_matricula,status_adesao_id,vendedor_nome,vendedor_codigo,adesionista_nome,adesionista_codigo,responsavel_financeiro_codigo,responsavel_financeiro_nome,responsavel_financeiro_cpf,contatos_responsavel_financeiro,motivo_bloqueio,erp_dados_associado,erp_response,arquivo_path,plano_codigo,created_at,updated_at"
+                    "id,status,tipo_cadastro,nome,cpf,data_nascimento,sexo_codigo,nome_mae,contatos,endereco,dependentes,empresa_id,empresa_codigo,empresa_nome,empresa_cnpj,empresa_exige_matricula,empresa_raw,planos_raw,numero_matricula,status_adesao_id,vendedor_nome,vendedor_codigo,adesionista_nome,adesionista_codigo,responsavel_financeiro_codigo,responsavel_financeiro_nome,responsavel_financeiro_cpf,contatos_responsavel_financeiro,motivo_bloqueio,erp_dados_associado,erp_response,arquivo_path,arquivo_nome,arquivo_mime_type,arquivo_tamanho,plano_codigo,created_at,updated_at"
                 )
                 parameter("limit", 1)
             },
@@ -873,7 +873,12 @@ class CadastroWorkflowRepository(
         }.getOrDefault(cadastro)
     }
 
-    suspend fun updateCadastro(session: SavedSession, id: String, payload: JsonObject): CadastroDetalhe {
+    suspend fun updateCadastro(
+        session: SavedSession,
+        id: String,
+        payload: JsonObject,
+        resolveDraftConflict: Boolean = true,
+    ): CadastroDetalhe {
         val payloadComCreatedBy = buildJsonObject {
             payload.forEach { (key, value) -> put(key, value) }
             val createdByPayload = payload["created_by"]
@@ -936,7 +941,7 @@ class CadastroWorkflowRepository(
                 else -> null
             }
 
-            if (existingAfterConflict != null) {
+            if (existingAfterConflict != null && resolveDraftConflict) {
                 if (existingAfterConflict.id == id) {
                     Log.w(
                         logTag,
@@ -951,6 +956,13 @@ class CadastroWorkflowRepository(
                 )
                 patchCadastroById(session, existingAfterConflict.id, payloadComCreatedBy)
                 return fetchCadastroDetalhe(session, existingAfterConflict.id)
+            }
+            if (!resolveDraftConflict && isDuplicateDraftConstraintError(throwable)) {
+                Log.w(
+                    logTag,
+                    "updateCadastro autosave best-effort ignorando conflito id=$id tipoCadastro=$tipoCadastro cpfLookup=$cpfLookup msg=${throwable.message}",
+                )
+                return fetchCadastroDetalhe(session, id)
             }
             Log.w(
                 logTag,
@@ -1618,6 +1630,7 @@ class CadastroWorkflowRepository(
             val updatePayload = buildJsonObject {
                 payload.forEach { (key, value) -> put(key, value) }
                 put("tipo_cadastro", "cadastro")
+                put("status", "incompleto")
                 put("created_by", profileId)
                 profile.teamId?.let { put("team_id", it) }
             }
@@ -1635,9 +1648,9 @@ class CadastroWorkflowRepository(
             val insertPayload = buildJsonObject {
                 payload.forEach { (key, value) -> put(key, value) }
                 put("tipo_cadastro", "cadastro")
+                put("status", "incompleto")
                 put("created_by", profileId)
                 profile.teamId?.let { put("team_id", it) }
-                put("status", "incompleto")
             }
 
             val insertedRows = try {

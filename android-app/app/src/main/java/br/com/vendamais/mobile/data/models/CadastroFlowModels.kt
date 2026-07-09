@@ -320,8 +320,13 @@ data class DependenteCadastro(
     @SerialName("sexoDescricao")
     val sexoDescricao: String = "",
     val plano: Int = 0,
+    @SerialName("planoNome")
+    val planoNome: String = "",
     @SerialName("planoValor")
     val planoValor: String = "0,00",
+    @SerialName("tipoPlano")
+    val tipoPlano: String = "",
+    val vigencia: String = "",
     @SerialName("nomeMae")
     val nomeMae: String = "",
     @SerialName("carenciaAtendimento")

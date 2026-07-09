@@ -82,6 +82,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import br.com.vendamais.mobile.data.models.CadastroDetalhe
 import br.com.vendamais.mobile.data.models.MobileProfile
 import br.com.vendamais.mobile.data.models.TeamMemberOption
+import br.com.vendamais.mobile.data.remote.DraftAttachmentStorage
 import br.com.vendamais.mobile.domain.cadastro.CadastroApiErrorMapper
 import br.com.vendamais.mobile.domain.cadastro.CadastroModalSignal
 import br.com.vendamais.mobile.domain.cadastro.LemmitAgePolicy
@@ -119,6 +120,7 @@ import java.text.NumberFormat
 import java.io.File
 import java.time.LocalDate
 import java.time.Period
+import java.text.Normalizer
 import java.util.Locale
 
 private const val MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -144,6 +146,8 @@ private data class CadastroDependenteFormState(
     val sexo: Int = -1,
     val plano: Int = 0,
     val planoValor: String = "0,00",
+    val planoNome: String = "",
+    val tipoPlano: String = "",
     val nomeMae: String = "",
     val carenciaAtendimento: Int = 0,
 )
@@ -153,6 +157,7 @@ private data class CadastroPlanoOption(
     val nome: String,
     val valorTitular: Double? = null,
     val valorDependente: Double? = null,
+    val regraValor: String = "",
     val label: String = nome,
 )
 
@@ -198,7 +203,9 @@ fun CadastroEditorDialog(
     var numeroMatricula by rememberSaveable(cadastro.id) { mutableStateOf(cadastro.numeroMatricula.orEmpty()) }
     var statusAdesaoId by rememberSaveable(cadastro.id) { mutableStateOf(cadastro.statusAdesaoId.orEmpty()) }
     var arquivoPath by rememberSaveable(cadastro.id) { mutableStateOf(cadastro.arquivoPath.orEmpty()) }
-    var arquivoNome by rememberSaveable(cadastro.id) { mutableStateOf(cadastro.arquivoPath?.substringAfterLast('/') ?: "") }
+    var arquivoNome by rememberSaveable(cadastro.id) { mutableStateOf(cadastro.arquivoNome ?: cadastro.arquivoPath?.substringAfterLast('/') ?: "") }
+    var arquivoMimeType by rememberSaveable(cadastro.id) { mutableStateOf(cadastro.arquivoMimeType ?: "application/octet-stream") }
+    var arquivoTamanho by rememberSaveable(cadastro.id) { mutableStateOf(cadastro.arquivoTamanho ?: 0L) }
     var currentStep by rememberSaveable(cadastro.id) { mutableStateOf(1) }
     var selectedVendedorId by rememberSaveable(cadastro.id) {
         mutableStateOf(if (profile?.role == "VENDEDOR") profile.id else "")
@@ -244,26 +251,6 @@ fun CadastroEditorDialog(
         mutableStateOf(TextFieldValue(digits, TextRange(digits.length)))
     }
 
-    val contatos = remember(cadastro.id) {
-        mutableStateListOf<ContatoFormState>().apply {
-            addAll(parseContatos(cadastro))
-        }
-    }
-
-    val dependentes = remember(cadastro.id) {
-        mutableStateListOf<CadastroDependenteFormState>().apply {
-            val parsed = parseDependentes(cadastro)
-            if (parsed.isEmpty()) {
-                add(buildTitularDependente(cadastro))
-            } else {
-                addAll(parsed)
-            }
-        }
-    }
-    val cpfValidationErrors = remember(cadastro.id) { mutableStateMapOf<Int, String>() }
-    val consultedCpfByIndex = remember(cadastro.id) { mutableStateMapOf<Int, String>() }
-    var consultingLemmitIndex by rememberSaveable(cadastro.id) { mutableStateOf<Int?>(null) }
-
     val planoOptions = remember(
         cadastro.id,
         cadastro.planosRaw,
@@ -277,6 +264,26 @@ fun CadastroEditorDialog(
             planosMap = state.planosMap,
         )
     }
+
+    val contatos = remember(cadastro.id) {
+        mutableStateListOf<ContatoFormState>().apply {
+            addAll(parseContatos(cadastro))
+        }
+    }
+
+    val dependentes = remember(cadastro.id) {
+        mutableStateListOf<CadastroDependenteFormState>().apply {
+            val parsed = parseDependentes(cadastro, planoOptions)
+            if (parsed.isEmpty()) {
+                add(buildTitularDependente(cadastro))
+            } else {
+                addAll(parsed)
+            }
+        }
+    }
+    val cpfValidationErrors = remember(cadastro.id) { mutableStateMapOf<Int, String>() }
+    val consultedCpfByIndex = remember(cadastro.id) { mutableStateMapOf<Int, String>() }
+    var consultingLemmitIndex by rememberSaveable(cadastro.id) { mutableStateOf<Int?>(null) }
 
     val parentescoOptions = remember(state.parentescosMap) {
         listOf(0 to "Selecione") +
@@ -385,11 +392,25 @@ fun CadastroEditorDialog(
             bytes = bytes,
             prefix = "cadastros/${cadastro.id}",
         )
-        arquivoPath = uploaded.path
-        arquivoNome = uploaded.nome
+        val draftAttachment = DraftAttachmentStorage.copyBytesToDraftStorage(
+            context = context,
+            draftId = cadastro.id,
+            originalName = uploaded.nome,
+            mimeType = uploaded.mime,
+            bytes = bytes,
+        )
+        arquivoPath = draftAttachment.path
+        arquivoNome = draftAttachment.name
+        arquivoMimeType = draftAttachment.mimeType
+        arquivoTamanho = draftAttachment.size
         viewModel.persistCadastroDraftSilently(
             cadastro.id,
-            buildJsonObject { put("arquivo_path", uploaded.path) },
+            buildJsonObject {
+                put("arquivo_path", draftAttachment.path)
+                put("arquivo_nome", draftAttachment.name)
+                put("arquivo_mime_type", draftAttachment.mimeType)
+                put("arquivo_tamanho", draftAttachment.size)
+            },
         )
         localMessage = "Arquivo atualizado com sucesso."
     }
@@ -402,7 +423,11 @@ fun CadastroEditorDialog(
         }
         previewingArquivo = true
         runCatching {
-            val bytes = viewModel.downloadTempFile(path)
+            val bytes = if (File(path).exists()) {
+                File(path).readBytes()
+            } else {
+                viewModel.downloadTempFile(path)
+            }
             val uri = writePreviewFile(
                 context = context,
                 fileName = arquivoNome.ifBlank { path.substringAfterLast('/') },
@@ -538,6 +563,7 @@ fun CadastroEditorDialog(
         val funcionarioCadastro = state.profile?.externalId?.toIntOrNull() ?: 0
         val vendedor = resolveVendedor(profile, state, selectedVendedorId)
         val adesionista = resolveAdesionista(profile, state, selectedAdesionistaId)
+        val traceId = "snap-${cadastro.id.take(8)}-${System.currentTimeMillis()}"
 
         val contatosJson = buildJsonArray {
             contatos.forEach { contato ->
@@ -572,6 +598,14 @@ fun CadastroEditorDialog(
                         put("sexo", sexo)
                         put("sexoDescricao", sexoDescricao)
                         put("plano", dep.plano)
+                        val planoOption = planoOptions.firstOrNull { it.codigo == dep.plano }
+                        if (planoOption != null) {
+                            put("planoNome", planoOption.nome)
+                            put("tipoPlano", planoOption.regraValor)
+                        } else {
+                            if (dep.planoNome.isNotBlank()) put("planoNome", dep.planoNome)
+                            if (dep.tipoPlano.isNotBlank()) put("tipoPlano", dep.tipoPlano)
+                        }
                         put("planoValor", dep.planoValor.ifBlank { "0,00" })
                         put("nomeMae", dep.nomeMae.trim())
                         put("carenciaAtendimento", dep.carenciaAtendimento)
@@ -580,6 +614,17 @@ fun CadastroEditorDialog(
                 )
             }
         }
+        val dependentesCount = dependentesJson.size
+        val titularTemPlano = dependentes.firstOrNull()?.plano?.takeIf { it != 0 } != null
+        val dependenteComPlanoCount = dependentes.drop(1).count { it.plano != 0 }
+        val arquivoPathFlag = arquivoPath.isNotBlank()
+        val arquivoNomeFlag = arquivoNome.isNotBlank()
+        val arquivoMimeFlag = arquivoMimeType.isNotBlank()
+        val arquivoTamanhoFlag = arquivoTamanho > 0
+        Log.i(
+            "CadastroDraftTrace",
+            "SNAPSHOT_BUILD trace=$traceId id=${cadastro.id} dependentesCount=$dependentesCount titularPlano=$titularTemPlano dependentePlanoCount=$dependenteComPlanoCount arquivoPath=$arquivoPathFlag arquivoNome=$arquivoNomeFlag mime=$arquivoMimeFlag tamanho=$arquivoTamanhoFlag",
+        )
         val cpfTitularPersist = dependentes
             .firstOrNull()
             ?.cpf
@@ -625,6 +670,9 @@ fun CadastroEditorDialog(
             )
             if (statusAdesaoId.isNotBlank()) put("status_adesao_id", statusAdesaoId)
             put("arquivo_path", arquivoPath.ifBlank { "" })
+            put("arquivo_nome", arquivoNome.ifBlank { "" })
+            put("arquivo_mime_type", arquivoMimeType.ifBlank { "application/octet-stream" })
+            put("arquivo_tamanho", arquivoTamanho)
             put("contatos", contatosJson)
             put("dependentes", dependentesJson)
             vendedor?.let {
@@ -952,6 +1000,10 @@ fun CadastroEditorDialog(
                         put("sexo", sexo)
                         put("sexoDescricao", sexoDescricao)
                         put("plano", dep.plano)
+                        planoOptions.firstOrNull { it.codigo == dep.plano }?.let { planoOption ->
+                            put("planoNome", planoOption.nome)
+                            put("tipoPlano", planoOption.regraValor)
+                        }
                         put("planoValor", dep.planoValor.ifBlank { "0,00" })
                         put("nomeMae", dep.nomeMae.trim())
                         put("carenciaAtendimento", dep.carenciaAtendimento)
@@ -1024,6 +1076,9 @@ fun CadastroEditorDialog(
                 put("adesionista_nome", it.name)
             }
             put("arquivo_path", arquivoPath.ifBlank { "" })
+            put("arquivo_nome", arquivoNome.ifBlank { "" })
+            put("arquivo_mime_type", arquivoMimeType.ifBlank { "application/octet-stream" })
+            put("arquivo_tamanho", arquivoTamanho)
             put("contatos", contatosJson)
             put("dependentes", dependentesJson)
         }
@@ -1823,9 +1878,16 @@ fun CadastroEditorDialog(
                                                     runCatching { viewModel.deleteTempFile(arquivoPath) }
                                                     arquivoPath = ""
                                                     arquivoNome = ""
+                                                    arquivoMimeType = "application/octet-stream"
+                                                    arquivoTamanho = 0L
                                                     viewModel.persistCadastroDraftSilently(
                                                         cadastro.id,
-                                                        buildJsonObject { put("arquivo_path", "") },
+                                                        buildJsonObject {
+                                                            put("arquivo_path", "")
+                                                            put("arquivo_nome", "")
+                                                            put("arquivo_mime_type", "application/octet-stream")
+                                                            put("arquivo_tamanho", 0L)
+                                                        },
                                                     )
                                                 }
                                             },
@@ -2407,7 +2469,10 @@ private fun parseContatos(cadastro: CadastroDetalhe): List<ContatoFormState> {
     }
 }
 
-private fun parseDependentes(cadastro: CadastroDetalhe): List<CadastroDependenteFormState> {
+private fun parseDependentes(
+    cadastro: CadastroDetalhe,
+    planoOptions: List<CadastroPlanoOption>,
+): List<CadastroDependenteFormState> {
     val dependentesRaw = decodeEmbeddedJsonElement(cadastro.dependentes) ?: return emptyList()
     val dependentesArray = when (dependentesRaw) {
         is JsonArray -> dependentesRaw
@@ -2454,6 +2519,20 @@ private fun parseDependentes(cadastro: CadastroDetalhe): List<CadastroDependente
         val planoValor = obj["planoValor"]?.jsonPrimitive?.contentOrNull
             ?: obj["plano_valor"]?.jsonPrimitive?.contentOrNull
             ?: "0,00"
+        val planoNome = obj["planoNome"]?.jsonPrimitive?.contentOrNull
+            ?: obj["plano_nome"]?.jsonPrimitive?.contentOrNull
+            ?: ""
+        val tipoPlano = obj["tipoPlano"]?.jsonPrimitive?.contentOrNull
+            ?: obj["tipo_plano"]?.jsonPrimitive?.contentOrNull
+            ?: ""
+        val resolvedPlano = resolvePlanoFromMetadados(
+            planoCodigo = plano,
+            planoNome = planoNome,
+            tipoPlano = tipoPlano,
+            planoValor = planoValor,
+            planoOptions = planoOptions,
+            dependenteIndex = index,
+        )
 
         val nomeMae = obj["nomeMae"]?.jsonPrimitive?.contentOrNull
             ?: obj["nome_mae"]?.jsonPrimitive?.contentOrNull
@@ -2465,8 +2544,10 @@ private fun parseDependentes(cadastro: CadastroDetalhe): List<CadastroDependente
             dataNascimento = TextFieldValue(dateDigits, TextRange(dateDigits.length)),
             cpf = TextFieldValue(cpf, TextRange(cpf.length)),
             sexo = sexo,
-            plano = plano,
-            planoValor = planoValor,
+            plano = resolvedPlano.plano,
+            planoValor = resolvedPlano.planoValor,
+            planoNome = resolvedPlano.planoNome,
+            tipoPlano = resolvedPlano.tipoPlano,
             nomeMae = nomeMae,
             carenciaAtendimento = obj["carenciaAtendimento"]?.jsonPrimitive?.intOrNull
                 ?: obj["carencia_atendimento"]?.jsonPrimitive?.intOrNull
@@ -2486,6 +2567,8 @@ private fun buildTitularDependente(cadastro: CadastroDetalhe): CadastroDependent
         sexo = cadastro.sexoCodigo ?: -1,
         plano = cadastro.planoCodigo ?: 0,
         planoValor = "0,00",
+        planoNome = "",
+        tipoPlano = "",
         nomeMae = cadastro.nomeMae.orEmpty(),
         carenciaAtendimento = 0,
     )
@@ -2510,6 +2593,7 @@ private fun extractPlanosFromCadastro(
                 CadastroPlanoOption(
                     codigo = it.planoId,
                     nome = it.nomeExibicao,
+                    regraValor = it.regraValor,
                     label = it.nomeExibicao,
                 )
             }
@@ -2531,6 +2615,7 @@ private fun extractPlanosFromCadastro(
             nome = nome,
             valorTitular = valorTitular,
             valorDependente = valorDependente,
+            regraValor = planosMap.firstOrNull { it.planoId == codigo }?.regraValor.orEmpty(),
             label = buildPlanoLabel(
                 nome = nome,
                 valorTitular = valorTitular,
@@ -2595,6 +2680,139 @@ private fun formatPlanoValor(value: Double): String {
 
 private fun extractPlanoCodigo(obj: JsonObject): Int? {
     return obj.jsonInt("Plano", "plano", "plano_id", "codigoPlano", "codigo_plano", "Id", "id")
+}
+
+private data class PlanoResolutionResult(
+    val plano: Int,
+    val planoNome: String,
+    val tipoPlano: String,
+    val planoValor: String,
+)
+
+private fun resolvePlanoFromMetadados(
+    planoCodigo: Int,
+    planoNome: String,
+    tipoPlano: String,
+    planoValor: String,
+    planoOptions: List<CadastroPlanoOption>,
+    dependenteIndex: Int,
+): PlanoResolutionResult {
+        val codigoMatch = planoOptions.firstOrNull { it.codigo == planoCodigo }
+        if (codigoMatch != null) {
+        Log.i(
+            "CadastroEditorDialog",
+            "Plano restaurado por codigo para dependente index=$dependenteIndex plano=${codigoMatch.codigo}",
+        )
+        return PlanoResolutionResult(
+            plano = codigoMatch.codigo,
+            planoNome = codigoMatch.nome,
+            tipoPlano = codigoMatch.regraValor,
+            planoValor = planoValor,
+        )
+    }
+
+    val nomeNorm = normalizePlanoTexto(planoNome)
+    val tipoNorm = normalizePlanoTexto(tipoPlano)
+    val valorNorm = normalizePlanoValor(planoValor)
+    if (nomeNorm.isBlank() && tipoNorm.isBlank() && valorNorm.isBlank()) {
+        Log.w(
+            "CadastroEditorDialog",
+            "Plano salvo no rascunho nao encontrado em planoOptions index=$dependenteIndex sem metadados suficientes",
+        )
+        return PlanoResolutionResult(
+            plano = planoCodigo,
+            planoNome = planoNome,
+            tipoPlano = tipoPlano,
+            planoValor = planoValor,
+        )
+    }
+
+    fun candidateMatches(option: CadastroPlanoOption): Triple<Boolean, Boolean, Boolean> {
+        val optionNomeNorm = normalizePlanoTexto(option.nome)
+        val optionTipoNorm = normalizePlanoTexto(option.regraValor)
+        val optionValorNorm = normalizePlanoValor(
+            option.valorTitular?.let(::formatPlanoValor) ?: option.valorDependente?.let(::formatPlanoValor).orEmpty(),
+        )
+        val nomeMatch = nomeNorm.isNotBlank() && optionNomeNorm == nomeNorm
+        val tipoMatch = tipoNorm.isNotBlank() && optionTipoNorm == tipoNorm
+        val valorMatch = valorNorm.isNotBlank() && optionValorNorm == valorNorm
+        return Triple(nomeMatch, tipoMatch, valorMatch)
+    }
+
+        val exactMatches = planoOptions.filter { option ->
+            val (nomeMatch, tipoMatch, valorMatch) = candidateMatches(option)
+            nomeMatch && tipoMatch && valorMatch
+        }
+    val typeMatches = planoOptions.filter { option ->
+        val (nomeMatch, tipoMatch, _) = candidateMatches(option)
+        nomeMatch && tipoMatch
+    }
+    val nameMatches = planoOptions.filter { option ->
+        val (nomeMatch, _, _) = candidateMatches(option)
+        nomeMatch
+    }
+
+    val resolved = when {
+        exactMatches.size == 1 -> exactMatches.single()
+        typeMatches.size == 1 -> typeMatches.single()
+        nameMatches.size == 1 -> nameMatches.single()
+        else -> null
+    }
+
+    return when {
+        resolved != null -> {
+            Log.i(
+                "CadastroEditorDialog",
+                "Plano restaurado por fallback de nome/tipo/valor index=$dependenteIndex plano=${resolved.codigo}",
+            )
+            PlanoResolutionResult(
+                plano = resolved.codigo,
+                planoNome = resolved.nome,
+                tipoPlano = resolved.regraValor,
+                planoValor = planoValor,
+            )
+        }
+        nameMatches.size > 1 || typeMatches.size > 1 || exactMatches.size > 1 -> {
+            Log.w(
+                "CadastroEditorDialog",
+                "Fallback de plano ambiguo; selecao automatica ignorada index=$dependenteIndex matches=${exactMatches.size}/${typeMatches.size}/${nameMatches.size}",
+            )
+            PlanoResolutionResult(
+                plano = planoCodigo,
+                planoNome = planoNome,
+                tipoPlano = tipoPlano,
+                planoValor = planoValor,
+            )
+        }
+        else -> {
+            Log.w(
+                "CadastroEditorDialog",
+                "Plano salvo no rascunho nao encontrado em planoOptions index=$dependenteIndex nome=${planoNome.take(40)} tipo=${tipoPlano.take(24)}",
+            )
+            PlanoResolutionResult(
+                plano = planoCodigo,
+                planoNome = planoNome,
+                tipoPlano = tipoPlano,
+                planoValor = planoValor,
+            )
+        }
+    }
+}
+
+private fun normalizePlanoTexto(value: String): String {
+    return Normalizer.normalize(value.trim(), Normalizer.Form.NFD)
+        .replace(Regex("\\p{M}+"), "")
+        .lowercase(Locale.ROOT)
+        .replace(Regex("\\s+"), " ")
+}
+
+private fun normalizePlanoValor(value: String): String {
+    val trimmed = value.trim()
+    if (trimmed.isBlank()) return ""
+    val digits = trimmed.filter { it.isDigit() || it == ',' || it == '.' }
+    if (digits.isBlank()) return ""
+    val normalized = digits.replace(".", "").replace(",", ".")
+    return normalized.toBigDecimalOrNull()?.toPlainString() ?: digits
 }
 
 private fun JsonObject.jsonInt(vararg keys: String): Int? {
