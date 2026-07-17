@@ -44,6 +44,25 @@ APK de debug gerado em:
 
 `android-app/app/build/outputs/apk/debug/app-debug.apk`
 
+## Desenvolvimento com atualizacao rapida
+
+Para nao precisar gerar APK manualmente a cada ajuste:
+
+```powershell
+.\iniciar-app.ps1
+```
+
+Esse fluxo sobe o emulador, instala `debug` e abre o app. Depois disso, use:
+
+- `Apply Changes` para mudancas pequenas
+- `Live Edit` para ajustes de UI em Compose
+
+Se quiser limpar o emulador antes de iniciar:
+
+```powershell
+.\iniciar-app.ps1 -CleanEmulator
+```
+
 ## Release para Play Store
 
 Para publicar na Google Play, gere o bundle de release:

@@ -1,7 +1,6 @@
 import java.net.URI
 import java.util.Properties
 import org.gradle.api.tasks.Copy
-import org.gradle.api.tasks.Delete
 import org.gradle.api.tasks.WriteProperties
 
 plugins {
@@ -200,14 +199,6 @@ android {
     }
 }
 
-tasks.register<Delete>("cleanReleaseApkOutputs") {
-    delete(layout.buildDirectory.dir("outputs/apk/release"))
-}
-
-tasks.matching { it.name == "bundleRelease" }.configureEach {
-    dependsOn("cleanReleaseApkOutputs")
-}
-
 tasks.register<Copy>("renameReleaseBundle") {
     dependsOn("bundleRelease")
     from(layout.buildDirectory.file("outputs/bundle/release/app-release.aab"))
@@ -216,13 +207,16 @@ tasks.register<Copy>("renameReleaseBundle") {
 }
 
 tasks.register<Copy>("renameReleaseApk") {
-    dependsOn("assembleRelease")
     from(layout.buildDirectory.dir("outputs/apk/release")) {
         include("*.apk")
         exclude("*.idsig")
     }
     into(layout.buildDirectory.dir("outputs/release-artifacts"))
     rename { "vendamais-mobile-v${android.defaultConfig.versionName}.apk" }
+}
+
+tasks.matching { it.name == "assembleRelease" }.configureEach {
+    finalizedBy("renameReleaseApk")
 }
 
 tasks.register("generateReleaseUpdateJson") {

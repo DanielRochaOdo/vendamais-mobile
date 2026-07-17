@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -7,6 +7,7 @@ const ERP_ABORT_FRIENDLY_MESSAGE =
 
 const ERP_SITUACOES_ATIVAS = [1, 4, 6];
 const inFlightCadastroEnvios = new Map<string, Promise<any>>();
+const CADASTROS_FETCH_TIMEOUT_MS = 15000;
 
 const normalizeCpf = (value?: string | null) => (value || '').replace(/\D/g, '');
 
@@ -139,6 +140,23 @@ export function useCadastros() {
   const [loading, setLoading] = useState(false);
   const [loadingStats, setLoadingStats] = useState(true);
   const { profile } = useAuth();
+  const fetchCadastrosInFlightRef = useRef<Promise<void> | null>(null);
+  const fetchStatsInFlightRef = useRef<Promise<void> | null>(null);
+
+  const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
+    let timeoutId: number | null = null;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = window.setTimeout(() => reject(new Error(`${label} timeout after ${timeoutMs}ms`)), timeoutMs);
+    });
+
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    }
+  };
 
   const sortCadastrosByUpdatedAt = (items: Cadastro[]) => (
     [...items].sort((a, b) => {
@@ -166,44 +184,61 @@ export function useCadastros() {
   };
 
   const fetchCadastros = useCallback(async () => {
-    try {
-      setLoading(true);
+    if (fetchCadastrosInFlightRef.current) {
+      return fetchCadastrosInFlightRef.current;
+    }
 
-      let allData: any[] = [];
-      let rangeStart = 0;
-      const rangeSize = 1000;
-      let hasMore = true;
+    const request = (async () => {
+      try {
+        setLoading(true);
 
-      while (hasMore) {
-        const { data: chunk, error } = await supabase
-          .from('cadastros')
-          .select('*')
-          .order('updated_at', { ascending: false })
-          .range(rangeStart, rangeStart + rangeSize - 1);
+        let allData: any[] = [];
+        let rangeStart = 0;
+        const rangeSize = 1000;
+        let hasMore = true;
 
-        if (error) {
-          console.error('Erro ao buscar cadastros:', error);
-          throw error;
-        }
+        while (hasMore) {
+          const { data: chunk, error } = await withTimeout(
+            supabase
+              .from('cadastros')
+              .select('*')
+              .order('updated_at', { ascending: false })
+              .range(rangeStart, rangeStart + rangeSize - 1),
+            CADASTROS_FETCH_TIMEOUT_MS,
+            'fetchCadastros'
+          );
 
-        if (chunk && chunk.length > 0) {
-          allData = [...allData, ...chunk];
-
-          if (chunk.length < rangeSize) {
-            hasMore = false;
-          } else {
-            rangeStart += rangeSize;
+          if (error) {
+            console.error('Erro ao buscar cadastros:', error);
+            throw error;
           }
-        } else {
-          hasMore = false;
-        }
-      }
 
-      setCadastros(allData || []);
-    } catch (error) {
-      console.error('Erro fatal ao buscar cadastros:', error);
+          if (chunk && chunk.length > 0) {
+            allData = [...allData, ...chunk];
+
+            if (chunk.length < rangeSize) {
+              hasMore = false;
+            } else {
+              rangeStart += rangeSize;
+            }
+          } else {
+            hasMore = false;
+          }
+        }
+
+        setCadastros(allData || []);
+      } catch (error) {
+        console.error('Erro fatal ao buscar cadastros:', error);
+      } finally {
+        setLoading(false);
+      }
+    })();
+
+    fetchCadastrosInFlightRef.current = request;
+    try {
+      return await request;
     } finally {
-      setLoading(false);
+      fetchCadastrosInFlightRef.current = null;
     }
   }, []);
 
@@ -212,46 +247,63 @@ export function useCadastros() {
       return;
     }
 
+    if (fetchStatsInFlightRef.current) {
+      return fetchStatsInFlightRef.current;
+    }
+
+    const request = (async () => {
+      try {
+        setLoadingStats(true);
+
+        const { data, error } = await withTimeout(
+          supabase.rpc('get_cadastros_stats', {
+            p_user_id: profile.id,
+          }),
+          CADASTROS_FETCH_TIMEOUT_MS,
+          'fetchStats'
+        );
+
+        if (error) {
+          console.error('Erro ao buscar stats:', error);
+          throw error;
+        }
+
+        if (data) {
+          setStats(data);
+        } else {
+          setStats({
+            cadastro_total: 0,
+            cadastro_cadastros: 0,
+            cadastro_dependentes: 0,
+            cadastro_incompletos: 0,
+            cadastro_incompletos_cadastros: 0,
+            cadastro_incompletos_dependentes: 0,
+            cadastro_enviados: 0,
+            cadastro_enviados_cadastros: 0,
+            cadastro_enviados_dependentes: 0,
+            inclusao_total: 0,
+            inclusao_cadastros: 0,
+            inclusao_dependentes: 0,
+            inclusao_incompletos: 0,
+            inclusao_incompletos_cadastros: 0,
+            inclusao_incompletos_dependentes: 0,
+            inclusao_enviados: 0,
+            inclusao_enviados_cadastros: 0,
+            inclusao_enviados_dependentes: 0
+          });
+        }
+      } catch (error) {
+        console.error('Erro fatal ao buscar stats:', error);
+      } finally {
+        setLoadingStats(false);
+      }
+    })();
+
+    fetchStatsInFlightRef.current = request;
     try {
-      setLoadingStats(true);
-
-      const { data, error } = await supabase.rpc('get_cadastros_stats', {
-        p_user_id: profile.id,
-      });
-
-      if (error) {
-        console.error('Erro ao buscar stats:', error);
-        throw error;
-      }
-
-      if (data) {
-        setStats(data);
-      } else {
-        setStats({
-          cadastro_total: 0,
-          cadastro_cadastros: 0,
-          cadastro_dependentes: 0,
-          cadastro_incompletos: 0,
-          cadastro_incompletos_cadastros: 0,
-          cadastro_incompletos_dependentes: 0,
-          cadastro_enviados: 0,
-          cadastro_enviados_cadastros: 0,
-          cadastro_enviados_dependentes: 0,
-          inclusao_total: 0,
-          inclusao_cadastros: 0,
-          inclusao_dependentes: 0,
-          inclusao_incompletos: 0,
-          inclusao_incompletos_cadastros: 0,
-          inclusao_incompletos_dependentes: 0,
-          inclusao_enviados: 0,
-          inclusao_enviados_cadastros: 0,
-          inclusao_enviados_dependentes: 0
-        });
-      }
-    } catch (error) {
-      console.error('Erro fatal ao buscar stats:', error);
+      return await request;
     } finally {
-      setLoadingStats(false);
+      fetchStatsInFlightRef.current = null;
     }
   }, [profile?.id]);
 
@@ -937,8 +989,8 @@ export function useCadastros() {
   useEffect(() => {
     if (!profile?.id) return;
     const intervalId = window.setInterval(() => {
-      fetchCadastros();
-      fetchStats();
+      void fetchCadastros();
+      void fetchStats();
     }, 30000);
 
     return () => {

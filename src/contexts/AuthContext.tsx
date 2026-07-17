@@ -18,6 +18,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const mountedRef = useRef(true);
+  const authInitTimeoutRef = useRef<number | null>(null);
 
   const setAuthState = (nextUser: User | null, nextProfile: Profile | null) => {
     if (!mountedRef.current) return;
@@ -90,6 +91,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     mountedRef.current = true;
+    authInitTimeoutRef.current = window.setTimeout(() => {
+      if (!mountedRef.current) return;
+      console.warn('Auth bootstrap timeout reached, releasing loading state');
+      setLoading(false);
+    }, 8000);
 
     const initializeAuth = async () => {
       try {
@@ -108,6 +114,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } finally {
         if (mountedRef.current) {
           setLoading(false);
+        }
+        if (authInitTimeoutRef.current !== null) {
+          window.clearTimeout(authInitTimeoutRef.current);
+          authInitTimeoutRef.current = null;
         }
       }
     };
@@ -150,6 +160,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       mountedRef.current = false;
+      if (authInitTimeoutRef.current !== null) {
+        window.clearTimeout(authInitTimeoutRef.current);
+        authInitTimeoutRef.current = null;
+      }
       subscription.unsubscribe();
     };
   }, []);

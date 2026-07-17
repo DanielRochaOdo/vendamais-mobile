@@ -1086,29 +1086,7 @@ class CadastroWorkflowRepository(
             excludeCadastroId = excludeCadastroId,
         )?.let { return it }
 
-        val pendingFromRpc = runCatching {
-            checkCpfExistente(
-                session = session,
-                userId = currentUserId,
-                cpf = normalizedCpf,
-            )
-        }.getOrNull()
-
-        val cadastroIdFromRpc = pendingFromRpc
-            ?.cadastroId
-            ?.trim()
-            .orEmpty()
-
-        return if (
-            pendingFromRpc?.exists == true &&
-            pendingFromRpc.canContinue &&
-            cadastroIdFromRpc.isNotBlank() &&
-            cadastroIdFromRpc != excludeCadastroId
-        ) {
-            CadastroIdRow(id = cadastroIdFromRpc)
-        } else {
-            null
-        }
+        return null
     }
 
     suspend fun resolvePendingCadastroConflictIdByCpf(
@@ -1146,6 +1124,7 @@ class CadastroWorkflowRepository(
         session: SavedSession,
         profile: MobileProfile,
         payload: JsonObject,
+        operationId: String? = null,
     ): CadastroDetalhe {
         val profileId = ensureProfileReadyForCadastroInsert(session, profile)
         val tipoCadastro = payload["tipo_cadastro"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
@@ -1175,6 +1154,10 @@ class CadastroWorkflowRepository(
             }
             else -> null
         }
+        Log.i(
+            logTag,
+            "operationId=${operationId ?: "-"} stage=repository_createCadastroDraft tipoCadastro=$tipoCadastro hasExisting=${existing != null} statusToPersist=$statusToPersist",
+        )
 
         return if (existing != null) {
             val updatePayload = buildJsonObject {
@@ -1239,6 +1222,10 @@ class CadastroWorkflowRepository(
 
             val insertedId = insertedRows.firstOrNull()?.id
                 ?: throw IllegalStateException("Falha ao criar rascunho.")
+            Log.i(
+                logTag,
+                "operationId=${operationId ?: "-"} stage=repository_createCadastroDraft_insert insertedId=$insertedId",
+            )
             fetchCadastroDetalhe(session, insertedId)
         }
     }
@@ -1938,8 +1925,13 @@ class CadastroWorkflowRepository(
         session: SavedSession,
         payload: JsonObject,
         cadastroId: String? = null,
+        operationId: String? = null,
     ): JsonElement {
         val idempotencyKey = buildInclusaoDependenteIdempotencyKey(cadastroId, payload)
+        Log.d(
+            logTag,
+            "operationId=${operationId ?: "-"} stage=repository_send_inclusao cadastroId=${cadastroId ?: "-"} idempotency=${idempotencyKey.take(18)}",
+        )
         return client.safePost(
             url = "${AppConfig.supabaseUrl}/functions/v1/erp-novo-dependente",
             json = json,
@@ -2034,7 +2026,12 @@ class CadastroWorkflowRepository(
         token: String,
         cadastro: PublicCadastroPayload,
         idempotencyKey: String? = null,
+        operationId: String? = null,
     ): PublicCadastroSubmitResponse {
+        Log.d(
+            logTag,
+            "operationId=${operationId ?: "-"} stage=repository_submit_public idempotency=${!idempotencyKey.isNullOrBlank()}",
+        )
         return client.safePost(
             url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-public-submit",
             json = json,

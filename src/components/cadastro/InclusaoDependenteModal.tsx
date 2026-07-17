@@ -62,8 +62,13 @@ interface DependenteForm {
   dataNascimento: string;
   carenciaAtendimento: number;
   arquivo?: UploadedFile;
+  uploadError?: string;
   saved: boolean;
 }
+
+type PendingUpload = {
+  file: File;
+};
 
 function isParceiroInvalidoMessage(message: string): boolean {
   const normalized = message
@@ -155,6 +160,7 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [uploadingFileIndex, setUploadingFileIndex] = useState<number | null>(null);
+  const [pendingUploads, setPendingUploads] = useState<Record<number, PendingUpload>>({});
   const [enviando, setEnviando] = useState(false);
   const [salvandoPendente, setSalvandoPendente] = useState(false);
   const [planosEmpresa, setPlanosEmpresa] = useState<any[]>([]);
@@ -738,6 +744,13 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
 
     setUploadingFileIndex(index);
     setError('');
+    setPendingUploads(prev => ({
+      ...prev,
+      [index]: { file }
+    }));
+    setDependentes(prev => prev.map((dep, idx) =>
+      idx === index ? { ...dep, uploadError: undefined } : dep
+    ));
 
     try {
       const dependente = dependentes[index];
@@ -769,7 +782,8 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
       const novosDependentes = [...dependentes];
       novosDependentes[index] = {
         ...novosDependentes[index],
-        arquivo: uploadedFile
+        arquivo: uploadedFile,
+        uploadError: undefined
       };
       setDependentes(novosDependentes);
 
@@ -779,10 +793,35 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
       console.error('Erro ao fazer upload do arquivo:', err);
       const errorMessage = err instanceof Error ? err.message : 'Erro ao fazer upload do arquivo';
       setError(errorMessage);
+      setDependentes(prev => prev.map((dep, idx) =>
+        idx === index ? { ...dep, uploadError: errorMessage } : dep
+      ));
     } finally {
       setUploadingFileIndex(null);
       e.target.value = '';
     }
+  };
+
+  const retryArquivoUpload = async (index: number) => {
+    const pending = pendingUploads[index];
+    if (!pending) {
+      setError('Nao ha arquivo para retentar');
+      return;
+    }
+
+    const fileInput = document.querySelector<HTMLInputElement>(`input[data-upload-index="${index}"]`);
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(pending.file);
+
+    if (fileInput) {
+      fileInput.files = dataTransfer.files;
+    }
+
+    await handleArquivoChange(index, {
+      preventDefault() {},
+      stopPropagation() {},
+      target: { files: dataTransfer.files, value: '' },
+    } as unknown as React.ChangeEvent<HTMLInputElement>);
   };
 
   const handleSalvarPendente = async () => {
@@ -1539,6 +1578,7 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
                             <input
                               type="file"
                               accept=".pdf,.jpg,.jpeg,.png"
+                              data-upload-index={index}
                               onPointerDown={() => {
                                 if (profile?.id && draftHydratedRef.current) {
                                   saveBeforeFilePicker('inclusao-dependente-modal', buildDraftPayload, profile.id);
@@ -1562,6 +1602,18 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
                                 <p className="text-xs text-emerald-600 font-medium">
                                   Fazendo upload...
                                 </p>
+                              </div>
+                            )}
+                            {dep.uploadError && uploadingFileIndex !== index && (
+                              <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 p-2">
+                                <p className="text-xs text-red-700">{dep.uploadError}</p>
+                                <button
+                                  type="button"
+                                  onClick={() => retryArquivoUpload(index)}
+                                  className="text-xs font-medium text-red-700 hover:text-red-800"
+                                >
+                                  Retentar
+                                </button>
                               </div>
                             )}
                             {dep.arquivo && uploadingFileIndex !== index && (

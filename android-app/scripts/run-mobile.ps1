@@ -71,6 +71,32 @@ function Wait-ForBootComplete([string]$adbPath, [string]$serial, [int]$timeoutSe
     throw "Emulador $serial nao finalizou boot (sys.boot_completed=1) dentro de $timeoutSec segundos."
 }
 
+function Install-AppWithRetry(
+    [string]$gradlePath,
+    [string]$installTask,
+    [string]$adbPath,
+    [string]$serial,
+    [string]$packageName,
+    [string]$projectRoot
+) {
+    Push-Location $projectRoot
+    try {
+        & $gradlePath $installTask
+        return $true
+    } catch {
+        $message = $_.Exception.Message
+        if ($message -match "INSTALL_FAILED_UPDATE_INCOMPATIBLE" -or $message -match "signatures do not match") {
+            Write-Output "Aviso: pacote existente com assinatura diferente detectado. Removendo $packageName e tentando novamente..."
+            & $adbPath -s $serial uninstall $packageName | Out-Null 2>$null
+            & $gradlePath $installTask
+            return $true
+        }
+        throw
+    } finally {
+        Pop-Location
+    }
+}
+
 function Start-EmulatorProcess(
     [string]$emulatorPath,
     [string]$avdName,
@@ -79,7 +105,6 @@ function Start-EmulatorProcess(
 ) {
     $args = @(
         "-avd", $avdName,
-        "-gpu", "swiftshader_indirect",
         "-no-boot-anim",
         "-no-audio"
     )
@@ -128,12 +153,7 @@ if (-not $serial) {
 
 Wait-ForBootComplete -adbPath $adbPath -serial $serial -timeoutSec $BootTimeoutSec
 
-Push-Location $projectRoot
-try {
-    & $gradlePath $InstallTask
-} finally {
-    Pop-Location
-}
+Install-AppWithRetry -gradlePath $gradlePath -installTask $InstallTask -adbPath $adbPath -serial $serial -packageName $PackageName -projectRoot $projectRoot
 
 if ([string]::IsNullOrWhiteSpace($DeepLinkUrl)) {
     & $adbPath -s $serial shell am start -n "$PackageName/$ActivityName" | Out-Null
@@ -141,4 +161,4 @@ if ([string]::IsNullOrWhiteSpace($DeepLinkUrl)) {
     & $adbPath -s $serial shell am start -a android.intent.action.VIEW -d $DeepLinkUrl | Out-Null
 }
 
-Write-Output "OK: emulador=$serial, app instalada e aberta."
+Write-Output "OK: emulador=$serial, app debug instalada e aberta."

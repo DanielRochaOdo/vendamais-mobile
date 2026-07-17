@@ -1,6 +1,7 @@
 package br.com.vendamais.mobile.ui.screens
 
 import android.content.Context
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -49,11 +50,14 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.Period
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 
 private const val PUBLIC_CADASTRO_DRAFT_VERSION = 1
@@ -93,6 +97,11 @@ private data class PublicPlanoOption(
     val nome: String,
 )
 
+private data class CadastroValidationResult(
+    val isValid: Boolean,
+    val fieldErrors: Map<String, String>,
+)
+
 @Composable
 fun PublicAdesaoTokenScreen(
     token: String,
@@ -116,6 +125,7 @@ fun PublicAdesaoTokenScreen(
     var selectedPlanoCodigo by rememberSaveable(token) { mutableStateOf("") }
     var submissionId by rememberSaveable(token) { mutableStateOf("") }
     var draftRestored by rememberSaveable(token) { mutableStateOf(false) }
+    val submittingRef = remember(token) { AtomicBoolean(false) }
     val scope = rememberCoroutineScope()
 
     var nome by rememberSaveable { mutableStateOf("") }
@@ -182,6 +192,37 @@ fun PublicAdesaoTokenScreen(
         extractPlanoOptions(empresa?.planosRaw)
     }
     val planoNomePadrao = remember(planoOptions) { planoOptions.firstOrNull()?.nome }
+    var fieldErrors by rememberSaveable(token) { mutableStateOf(emptyMap<String, String>()) }
+
+    fun validatePublicCadastro(): CadastroValidationResult {
+        val errors = linkedMapOf<String, String>()
+        val nomeTrim = nome.trim()
+        val cpfDigits = CadastroPayloadBuilder.normalizeDigits(cpf)
+        val idade = runCatching { Period.between(LocalDate.parse(dataNascimento.trim()), LocalDate.now()).years }.getOrNull()
+        val isMinor = idade != null && idade < 18
+        val cpfObrigatorio = !isMinor
+        val selectedPlano = planoOptions.firstOrNull { it.codigo.toString() == selectedPlanoCodigo }
+        val empresaIdValida = empresa?.id != null
+
+        if (nomeTrim.isBlank()) errors["nome"] = "Informe o nome completo."
+        if (dataNascimento.trim().isBlank() || runCatching { LocalDate.parse(dataNascimento.trim()) }.isFailure) errors["dataNascimento"] = "Informe uma data de nascimento válida."
+        if (sexo.trim() !in setOf("0", "1")) errors["sexo"] = "Selecione o sexo."
+        if (empresaIdValida.not()) errors["empresa"] = "Selecione a empresa."
+        if (planoOptions.isEmpty() || selectedPlano == null) errors["plano"] = "Selecione um plano."
+        if (selectedPlano != null && selectedPlano.codigo <= 0) errors["plano"] = "Selecione um plano."
+        if (selectedPlano != null && selectedPlano.nome.isBlank()) errors["plano"] = "Selecione um plano."
+        if (!isMinor && cpfObrigatorio && !CadastroPayloadBuilder.validateCpf(cpfDigits)) errors["cpf"] = "Informe um CPF válido."
+        if (nomeMae.trim().isBlank()) errors["nomeMae"] = "Informe o nome da mãe."
+        if (telefone.filter(Char::isDigit).length < 10) errors["telefone"] = "Informe ao menos um telefone válido."
+        if (cep.filter(Char::isDigit).length != 8) errors["cep"] = "Informe um CEP válido."
+        if (logradouro.trim().isBlank()) errors["logradouro"] = "Informe o logradouro."
+        if (numero.trim().isBlank()) errors["numero"] = "Informe o número."
+        if (bairro.trim().isBlank()) errors["bairro"] = "Informe o bairro."
+        if (cidade.trim().isBlank()) errors["cidade"] = "Informe a cidade."
+        if (uf.trim().length != 2) errors["uf"] = "Informe a UF."
+        if (empresa?.empresaExigeMatricula == 1 && numeroMatricula.trim().isBlank()) errors["numeroMatricula"] = "Informe a matrícula."
+        return CadastroValidationResult(errors.isEmpty(), errors)
+    }
 
     LaunchedEffect(planoOptions) {
         if (planoOptions.isEmpty()) {
@@ -670,8 +711,8 @@ fun PublicAdesaoTokenScreen(
                             error = "Campo obrigatorio: Nome da Mae."
                             return@Button
                         }
-                        val sexoCodigo = sexo.toIntOrNull() ?: -1
-                        if (sexoCodigo !in setOf(0, 1)) {
+                        val sexoCodigoValido = sexo.toIntOrNull() ?: -1
+                        if (sexoCodigoValido !in setOf(0, 1)) {
                             error = "Campo obrigatorio: Sexo."
                             return@Button
                         }
@@ -696,13 +737,30 @@ fun PublicAdesaoTokenScreen(
                             return@Button
                         }
 
+                        val validation = validatePublicCadastro()
+                        Log.d("CadastroTrace", "operationId=- stage=frontend_validation_started")
+                        if (!validation.isValid) {
+                            fieldErrors = validation.fieldErrors
+                            Log.w(
+                                "CadastroTrace",
+                                "operationId=- stage=frontend_validation_failed invalidFields=${validation.fieldErrors.keys}",
+                            )
+                            error = "Revise os campos destacados antes de concluir a adesao."
+                            return@Button
+                        }
+                        Log.d("CadastroTrace", "operationId=- stage=frontend_validation_passed")
+                        if (!submittingRef.compareAndSet(false, true)) return@Button
+                        val operationId = UUID.randomUUID().toString()
+                        Log.d("CadastroTrace", "operationId=$operationId stage=ui_click_public_submit")
                         error = null
                         notice = null
                         success = null
                         submitting = true
+                        fieldErrors = emptyMap()
                         if (submissionId.isBlank()) {
                             submissionId = UUID.randomUUID().toString()
                         }
+                        val sexoCodigo = sexoCodigoValido
                         val sexoDescricao = if (sexoCodigo == 1) "Masculino" else "Feminino"
                         val dependentes = listOf(
                             PublicCadastroDependente(
@@ -712,24 +770,13 @@ fun PublicAdesaoTokenScreen(
                                 cpf = cpfDigits,
                                 sexo = sexoCodigo,
                                 sexoDescricao = sexoDescricao,
-                                plano = planoCodigo,
+                                plano = planoOptions.firstOrNull { it.codigo.toString() == selectedPlanoCodigo }?.codigo ?: 0,
                                 planoValor = "0,00",
                                 nomeMae = nomeMae.trim(),
                                 carenciaAtendimento = 0,
                                 funcionarioCadastro = 0,
                             ),
                         )
-                        val titulares = dependentes.filter { it.tipo == 1 }
-                        if (titulares.size != 1) {
-                            error = "O cadastro precisa ter exatamente 1 titular nos dependentes."
-                            submitting = false
-                            return@Button
-                        }
-                        if (dependentes.any { it.plano <= 0 }) {
-                            error = "Todos os dependentes precisam ter um plano selecionado."
-                            submitting = false
-                            return@Button
-                        }
 
                         val payload = PublicCadastroPayload(
                             cpf = cpfDigits,
@@ -758,37 +805,41 @@ fun PublicAdesaoTokenScreen(
                         )
 
                         scope.launch {
-                            runCatching {
-                                val cpfValidation = viewModel.checkPublicCadastroCpf(token, cpfDigits)
-                                if (!cpfValidation.ok) {
-                                    throw IllegalStateException(
-                                        CadastroApiErrorMapper.mapUserMessage(
-                                            cpfValidation.error,
-                                            "CPF nao permitido neste link.",
-                                        ),
-                                    )
-                                }
-                                val idempotencyKey = "public:${token.trim()}:${cpfDigits}:$submissionId"
-                                viewModel.submitPublicCadastro(token, payload, idempotencyKey)
-                            }.onSuccess { response ->
-                                if (!response.ok) {
+                            try {
+                                runCatching {
+                                    val cpfValidation = viewModel.checkPublicCadastroCpf(token, cpfDigits)
+                                    if (!cpfValidation.ok) {
+                                        throw IllegalStateException(
+                                            CadastroApiErrorMapper.mapUserMessage(
+                                                cpfValidation.error,
+                                                "CPF nao permitido neste link.",
+                                            ),
+                                        )
+                                    }
+                                    val idempotencyKey = "public:${token.trim()}:${cpfDigits}:$submissionId"
+                                    viewModel.submitPublicCadastro(token, payload, idempotencyKey, operationId)
+                                }.onSuccess { response ->
+                                    if (!response.ok) {
+                                        error = CadastroApiErrorMapper.mapUserMessage(
+                                            response.error,
+                                            "Falha ao concluir adesao.",
+                                        )
+                                    } else {
+                                        success = response.message ?: "Cadastro concluido com sucesso."
+                                        notice = response.warning
+                                        draftStorage.edit().remove(draftStorageKey).apply()
+                                        submissionId = ""
+                                    }
+                                }.onFailure { throwable ->
                                     error = CadastroApiErrorMapper.mapUserMessage(
-                                        response.error,
-                                        "Falha ao concluir adesao.",
+                                        throwable.message,
+                                        "Falha ao enviar cadastro.",
                                     )
-                                } else {
-                                    success = response.message ?: "Cadastro concluido com sucesso."
-                                    notice = response.warning
-                                    draftStorage.edit().remove(draftStorageKey).apply()
-                                    submissionId = ""
                                 }
-                            }.onFailure { throwable ->
-                                error = CadastroApiErrorMapper.mapUserMessage(
-                                    throwable.message,
-                                    "Falha ao enviar cadastro.",
-                                )
+                            } finally {
+                                submitting = false
+                                submittingRef.set(false)
                             }
-                            submitting = false
                         }
                     },
                     enabled = !submitting && !consultingCpf,

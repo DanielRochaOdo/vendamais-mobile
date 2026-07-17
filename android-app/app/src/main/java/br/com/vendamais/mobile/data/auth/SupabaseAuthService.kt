@@ -1,5 +1,6 @@
 package br.com.vendamais.mobile.data.auth
 
+import android.util.Log
 import br.com.vendamais.mobile.AppConfig
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -20,6 +21,8 @@ class SupabaseAuthService(
     private val client: HttpClient,
     private val json: Json,
 ) {
+    private val logTag = "CadastroTrace"
+
     suspend fun login(email: String, password: String): SavedSession {
         check(AppConfig.isConfigured()) {
             "Supabase nao configurado. Atualize android-app/local.properties."
@@ -34,8 +37,13 @@ class SupabaseAuthService(
                 setBody(LoginRequest(email = email, password = password))
             }.body<TokenResponse>()
         } catch (exception: ClientRequestException) {
-            throw exception.toSupabaseException()
+            throw exception.toSupabaseException(isRefreshFlow = false)
         } catch (exception: Throwable) {
+            Log.w(
+                logTag,
+                "operationId=- stage=auth_login_unexpected_failure type=${exception::class.simpleName} message=${exception.message}",
+                exception,
+            )
             throw IllegalStateException("Falha ao interpretar resposta de autenticacao do Supabase.")
         }
 
@@ -67,9 +75,20 @@ class SupabaseAuthService(
                 )
             }.body<TokenResponse>()
         } catch (exception: ClientRequestException) {
-            throw exception.toSupabaseException()
+            val readable = exception.toSupabaseException(isRefreshFlow = true)
+            Log.w(
+                logTag,
+                "operationId=- stage=auth_refresh_http_failure status=${exception.response.status.value} message=${readable.message}",
+                exception,
+            )
+            throw readable
         } catch (exception: Throwable) {
-            throw IllegalStateException("Refresh token invalido ou sessao expirada. Faca login novamente.")
+            Log.w(
+                logTag,
+                "operationId=- stage=auth_refresh_unexpected_failure type=${exception::class.simpleName} message=${exception.message}",
+                exception,
+            )
+            throw IllegalStateException("Falha temporaria ao atualizar sessao. Tente novamente.")
         }
 
         return response.toSavedSession(
@@ -79,13 +98,27 @@ class SupabaseAuthService(
         )
     }
 
-    private suspend fun ClientRequestException.toSupabaseException(): IllegalStateException {
+    private suspend fun ClientRequestException.toSupabaseException(isRefreshFlow: Boolean): IllegalStateException {
+        val statusCode = response.status.value
         val errorBody = response.body<String>()
         val parsed = runCatching {
             json.decodeFromString(SupabaseError.serializer(), errorBody)
         }.getOrNull()
 
-        return IllegalStateException(parsed?.message ?: parsed?.error ?: "Falha ao autenticar no Supabase")
+        val message = parsed?.message ?: parsed?.error ?: "Falha ao autenticar no Supabase"
+        val normalized = message.lowercase()
+        val shouldInvalidateSession =
+            statusCode == 401 ||
+                statusCode == 403 ||
+                (isRefreshFlow && normalized.contains("invalid_grant")) ||
+                (isRefreshFlow && normalized.contains("refresh token")) ||
+                (isRefreshFlow && normalized.contains("revoked"))
+
+        return if (shouldInvalidateSession) {
+            IllegalStateException(message)
+        } else {
+            IllegalStateException("Falha temporaria ao atualizar sessao: $message")
+        }
     }
 
     private fun TokenResponse.toSavedSession(
@@ -111,7 +144,12 @@ class SupabaseAuthService(
             } else {
                 "Falha ao autenticar no Supabase."
             }
-            throw IllegalStateException(backendMessage ?: fallbackMessage)
+            val finalMessage = backendMessage ?: fallbackMessage
+            Log.w(
+                logTag,
+                "operationId=- stage=auth_token_payload_invalid refreshFlow=$isRefreshFlow message=$finalMessage",
+            )
+            throw IllegalStateException(finalMessage)
         }
 
         return SavedSession(

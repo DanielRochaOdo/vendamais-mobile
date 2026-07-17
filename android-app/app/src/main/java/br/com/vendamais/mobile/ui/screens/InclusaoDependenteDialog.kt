@@ -90,6 +90,7 @@ import br.com.vendamais.mobile.ui.theme.Red500
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -115,6 +116,7 @@ private const val MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 private const val LEMMIT_MAX_ATTEMPTS = 3
 private const val LEMMIT_TIMEOUT_MS = 12000L
 private const val LEMMIT_RETRY_DELAY_MS = 900L
+private const val INCLUSAO_SEND_TIMEOUT_MS = 120000L
 
 private data class DependenteFormState(
     val nome: String = "",
@@ -126,9 +128,16 @@ private data class DependenteFormState(
     val planoValor: String = "0.00",
     val nomeMae: String = "",
     val arquivo: UploadedTempFile? = null,
+    val uploadError: String? = null,
     val saved: Boolean = false,
     val uploading: Boolean = false,
     val expanded: Boolean = true,
+)
+
+private data class PendingUpload(
+    val fileName: String,
+    val mimeType: String,
+    val bytes: ByteArray,
 )
 
 private data class PlanoOption(
@@ -175,11 +184,14 @@ fun InclusaoDependenteDialog(
     var loadingBusca by rememberSaveable { mutableStateOf(false) }
     var salvando by rememberSaveable { mutableStateOf(false) }
     var enviando by rememberSaveable { mutableStateOf(false) }
+    val salvandoRef = remember { AtomicBoolean(false) }
+    val enviandoRef = remember { AtomicBoolean(false) }
     var localError by rememberSaveable { mutableStateOf<String?>(null) }
     var localNotice by rememberSaveable { mutableStateOf<String?>(null) }
     var successDialogMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var previewingArquivoIndex by rememberSaveable { mutableStateOf<Int?>(null) }
     val keyboardAwareFooter = rememberKeyboardAwareFooterState()
+    val pendingUploads = remember { mutableStateMapOf<Int, PendingUpload>() }
 
     var selectedVendedorId by rememberSaveable {
         mutableStateOf(
@@ -273,6 +285,7 @@ fun InclusaoDependenteDialog(
         bytes: ByteArray,
     ) {
         validateUpload(fileName, mimeType, bytes.size.toLong())
+        pendingUploads[index] = PendingUpload(fileName = fileName, mimeType = mimeType, bytes = bytes)
         dependentes[index].arquivo?.path?.takeIf { it.isNotBlank() }?.let { path ->
             runCatching { viewModel.deleteTempFile(path) }
         }
@@ -283,9 +296,33 @@ fun InclusaoDependenteDialog(
             bytes = bytes,
             prefix = if (isContinuacao) "dependentes-continuar/$cpf" else "dependentes-temp/$cpf",
         )
-        updateDependente(dependentes, index) { it.copy(arquivo = uploaded, uploading = false, saved = false) }
+        pendingUploads.remove(index)
+        updateDependente(dependentes, index) { it.copy(arquivo = uploaded, uploadError = null, uploading = false, saved = false) }
         runCatching { persistInclusaoDraftNow() }
         localNotice = "Arquivo carregado com sucesso."
+    }
+
+    suspend fun retryDependenteUpload(index: Int) {
+        val pending = pendingUploads[index] ?: run {
+            localError = "Nao ha arquivo para retentar."
+            return
+        }
+        updateDependente(dependentes, index) { it.copy(uploading = true, uploadError = null) }
+        runCatching {
+            uploadDependenteArquivo(
+                index = index,
+                fileName = pending.fileName,
+                mimeType = pending.mimeType,
+                bytes = pending.bytes,
+            )
+        }.onFailure { throwable ->
+            val errorMessage = CadastroApiErrorMapper.mapUserMessage(
+                throwable.message,
+                "Erro ao carregar arquivo.",
+            )
+            updateDependente(dependentes, index) { it.copy(uploading = false, uploadError = errorMessage) }
+            localError = errorMessage
+        }
     }
 
     suspend fun openDependenteArquivoPreview(index: Int) {
@@ -336,11 +373,12 @@ fun InclusaoDependenteDialog(
                 )
             }.onSuccess {
             }.onFailure { throwable ->
-                updateDependente(dependentes, index) { it.copy(uploading = false) }
-                localError = CadastroApiErrorMapper.mapUserMessage(
+                val errorMessage = CadastroApiErrorMapper.mapUserMessage(
                     throwable.message,
                     "Erro ao carregar arquivo.",
                 )
+                updateDependente(dependentes, index) { it.copy(uploading = false, uploadError = errorMessage) }
+                localError = errorMessage
             }
         }
     }
@@ -363,11 +401,12 @@ fun InclusaoDependenteDialog(
                     bytes = bytes,
                 )
             }.onFailure { throwable ->
-                updateDependente(dependentes, index) { it.copy(uploading = false) }
-                localError = CadastroApiErrorMapper.mapUserMessage(
+                val errorMessage = CadastroApiErrorMapper.mapUserMessage(
                     throwable.message,
                     "Erro ao capturar arquivo pela camera.",
                 )
+                updateDependente(dependentes, index) { it.copy(uploading = false, uploadError = errorMessage) }
+                localError = errorMessage
             }
             runCatching { File(cameraPath).delete() }
         }
@@ -644,7 +683,22 @@ fun InclusaoDependenteDialog(
         }
     }
 
-    suspend fun enviarDependentes() {
+    fun validateInclusaoAntesDeEnviar(base: List<DependenteFormState>): List<String> {
+        val errors = mutableListOf<String>()
+        val responsavel = responsavelSelecionado
+        if (responsavel == null) errors += "responsavel"
+        if (!ensureEmpresaIdentificada(responsavel ?: return errors)) errors += "empresa"
+        val vendedor = resolveVendedor()
+        if (profile?.role != "VENDEDOR" && state.vendedores.isEmpty()) errors += "vendedor"
+        if (profile?.role != "VENDEDOR" && vendedor?.externalId.isNullOrBlank()) errors += "vendedor"
+        if (base.isEmpty()) errors += "dependentes"
+        base.forEachIndexed { index, dep ->
+            validateDependente(dep, index)?.let { errors += it }
+        }
+        return errors
+    }
+
+    suspend fun enviarDependentes(operationId: String? = null) {
         val responsavel = responsavelSelecionado ?: run {
             localError = "Selecione um responsavel financeiro."
             return
@@ -706,6 +760,7 @@ fun InclusaoDependenteDialog(
                 dependentes = base,
             ),
             cadastroId = cadastroId,
+            operationId = operationId,
         )
 
         val finalPayloadBase = buildCadastroPayload(
@@ -1230,6 +1285,11 @@ fun InclusaoDependenteDialog(
                                     Button(onClick = { targetUploadIndex = index; showArquivoSourceModal = true }, enabled = !dep.uploading && !enviando && !salvando) {
                                         if (dep.uploading) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp) else Text(if (dep.arquivo == null) "Arquivo" else "Trocar arquivo")
                                     }
+                                    if (dep.uploadError != null && !dep.uploading) {
+                                        TextButton(onClick = { scope.launch { retryDependenteUpload(index) } }) {
+                                            Text("Retentar")
+                                        }
+                                    }
                                     if (dep.arquivo != null) {
                                         TextButton(
                                             onClick = { scope.launch { openDependenteArquivoPreview(index) } },
@@ -1270,6 +1330,13 @@ fun InclusaoDependenteDialog(
                                             contentDescription = "Remover",
                                         )
                                     }
+                                }
+                                if (dep.uploadError != null) {
+                                    Text(
+                                        text = dep.uploadError,
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
                                 }
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -1337,17 +1404,21 @@ fun InclusaoDependenteDialog(
                     Button(
                         modifier = Modifier.weight(1f),
                         onClick = {
-                            if (salvando || enviando) return@Button
+                            if (!salvandoRef.compareAndSet(false, true)) return@Button
                             salvando = true
                             scope.launch {
-                                runCatching { salvarPendente() }
-                                    .onFailure {
-                                        localError = CadastroApiErrorMapper.mapUserMessage(
-                                            it.message,
-                                            "Falha ao salvar pendente.",
-                                        )
-                                    }
-                                salvando = false
+                                try {
+                                    runCatching { salvarPendente() }
+                                        .onFailure {
+                                            localError = CadastroApiErrorMapper.mapUserMessage(
+                                                it.message,
+                                                "Falha ao salvar pendente.",
+                                            )
+                                        }
+                                } finally {
+                                    salvando = false
+                                    salvandoRef.set(false)
+                                }
                             }
                         },
                         enabled = !salvando && !enviando && responsavelSelecionado != null,
@@ -1366,22 +1437,45 @@ fun InclusaoDependenteDialog(
                     Button(
                         modifier = Modifier.weight(1.1f),
                         onClick = {
-                            if (salvando || enviando) return@Button
+                            val base = dependentes.toList()
+                            val invalidFields = validateInclusaoAntesDeEnviar(base)
+                            android.util.Log.d("CadastroTrace", "operationId=- stage=frontend_validation_started")
+                            if (invalidFields.isNotEmpty()) {
+                                android.util.Log.w(
+                                    "CadastroTrace",
+                                    "operationId=- stage=frontend_validation_failed invalidFields=$invalidFields",
+                                )
+                                localError = "Revise os campos destacados antes de concluir a inclusao."
+                                return@Button
+                            }
+                            android.util.Log.d("CadastroTrace", "operationId=- stage=frontend_validation_passed")
+                            if (!enviandoRef.compareAndSet(false, true)) return@Button
+                            val operationId = java.util.UUID.randomUUID().toString()
+                            android.util.Log.d("CadastroTrace", "operationId=$operationId stage=ui_click_inclusao_submit")
                             enviando = true
                             scope.launch {
-                                runCatching { enviarDependentes() }
-                                    .onFailure { throwable ->
-                                        val mapped = CadastroApiErrorMapper.mapErpError(throwable.message)
-                                        if (mapped != null) {
-                                            viewModel.resolveCadastroOverlay(CadastroModalSignal(erpError = mapped))
-                                        } else {
-                                            localError = CadastroApiErrorMapper.mapUserMessage(
-                                                throwable.message,
-                                                "Falha ao incluir dependentes.",
-                                            )
-                                        }
+                                try {
+                                    val completed = withTimeoutOrNull(INCLUSAO_SEND_TIMEOUT_MS) {
+                                        runCatching { enviarDependentes(operationId) }
+                                            .onFailure { throwable ->
+                                                val mapped = CadastroApiErrorMapper.mapErpError(throwable.message)
+                                                if (mapped != null) {
+                                                    viewModel.resolveCadastroOverlay(CadastroModalSignal(erpError = mapped))
+                                                } else {
+                                                    localError = CadastroApiErrorMapper.mapUserMessage(
+                                                        throwable.message,
+                                                        "Falha ao incluir dependentes.",
+                                                    )
+                                                }
+                                            }
                                     }
-                                enviando = false
+                                    if (completed == null) {
+                                        localError = "A inclusao demorou demais para concluir. Tente novamente."
+                                    }
+                                } finally {
+                                    enviando = false
+                                    enviandoRef.set(false)
+                                }
                             }
                         },
                         enabled = !salvando && !enviando && responsavelSelecionado != null,

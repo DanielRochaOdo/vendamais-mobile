@@ -20,5 +20,4 @@ if (Test-Path $avdDir) {
 Start-Process -FilePath $emulatorExe -ArgumentList @(
     "-avd", $emulatorName,
     "-no-snapshot-load",
-    "-gpu", "swiftshader_indirect"
 )

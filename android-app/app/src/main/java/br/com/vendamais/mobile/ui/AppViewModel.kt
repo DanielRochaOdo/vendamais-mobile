@@ -1,10 +1,14 @@
 ﻿package br.com.vendamais.mobile.ui
 
 import android.content.Context
+import android.content.pm.PackageManager
+import android.content.pm.PackageInfo
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.core.content.pm.PackageInfoCompat
+import java.security.MessageDigest
 import br.com.vendamais.mobile.AppConfig
 import br.com.vendamais.mobile.data.auth.SavedSession
 import br.com.vendamais.mobile.data.auth.SessionStore
@@ -572,6 +576,13 @@ class AppViewModel(
             _uiState.update { it.copy(appUpdateDownloading = false) }
             if (apkFile != null) {
                 Log.d(logTag, "APK baixado em ${apkFile.absolutePath} tamanho=${apkFile.length()}")
+                val validationError = validateDownloadedUpdateApk(context, apkFile)
+                if (validationError != null) {
+                    Log.e(logTag, "APK de atualizacao rejeitado: $validationError")
+                    apkFile.delete()
+                    _uiState.update { it.copy(appUpdateError = validationError) }
+                    return@launch
+                }
                 val uri = androidx.core.content.FileProvider.getUriForFile(
                     context,
                     "${context.packageName}.fileprovider",
@@ -594,6 +605,54 @@ class AppViewModel(
                 _uiState.update { it.copy(appUpdateError = "Nao foi possivel baixar a atualizacao.") }
             }
         }
+    }
+
+    private fun validateDownloadedUpdateApk(context: Context, apkFile: File): String? {
+        val archiveInfo = runCatching {
+            @Suppress("DEPRECATION")
+            context.packageManager.getPackageArchiveInfo(
+                apkFile.absolutePath,
+                PackageManager.GET_ACTIVITIES or PackageManager.GET_META_DATA,
+            )
+        }.getOrNull() ?: return "Nao foi possivel ler os dados do APK baixado."
+
+        val downloadedPackageName = archiveInfo.packageName.orEmpty()
+        if (downloadedPackageName != context.packageName) {
+            return "O APK baixado nao pertence ao aplicativo esperado."
+        }
+
+        val installedVersionCode = runCatching { br.com.vendamais.mobile.BuildConfig.VERSION_CODE }.getOrDefault(0)
+        val downloadedVersionCode = runCatching { PackageInfoCompat.getLongVersionCode(archiveInfo).toInt() }.getOrDefault(0)
+        if (downloadedVersionCode <= installedVersionCode) {
+            return "O APK baixado esta desatualizado. Versao atual: $installedVersionCode, APK baixado: $downloadedVersionCode."
+        }
+
+        val installedInfo = runCatching {
+            @Suppress("DEPRECATION")
+            context.packageManager.getPackageInfo(
+                context.packageName,
+                PackageManager.GET_SIGNING_CERTIFICATES,
+            )
+        }.getOrNull() ?: return "Nao foi possivel ler a assinatura do app instalado."
+
+        val installedCert = installedInfo.signingCertificateSha256()
+            ?: return "Nao foi possivel ler a assinatura do app instalado."
+        val downloadedCert = archiveInfo.signingCertificateSha256()
+            ?: return "Nao foi possivel ler a assinatura do APK baixado."
+        if (installedCert != downloadedCert) {
+            return "O APK baixado foi assinado com outra chave."
+        }
+
+        return null
+    }
+
+    private fun PackageInfo.signingCertificateSha256(): String? {
+        val signatures = signingInfo?.apkContentsSigners?.takeIf { it.isNotEmpty() }
+            ?: signingInfo?.signingCertificateHistory?.takeIf { it.isNotEmpty() }
+            ?: return null
+        val certificate = signatures.firstOrNull()?.toByteArray() ?: return null
+        val digest = MessageDigest.getInstance("SHA-256").digest(certificate)
+        return digest.joinToString("") { byte -> "%02x".format(byte) }
     }
 
     fun checkAndInstallAppUpdate(
@@ -909,6 +968,48 @@ class AppViewModel(
             try {
                 runCatching {
                     val activeSession = ensureFreshSession(session)
+                    val cpfExistente = withContext(Dispatchers.IO) {
+                        workflowRepository.inspectCpfExistente(
+                            session = activeSession,
+                            userId = profile.id,
+                            cpf = cpf,
+                        )
+                    }
+                    val cpfStatusConfiavel = cpfExistente?.status?.trim().orEmpty()
+                    if (
+                        cpfExistente?.exists == true &&
+                        cpfStatusConfiavel.isNotBlank() &&
+                        !isPendingCadastroStatus(cpfStatusConfiavel)
+                    ) {
+                        Log.i(
+                            logTag,
+                            "createDraftFromCpf cpfConsolidado cpf=$cpf status=$cpfStatusConfiavel id=${cpfExistente.cadastroId ?: "-"}",
+                        )
+                        val cadastroConsolidado = cpfExistente.cadastroId
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { cadastroId ->
+                                runCatching {
+                                    withContext(Dispatchers.IO) {
+                                        workflowRepository.fetchCadastroDetalhe(activeSession, cadastroId)
+                                    }
+                                }.getOrNull()
+                            }
+                        _uiState.update {
+                            it.copy(
+                                cadastroWorkspace = it.cadastroWorkspace.copy(operationLoading = false),
+                                selectedCadastro = cadastroConsolidado,
+                                pendingCadastroPrompt = null,
+                                pendingCadastroActionLoading = false,
+                                errorMessage = null,
+                                noticeMessage = buildString {
+                                    append("CPF ja consolidado")
+                                    append(" com status $cpfStatusConfiavel")
+                                    cpfExistente.empresaNome?.takeIf { it.isNotBlank() }?.let { append(" na empresa $it") }
+                                },
+                            )
+                        }
+                        return@runCatching null
+                    }
                     withContext(Dispatchers.IO) {
                         workflowRepository.createDraftFromCpf(
                             session = activeSession,
@@ -923,6 +1024,16 @@ class AppViewModel(
                         )
                     }
                 }.onSuccess { result ->
+                    if (result == null) {
+                        _uiState.update {
+                            it.copy(
+                                cadastroWorkspace = it.cadastroWorkspace.copy(operationLoading = false),
+                                pendingCadastroPrompt = null,
+                                pendingCadastroActionLoading = false,
+                            )
+                        }
+                        return@onSuccess
+                    }
                     val activeSession = ensureFreshSession(session)
                     val currentCadastros = _uiState.value.cadastros
                     val cadastrosRefreshResult = runCatching {
@@ -949,7 +1060,7 @@ class AppViewModel(
                     }.joinToString("\n\n").ifBlank { null }
                     _uiState.update {
                         it.copy(
-                            cadastros = cadastrosAtualizados,
+                            cadastros = reconcileCadastrosByCpf(cadastrosAtualizados),
                             selectedCadastro = result.draft,
                             cadastroWorkspace = it.cadastroWorkspace.copy(
                                 operationLoading = false,
@@ -1122,7 +1233,7 @@ class AppViewModel(
             withContext(Dispatchers.IO) { repository.fetchCadastros(session) }
         }.getOrNull() ?: return null
 
-        _uiState.update { it.copy(cadastros = refreshed) }
+        _uiState.update { it.copy(cadastros = reconcileCadastrosByCpf(refreshed)) }
 
         val fromRemoteById = preferredCadastroId
             ?.takeIf { it.isNotBlank() }
@@ -1675,7 +1786,7 @@ class AppViewModel(
                     it.copy(
                         sendingCadastro = false,
                         selectedCadastro = null,
-                        cadastros = cadastrosAtualizados,
+                        cadastros = reconcileCadastrosByCpf(cadastrosAtualizados),
                         cadastroStats = statsAtualizadas,
                         errorMessage = null,
                         noticeMessage = noticeMessage,
@@ -1818,7 +1929,7 @@ class AppViewModel(
                     it.copy(
                         sendingCadastro = false,
                         selectedCadastro = null,
-                        cadastros = cadastrosAtualizados,
+                        cadastros = reconcileCadastrosByCpf(cadastrosAtualizados),
                         cadastroStats = statsAtualizadas,
                         noticeMessage = noticeMessage,
                         activeTab = MainTab.CADASTROS,
@@ -2205,7 +2316,12 @@ class AppViewModel(
         token: String,
         payload: PublicCadastroPayload,
         idempotencyKey: String? = null,
+        operationId: String? = null,
     ): PublicCadastroSubmitResponse {
+        Log.d(
+            logTag,
+            "operationId=${operationId ?: "-"} stage=viewmodel_submit_public idempotency=${!idempotencyKey.isNullOrBlank()}",
+        )
         return workflowRepository.submitPublicCadastro(token, payload, idempotencyKey)
     }
 
@@ -2277,10 +2393,14 @@ class AppViewModel(
             val updated = workflowRepository.updateCadastro(activeSession, id, payloadPersistencia)
             draftUxStateCache.save(id, payloadPersistencia)
             val cadastrosAtualizados = repository.fetchCadastros(activeSession)
+            Log.i(
+                "CadastroTrace",
+                "trace=$traceId stage=viewmodel_updateCadastroRecord cadastrosBefore=NA cadastrosAfter=${cadastrosAtualizados.size}",
+            )
             _uiState.update {
                 it.copy(
                     selectedCadastro = updated,
-                    cadastros = cadastrosAtualizados,
+                    cadastros = reconcileCadastrosByCpf(cadastrosAtualizados),
                 )
             }
             Log.i(
@@ -2318,7 +2438,7 @@ class AppViewModel(
                             _uiState.update {
                                 it.copy(
                                     selectedCadastro = detalhe,
-                                    cadastros = cadastrosAtualizados,
+                                    cadastros = reconcileCadastrosByCpf(cadastrosAtualizados),
                                     pendingCadastroPrompt = null,
                                     pendingCadastroActionLoading = false,
                                 )
@@ -2366,10 +2486,14 @@ class AppViewModel(
             val created = workflowRepository.createCadastroDraft(activeSession, profile, payload)
             val cadastrosAtualizados = repository.fetchCadastros(activeSession)
             val statsAtualizadas = repository.fetchCadastroStats(activeSession)
+            Log.i(
+                "CadastroTrace",
+                "stage=viewmodel_createCadastroRecord createdId=${created.id} cadastrosAfter=${cadastrosAtualizados.size}",
+            )
             _uiState.update {
                 it.copy(
                     selectedCadastro = created,
-                    cadastros = cadastrosAtualizados,
+                    cadastros = reconcileCadastrosByCpf(cadastrosAtualizados),
                     cadastroStats = statsAtualizadas,
                 )
             }
@@ -2518,19 +2642,26 @@ class AppViewModel(
             cadastroId = id,
             motivoExclusao = motivoExclusao,
         )
-        val cadastrosAtualizados = runCatching { repository.fetchCadastros(activeSession) }
-            .getOrElse {
-                Log.w(logTag, "Falha ao atualizar lista apos exclusao, removendo localmente", it)
-                _uiState.value.cadastros.filterNot { cadastro -> cadastro.id == id }
-            }
-        val statsAtualizadas = runCatching { repository.fetchCadastroStats(activeSession) }
-            .getOrDefault(_uiState.value.cadastroStats)
+        val cadastrosAtualizados = _uiState.value.cadastros.filterNot { cadastro -> cadastro.id == id }
+        val statsAtualizadas = _uiState.value.cadastroStats
         _uiState.update {
             it.copy(
                 selectedCadastro = null,
-                cadastros = cadastrosAtualizados,
+                cadastros = reconcileCadastrosByCpf(cadastrosAtualizados),
                 cadastroStats = statsAtualizadas,
             )
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { repository.fetchCadastroStats(activeSession) }
+                .onSuccess { stats ->
+                    _uiState.update { current ->
+                        current.copy(cadastroStats = stats)
+                    }
+                }
+                .onFailure {
+                    Log.w(logTag, "Falha ao atualizar estatisticas apos exclusao", it)
+                }
         }
     }
 
@@ -2596,13 +2727,19 @@ class AppViewModel(
     suspend fun enviarInclusaoDependente(
         payload: kotlinx.serialization.json.JsonObject,
         cadastroId: String? = null,
+        operationId: String? = null,
     ): kotlinx.serialization.json.JsonElement {
         val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
         val activeSession = ensureFreshSession(session)
+        Log.d(
+            logTag,
+            "operationId=${operationId ?: "-"} stage=viewmodel_send_inclusao cadastroId=${cadastroId ?: "-"}",
+        )
         return workflowRepository.enviarInclusaoDependente(
             session = activeSession,
             payload = payload,
             cadastroId = cadastroId,
+            operationId = operationId,
         )
     }
 
@@ -2622,7 +2759,7 @@ class AppViewModel(
             erpResponse = erpResponse,
         )
         val cadastrosAtualizados = repository.fetchCadastros(activeSession)
-        _uiState.update { it.copy(cadastros = cadastrosAtualizados) }
+        _uiState.update { it.copy(cadastros = reconcileCadastrosByCpf(cadastrosAtualizados)) }
     }
 
     suspend fun uploadDependenteDocumento(
@@ -2833,7 +2970,7 @@ class AppViewModel(
                     .onSuccess { cadastros ->
                         _uiState.update {
                             it.copy(
-                                cadastros = cadastros,
+                                cadastros = reconcileCadastrosByCpf(cadastros),
                                 cadastrosLoading = false,
                                 cadastrosLoaded = true,
                             )
@@ -2897,7 +3034,7 @@ class AppViewModel(
             val selected = current.selectedCadastro
             val selectedStillExists = selected == null || cadastrosAtualizados.any { it.id == selected.id }
             current.copy(
-                cadastros = cadastrosAtualizados,
+                cadastros = reconcileCadastrosByCpf(cadastrosAtualizados),
                 cadastrosLoaded = true,
                 cadastroStats = statsAtualizadas ?: current.cadastroStats,
                 selectedCadastro = if (selectedStillExists) selected else null,
@@ -3087,10 +3224,26 @@ class AppViewModel(
     }
 
     private suspend fun ensureFreshSession(session: SavedSession): SavedSession {
+        val operationId = "session-${session.userId.take(8)}-${System.currentTimeMillis()}"
+        Log.d(
+            "CadastroTrace",
+            "operationId=$operationId stage=ensure_session_start authenticated=${_uiState.value.isAuthenticated} hasExpiresAt=${session.expiresAt != null}",
+        )
         val refreshed = try {
-            authService.refreshIfNeeded(session)
+            val refreshedSession = authService.refreshIfNeeded(session)
+            Log.d(
+                "CadastroTrace",
+                "operationId=$operationId stage=ensure_session_ok refreshed=${refreshedSession != session}",
+            )
+            refreshedSession
         } catch (throwable: Throwable) {
-            if (shouldForceLogoutOnRefreshFailure(throwable.message)) {
+            val shouldLogout = shouldForceLogoutOnRefreshFailure(throwable)
+            Log.w(
+                "CadastroTrace",
+                "operationId=$operationId stage=ensure_session_failure shouldLogout=$shouldLogout type=${throwable::class.simpleName} message=${throwable.message}",
+                throwable,
+            )
+            if (shouldLogout) {
                 Log.w(logTag, "Sessao invalida detectada no refresh; limpando sessao local", throwable)
                 stopCadastrosAutoSync()
                 inMemorySessionActive = false
@@ -3111,6 +3264,10 @@ class AppViewModel(
                         errorMessage = "Sua sessao expirou. Faca login novamente para continuar.",
                     )
                 }
+                Log.w(
+                    "CadastroTrace",
+                    "operationId=$operationId stage=session_cleared authenticated=${_uiState.value.isAuthenticated}",
+                )
                 throw IllegalStateException("Sua sessao expirou. Faca login novamente para continuar.")
             }
             throw throwable
@@ -3125,19 +3282,23 @@ class AppViewModel(
         return refreshed
     }
 
-    private fun shouldForceLogoutOnRefreshFailure(message: String?): Boolean {
-        val normalized = message
-            ?.trim()
-            ?.lowercase(Locale.ROOT)
-            .orEmpty()
-        if (normalized.isBlank()) return false
+    private fun shouldForceLogoutOnRefreshFailure(throwable: Throwable): Boolean {
+        val message = throwable.message?.trim()?.lowercase(Locale.ROOT).orEmpty()
+        val type = throwable::class.simpleName.orEmpty().lowercase(Locale.ROOT)
+        if (message.isBlank() && type.isBlank()) return false
 
-        return normalized.contains("refresh token") ||
-            normalized.contains("invalid_grant") ||
-            normalized.contains("session expired") ||
-            normalized.contains("jwt expired") ||
-            normalized.contains("token is expired") ||
-            normalized.contains("revoked")
+        val explicitAuthSignals = listOf(
+            "invalid_grant",
+            "refresh token",
+            "jwt expired",
+            "token is expired",
+            "token expired",
+            "revoked",
+            "session revoked",
+        )
+
+        return explicitAuthSignals.any { message.contains(it) } ||
+            (type.contains("auth") && (message.contains("expired") || message.contains("revoked")))
     }
 
     private fun requiresVendedorSelection(profile: MobileProfile): Boolean {
@@ -3246,6 +3407,35 @@ class AppViewModel(
                 "Selecione uma empresa valida antes de cadastrar."
             else -> CadastroApiErrorMapper.mapUserMessage(message, fallback)
         }
+    }
+
+    private fun reconcileCadastrosByCpf(cadastros: List<CadastroResumo>): List<CadastroResumo> {
+        if (cadastros.isEmpty()) return cadastros
+
+        val groups = cadastros.groupBy { CadastroPayloadBuilder.normalizeDigits(it.cpf).takeIf { cpf -> cpf.length == 11 } ?: it.id }
+        return groups.values.map { group ->
+            if (group.size == 1) return@map group.first()
+
+            val consolidated = group.firstOrNull { !isPendingCadastroStatus(it.status) }
+            val pending = group.firstOrNull { isPendingCadastroStatus(it.status) }
+            val primary = consolidated ?: group.maxByOrNull { it.updatedAt } ?: group.first()
+            val fallback = pending ?: group.firstOrNull { it.id != primary.id }
+
+            primary.copy(
+                nome = primary.nome?.takeIf { it.isNotBlank() }
+                    ?: fallback?.nome?.takeIf { it.isNotBlank() },
+                empresaNome = primary.empresaNome?.takeIf { it.isNotBlank() }
+                    ?: fallback?.empresaNome?.takeIf { it.isNotBlank() },
+                empresaCnpj = primary.empresaCnpj?.takeIf { it.isNotBlank() }
+                    ?: fallback?.empresaCnpj?.takeIf { it.isNotBlank() },
+                empresaCodigo = primary.empresaCodigo ?: fallback?.empresaCodigo,
+                vendedorNome = primary.vendedorNome?.takeIf { it.isNotBlank() }
+                    ?: fallback?.vendedorNome?.takeIf { it.isNotBlank() },
+                adesionistaNome = primary.adesionistaNome?.takeIf { it.isNotBlank() }
+                    ?: fallback?.adesionistaNome?.takeIf { it.isNotBlank() },
+                status = if (consolidated != null) consolidated.status else primary.status,
+            )
+        }.sortedByDescending { it.updatedAt }
     }
 
     override fun onCleared() {

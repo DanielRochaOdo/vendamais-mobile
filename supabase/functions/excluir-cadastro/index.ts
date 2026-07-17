@@ -78,14 +78,16 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (profile.role === 'VENDEDOR' && cadastro.vendedor_id !== user.id) {
+    const isAdmin = profile.role === 'ADMINISTRADOR' || profile.role === 'ADMIN';
+
+    if (!isAdmin && profile.role === 'VENDEDOR' && cadastro.vendedor_id !== user.id) {
       return new Response(
         JSON.stringify({ error: 'Você só pode excluir suas próprias adesões' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    if (profile.role === 'ADESIONISTA' && cadastro.created_by !== user.id) {
+    if (!isAdmin && profile.role === 'ADESIONISTA' && cadastro.created_by !== user.id) {
       return new Response(
         JSON.stringify({ error: 'Você só pode excluir suas próprias adesões' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

@@ -12,6 +12,23 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { generateDraftKey, ModalName } from '../utils/draftKey';
 
+const DRAFT_STORAGE_KEY = 'modal-drafts-storage';
+
+function clearCorruptedPersistedDrafts() {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (!raw) return;
+
+    JSON.parse(raw);
+  } catch {
+    window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+  }
+}
+
+clearCorruptedPersistedDrafts();
+
 /**
  * File metadata (NO base64!)
  */
@@ -238,7 +255,7 @@ export const useDraftStore = create<DraftStoreState>()(
       },
     }),
     {
-      name: 'modal-drafts-storage',
+      name: DRAFT_STORAGE_KEY,
       version: 1,
     }
   )

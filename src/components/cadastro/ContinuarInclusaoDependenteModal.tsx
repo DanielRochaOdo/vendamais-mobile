@@ -45,10 +45,15 @@ interface DependenteForm {
   planoValor: string;
   nomeMae: string;
   arquivo: UploadedFile | null;
+  uploadError?: string;
   cpfValidationError: string;
   uploadingFile: boolean;
   consultingLemmit: boolean;
 }
+
+type PendingUpload = {
+  file: File;
+};
 
 interface Empresa {
   id: number;
@@ -262,6 +267,7 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
       consultingLemmit: false
     }];
   });
+  const [pendingUploads, setPendingUploads] = useState<Record<number, PendingUpload>>({});
 
   const [loading, setLoading] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -695,6 +701,13 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
       idx === index ? { ...dep, uploadingFile: true } : dep
     ));
     setError('');
+    setPendingUploads(prev => ({
+      ...prev,
+      [index]: { file }
+    }));
+    setDependentes(prev => prev.map((dep, idx) =>
+      idx === index ? { ...dep, uploadError: undefined } : dep
+    ));
 
     try {
       if (!profile?.id) {
@@ -718,6 +731,7 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
           return {
             ...dep,
             arquivo: uploadedFile,
+            uploadError: undefined,
             uploadingFile: false
           };
         }
@@ -731,11 +745,28 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
       const errorMessage = err instanceof Error ? err.message : 'Erro ao fazer upload do arquivo';
       setError(errorMessage);
       setDependentes(prev => prev.map((dep, idx) =>
-        idx === index ? { ...dep, uploadingFile: false } : dep
+        idx === index ? { ...dep, uploadingFile: false, uploadError: errorMessage } : dep
       ));
     } finally {
       e.target.value = '';
     }
+  };
+
+  const retryFileUpload = async (index: number) => {
+    const pending = pendingUploads[index];
+    if (!pending) {
+      setError('Nao ha arquivo para retentar');
+      return;
+    }
+
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(pending.file);
+
+    await handleFileUpload(index, {
+      preventDefault() {},
+      stopPropagation() {},
+      target: { files: dataTransfer.files, value: '' },
+    } as unknown as React.ChangeEvent<HTMLInputElement>);
   };
 
   const adicionarDependente = () => {
@@ -1529,6 +1560,7 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
                         <input
                           type="file"
                           accept="image/jpeg,image/jpg,image/png,application/pdf"
+                          data-upload-index={index}
                           onChange={(e) => handleFileUpload(index, e)}
                           disabled={dep.uploadingFile}
                           className="hidden"
@@ -1562,6 +1594,18 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
                             </>
                           )}
                         </label>
+                        {dep.uploadError && !dep.uploadingFile && (
+                          <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 p-2">
+                            <p className="text-xs text-red-700">{dep.uploadError}</p>
+                            <button
+                              type="button"
+                              onClick={() => retryFileUpload(index)}
+                              className="text-xs font-medium text-red-700 hover:text-red-800"
+                            >
+                              Retentar
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

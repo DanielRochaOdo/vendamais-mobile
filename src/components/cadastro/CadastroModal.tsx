@@ -111,7 +111,9 @@ export function CadastroModal({ cadastro, onClose, onSuccess, forceStartStepOne 
   const [showParceiroInvalidoModal, setShowParceiroInvalidoModal] = useState(false);
   const [selectedEmpresa, setSelectedEmpresa] = useState<Empresa | null>(null);
   const [arquivo, setArquivo] = useState<UploadedFile | null>(null);
+  const [arquivoUploadError, setArquivoUploadError] = useState('');
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [pendingArquivo, setPendingArquivo] = useState<File | null>(null);
   const [novoContato, setNovoContato] = useState<{ tipo: CadastroContato['tipo']; valor: string }>({
     tipo: 'celular',
     valor: '',
@@ -685,6 +687,8 @@ export function CadastroModal({ cadastro, onClose, onSuccess, forceStartStepOne 
 
     setUploadingFile(true);
     setError('');
+    setArquivoUploadError('');
+    setPendingArquivo(file);
 
     try {
       if (arquivo?.path) {
@@ -709,6 +713,8 @@ export function CadastroModal({ cadastro, onClose, onSuccess, forceStartStepOne 
       );
 
       setArquivo(uploadedFile);
+      setArquivoUploadError('');
+      setPendingArquivo(null);
 
       await updateCadastro(cadastroAtual.id, {
         arquivo_path: uploadedFile.path
@@ -720,10 +726,27 @@ export function CadastroModal({ cadastro, onClose, onSuccess, forceStartStepOne 
       console.error('Erro ao fazer upload do arquivo:', err);
       const errorMessage = err instanceof Error ? err.message : 'Erro ao fazer upload do arquivo';
       setError(errorMessage);
+      setArquivoUploadError(errorMessage);
     } finally {
       setUploadingFile(false);
       e.target.value = '';
     }
+  };
+
+  const retryArquivoUpload = async () => {
+    if (!pendingArquivo) {
+      setError('Nao ha arquivo para retentar');
+      return;
+    }
+
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(pendingArquivo);
+
+    await handleArquivoChange({
+      preventDefault() {},
+      stopPropagation() {},
+      target: { files: dataTransfer.files, value: '' },
+    } as unknown as React.ChangeEvent<HTMLInputElement>);
   };
 
   const validateCadastro = (requireArquivo: boolean, requireStatus = false) => {
@@ -1869,6 +1892,18 @@ export function CadastroModal({ cadastro, onClose, onSuccess, forceStartStepOne 
                         <p className="text-xs text-emerald-600 font-medium">
                           Fazendo upload do arquivo...
                         </p>
+                      </div>
+                    )}
+                    {arquivoUploadError && !uploadingFile && (
+                      <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 p-2">
+                        <p className="text-xs text-red-700">{arquivoUploadError}</p>
+                        <button
+                          type="button"
+                          onClick={() => retryArquivoUpload()}
+                          className="text-xs font-medium text-red-700 hover:text-red-800"
+                        >
+                          Retentar
+                        </button>
                       </div>
                     )}
                     {arquivo && !uploadingFile && (
