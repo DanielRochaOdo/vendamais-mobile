@@ -479,7 +479,7 @@ private fun normalizeRole(role: String): String {
 }
 
 private fun requiresTeamAndExternal(role: String): Boolean {
-    return role in setOf("CADASTRO", "SUPERVISOR", "VENDEDOR", "ADESIONISTA")
+    return role in setOf("SUPERVISOR", "VENDEDOR", "ADESIONISTA")
 }
 
 private fun parseLemmitLimite(rawValue: String): Double? {
