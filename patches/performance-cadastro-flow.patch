@@ -1,0 +1,291 @@
+diff --git a/android-app/app/src/main/java/br/com/vendamais/mobile/ui/screens/CadastroEditorDialog.kt b/android-app/app/src/main/java/br/com/vendamais/mobile/ui/screens/CadastroEditorDialog.kt
+--- a/android-app/app/src/main/java/br/com/vendamais/mobile/ui/screens/CadastroEditorDialog.kt
++++ b/android-app/app/src/main/java/br/com/vendamais/mobile/ui/screens/CadastroEditorDialog.kt
+@@ -111,10 +111,12 @@ import kotlinx.coroutines.launch
+ import kotlinx.coroutines.delay
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.withContext
+ import kotlinx.coroutines.withTimeoutOrNull
+@@
+-private const val LEMMIT_DEPENDENTE_MAX_ATTEMPTS = 3
+-private const val LEMMIT_DEPENDENTE_TIMEOUT_MS = 12000L
+-private const val LEMMIT_DEPENDENTE_RETRY_DELAY_MS = 900L
++private const val LEMMIT_DEPENDENTE_MAX_ATTEMPTS = 1
++private const val LEMMIT_DEPENDENTE_TIMEOUT_MS = 10000L
++private const val LEMMIT_DEPENDENTE_RETRY_DELAY_MS = 0L
+@@
+     suspend fun uploadSelectedArquivo(
+         fileName: String,
+         mimeType: String,
+         bytes: ByteArray,
+     ) {
+         if (arquivoPath.isNotBlank()) {
+-            runCatching { viewModel.deleteTempFile(arquivoPath) }
++            val existingFile = File(arquivoPath)
++            if (existingFile.exists()) {
++                withContext(Dispatchers.IO) { runCatching { existingFile.delete() } }
++            } else {
++                runCatching { viewModel.deleteTempFile(arquivoPath) }
++            }
+         }
+         validateUpload(
+             fileName = fileName,
+             mimeType = mimeType,
+             size = bytes.size.toLong(),
+         )
+-        val uploaded = viewModel.uploadTempFile(
+-            fileName = fileName,
+-            mimeType = mimeType,
+-            bytes = bytes,
+-            prefix = "cadastros/${cadastro.id}",
+-        )
+-        val draftAttachment = DraftAttachmentStorage.copyBytesToDraftStorage(
+-            context = context,
+-            draftId = cadastro.id,
+-            originalName = uploaded.nome,
+-            mimeType = uploaded.mime,
+-            bytes = bytes,
+-        )
++        val draftAttachment = withContext(Dispatchers.IO) {
++            DraftAttachmentStorage.copyBytesToDraftStorage(
++                context = context,
++                draftId = cadastro.id,
++                originalName = fileName,
++                mimeType = mimeType,
++                bytes = bytes,
++            )
++        }
+@@
+         scope.launch {
+             uploading = true
+             runCatching {
+-                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+-                    ?: error("Nao foi possivel ler o arquivo.")
++                val bytes = withContext(Dispatchers.IO) {
++                    context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
++                        ?: error("Nao foi possivel ler o arquivo.")
++                }
+                 uploadSelectedArquivo(
+@@
+         scope.launch {
+             uploading = true
+             runCatching {
+                 val cameraFile = File(cameraPath)
+-                val bytes = cameraFile.readBytes()
++                val bytes = withContext(Dispatchers.IO) { cameraFile.readBytes() }
+                 uploadSelectedArquivo(
+@@
+                                     }
+                                     val payload = buildPayload(requireStatus = false) ?: return@launch
+-                                    saving = true
+-                                    runCatching { viewModel.updateCadastroRecord(cadastro.id, payload) }
+-                                        .onSuccess { currentStep = 2 }
+-                                        .onFailure { throwable ->
+-                                            localMessage = CadastroApiErrorMapper.mapUserMessage(
+-                                                throwable.message,
+-                                                "Falha ao salvar antes de avancar.",
+-                                            )
+-                                        }
+-                                    saving = false
++                                    localMessage = null
++                                    currentStep = 2
++                                    viewModel.persistCadastroDraftSilently(cadastro.id, payload)
+                                 }
+                             },
+diff --git a/android-app/app/src/main/java/br/com/vendamais/mobile/ui/AppViewModel.kt b/android-app/app/src/main/java/br/com/vendamais/mobile/ui/AppViewModel.kt
+--- a/android-app/app/src/main/java/br/com/vendamais/mobile/ui/AppViewModel.kt
++++ b/android-app/app/src/main/java/br/com/vendamais/mobile/ui/AppViewModel.kt
+@@
+                 }.onSuccess { result ->
+-                    val activeSession = ensureFreshSession(session)
+-                    val currentCadastros = _uiState.value.cadastros
+-                    val cadastrosRefreshResult = runCatching {
+-                        withContext(Dispatchers.IO) { repository.fetchCadastros(activeSession) }
+-                    }
+-                    val cadastrosAtualizados = cadastrosRefreshResult.getOrElse {
+-                        Log.w(logTag, "Rascunho criado, mas falhou o refresh da lista", it)
+-                        currentCadastros
+-                    }
+                     val warning = result.warningMessage.orEmpty()
+-                    val postSuccessNotice = buildList {
+-                        if (warning.isBlank()) {
+-                            if (cadastrosRefreshResult.isFailure) {
+-                                add("Rascunho criado, mas houve falha ao atualizar a lista de cadastros.")
+-                            }
+-                        } else if (!warning.contains("Lemit", ignoreCase = true) && !warning.contains("Lemmit", ignoreCase = true)) {
+-                            add(warning)
+-                            if (cadastrosRefreshResult.isFailure) {
+-                                add("Rascunho criado, mas houve falha ao atualizar a lista de cadastros.")
+-                            }
+-                        } else if (cadastrosRefreshResult.isFailure) {
+-                            add("Rascunho criado, mas houve falha ao atualizar a lista de cadastros.")
+-                        }
+-                    }.joinToString("\n\n").ifBlank { null }
++                    val postSuccessNotice = warning
++                        .takeIf {
++                            it.isNotBlank() &&
++                                !it.contains("Lemit", ignoreCase = true) &&
++                                !it.contains("Lemmit", ignoreCase = true)
++                        }
+                     _uiState.update {
+                         it.copy(
+-                            cadastros = cadastrosAtualizados,
+                             selectedCadastro = result.draft,
+@@
+                             pendingCadastroActionLoading = false,
+                         )
+                     }
++                    viewModelScope.launch {
++                        val refreshSession = runCatching { ensureFreshSession(session) }.getOrNull()
++                            ?: return@launch
++                        runCatching {
++                            withContext(Dispatchers.IO) { repository.fetchCadastros(refreshSession) }
++                        }.onSuccess { refreshed ->
++                            _uiState.update { current -> current.copy(cadastros = refreshed) }
++                        }.onFailure {
++                            Log.w(logTag, "Rascunho criado; refresh da lista ficou para a proxima sincronizacao", it)
++                        }
++                    }
+                     if (warning.contains("Limite mensal da Lemmit atingido", ignoreCase = true)) {
+@@
+                 val arquivoPathFinalForSend = when {
+                     arquivoPathForSend.isNullOrBlank() -> null
+                     File(arquivoPathForSend).exists() -> {
+-                        val bytes = File(arquivoPathForSend).readBytes()
++                        val bytes = withContext(Dispatchers.IO) { File(arquivoPathForSend).readBytes() }
+                         val uploaded = uploadTempFile(
+@@
+                 if (!arquivoPathForSend.isNullOrBlank() && File(arquivoPathForSend).exists()) {
+                     DraftAttachmentStorage.deleteDraftDirAfterSuccess(File(arquivoPathForSend).parentFile?.parentFile)
+                 }
+-                val cadastrosResult = runCatching { repository.fetchCadastros(activeSession) }
+-                val statsResult = runCatching { repository.fetchCadastroStats(activeSession) }
+-                val notice = buildString {
+-                    append("Cadastro enviado com sucesso ao ERP.")
+-                    if (cadastrosResult.isFailure || statsResult.isFailure) {
+-                        append(" Houve falha ao atualizar a listagem local, mas o envio foi concluido.")
+-                    }
+-                }
+-                val cadastrosAtualizados = cadastrosResult.getOrElse {
+-                    Log.w(logTag, "Envio concluido, mas falhou ao atualizar lista de cadastros", it)
+-                    _uiState.value.cadastros
+-                }
+-                val statsAtualizadas = statsResult.getOrElse {
+-                    Log.w(logTag, "Envio concluido, mas falhou ao atualizar estatisticas", it)
+-                    _uiState.value.cadastroStats
+-                }
+-                Triple(detalheAtualizado, cadastrosAtualizados, statsAtualizadas) to notice
+-            }.onSuccess { (payload, noticeMessage) ->
++                detalheAtualizado to "Cadastro enviado com sucesso ao ERP."
++            }.onSuccess { (_, noticeMessage) ->
+                 Log.i(logTag, "[$sendTraceId] flowSuccess")
+-                val (_, cadastrosAtualizados, statsAtualizadas) = payload
+                 draftUxStateCache.clear(originalCadastroId)
+                 _uiState.update {
+                     it.copy(
+                         sendingCadastro = false,
+                         selectedCadastro = null,
+-                        cadastros = cadastrosAtualizados,
+-                        cadastroStats = statsAtualizadas,
+                         errorMessage = null,
+@@
+                         cadastroFiltro = CadastroFiltro.ENVIADOS,
+                     )
+                 }
++                viewModelScope.launch {
++                    val refreshSession = runCatching { ensureFreshSession(session) }.getOrNull()
++                        ?: return@launch
++                    val (cadastrosResult, statsResult) = coroutineScope {
++                        val cadastrosDeferred = async {
++                            runCatching { repository.fetchCadastros(refreshSession) }
++                        }
++                        val statsDeferred = async {
++                            runCatching { repository.fetchCadastroStats(refreshSession) }
++                        }
++                        cadastrosDeferred.await() to statsDeferred.await()
++                    }
++                    _uiState.update { current ->
++                        current.copy(
++                            cadastros = cadastrosResult.getOrElse {
++                                Log.w(logTag, "Envio concluido; falhou refresh da lista em background", it)
++                                current.cadastros
++                            },
++                            cadastroStats = statsResult.getOrElse {
++                                Log.w(logTag, "Envio concluido; falhou refresh das estatisticas em background", it)
++                                current.cadastroStats
++                            },
++                        )
++                    }
++                }
+             }.onFailure { throwable ->
+diff --git a/supabase/functions/lemit-consulta-pessoa/index.ts b/supabase/functions/lemit-consulta-pessoa/index.ts
+--- a/supabase/functions/lemit-consulta-pessoa/index.ts
++++ b/supabase/functions/lemit-consulta-pessoa/index.ts
+@@
+ const LEMMIT_COST = 0.12;
++const LEMMIT_REQUEST_TIMEOUT_MS = 7500;
+@@
+-    const lemmitResponse = await fetch(
+-      "http://189.84.127.130:8080/webhook/5e534e38-6f87-400b-a441-821559c6c2e9",
+-      {
+-        method: "POST",
+-        headers: {
+-          "ApiKey": LEMMIT_API_KEY,
+-          "Content-Type": "application/json",
+-        },
+-        body: JSON.stringify({
+-          documento: cpfLimpo,
+-        }),
+-      }
+-    );
++    const controller = new AbortController();
++    const timeoutId = setTimeout(() => controller.abort(), LEMMIT_REQUEST_TIMEOUT_MS);
++    let lemmitResponse: Response;
++    try {
++      lemmitResponse = await fetch(
++        "http://189.84.127.130:8080/webhook/5e534e38-6f87-400b-a441-821559c6c2e9",
++        {
++          method: "POST",
++          headers: {
++            "ApiKey": LEMMIT_API_KEY,
++            "Content-Type": "application/json",
++          },
++          body: JSON.stringify({
++            documento: cpfLimpo,
++          }),
++          signal: controller.signal,
++        }
++      );
++    } catch (error) {
++      if (error instanceof DOMException && error.name === "AbortError") {
++        statusCode = 504;
++        errorMessage = "Consulta Lemmit excedeu o tempo limite";
++        responseBody = {
++          error: errorMessage,
++          timeout: true,
++          canContinue: true,
++        };
++        await saveLog(supabase, {
++          user_id: userId,
++          user_email: userEmail,
++          endpoint: "lemit-consulta-pessoa",
++          method: "POST",
++          request_body: requestBody,
++          response_body: responseBody,
++          status_code: statusCode,
++          success: false,
++          error_message: errorMessage,
++          duration_ms: Date.now() - startTime,
++          cost: 0,
++        });
++        return new Response(JSON.stringify(responseBody), {
++          status: statusCode,
++          headers: { ...corsHeaders, "Content-Type": "application/json" },
++        });
++      }
++      throw error;
++    } finally {
++      clearTimeout(timeoutId);
++    }
+ 
+     const responseData = await lemmitResponse.json();
