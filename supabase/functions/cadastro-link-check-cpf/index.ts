@@ -27,7 +27,7 @@ const hashToken = async (token: string) => {
 };
 
 const checkLocalBlockedCpf = async (
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   cpf: string,
 ) => {
   const { data, error } = await supabase.rpc("check_public_link_blocked_cpf", {
