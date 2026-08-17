@@ -1,4 +1,4 @@
-﻿package br.com.vendamais.mobile.ui.screens
+package br.com.vendamais.mobile.ui.screens
 
 import android.content.Context
 import android.content.Intent
@@ -213,6 +213,7 @@ fun InclusaoDependenteDialog(
     var empresaNome by rememberSaveable { mutableStateOf(cadastro?.empresaNome.orEmpty()) }
     var empresaRaw by remember { mutableStateOf<JsonElement?>(cadastro?.empresaRaw) }
     var empresaPlanosRaw by remember { mutableStateOf<JsonElement?>(cadastro?.planosRaw ?: cadastro?.empresaRaw) }
+    val inclusaoStep = if (responsavelSelecionado == null) 1 else 2
     val resultados = remember { mutableStateListOf<ResponsavelFinanceiroResumo>() }
     val dependentes = remember {
         mutableStateListOf<DependenteFormState>().apply {
@@ -846,7 +847,19 @@ fun InclusaoDependenteDialog(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Text(if (isContinuacao) "Continuar Inclusao de Dependentes" else "Inclusao de Dependente", style = MaterialTheme.typography.headlineSmall)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            if (isContinuacao) "Continuar inclusao de dependentes" else "Inclusao de dependente",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        )
+                        Text(
+                            text = if (inclusaoStep == 1) "Etapa 1 de 2 · Localize o responsavel financeiro" else "Etapa 2 de 2 · Dependentes, documentos e envio",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        InclusaoWizardProgress(inclusaoStep)
+                    }
 
                 if (profile?.role != "VENDEDOR") {
                     SelectionField(
@@ -2165,3 +2178,28 @@ private class DependenteDateVisualTransformation : VisualTransformation {
 }
 
 
+
+@Composable
+private fun InclusaoWizardProgress(step: Int) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        listOf(1 to "Responsavel", 2 to "Dependentes").forEach { (number, label) ->
+            val active = step >= number
+            Surface(
+                modifier = Modifier.weight(1f),
+                shape = MaterialTheme.shapes.medium,
+                color = if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+            ) {
+                Text(
+                    text = "$number. $label",
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    color = if (active) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
