@@ -122,6 +122,8 @@ data class CadastroResumo(
     @SerialName("adesionista_nome")
     val adesionistaNome: String? = null,
     val dependentes: JsonElement? = null,
+    @SerialName("data_envio")
+    val dataEnvio: String? = null,
     @SerialName("created_at")
     val createdAt: String,
     @SerialName("updated_at")

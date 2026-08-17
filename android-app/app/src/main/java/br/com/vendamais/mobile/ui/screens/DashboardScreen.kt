@@ -1,4 +1,4 @@
-﻿package br.com.vendamais.mobile.ui.screens
+package br.com.vendamais.mobile.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -50,8 +50,8 @@ fun DashboardScreen(
     onCloseDrilldown: () -> Unit,
 ) {
     val profile = state.profile ?: return
-    val canViewSystemOverview = profile.role in setOf("ADMINISTRADOR", "ADMIN", "GERENTE", "GESTOR")
-    val canOpenDrilldown = profile.role in setOf("ADMINISTRADOR", "ADMIN", "GERENTE", "GESTOR", "SUPERVISOR")
+    val canViewSystemOverview = profile.role in setOf("ADMINISTRADOR", "ADMIN", "GERENTE")
+    val canOpenDrilldown = profile.role in setOf("ADMINISTRADOR", "ADMIN", "GERENTE", "SUPERVISOR")
 
     LazyColumn(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),

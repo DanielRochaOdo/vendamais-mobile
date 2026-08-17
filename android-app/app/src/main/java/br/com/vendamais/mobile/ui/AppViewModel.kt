@@ -1,4 +1,4 @@
-﻿package br.com.vendamais.mobile.ui
+package br.com.vendamais.mobile.ui
 
 import android.content.Context
 import android.util.Log
@@ -2228,6 +2228,41 @@ class AppViewModel(
         val updated = repository.updateUser(activeSession, id, payload)
         refreshAdminData(activeSession)
         return updated
+    }
+
+    suspend fun updateOwnProfile(
+        name: String,
+        telefone: String?,
+        externalId: String?,
+    ): MobileProfile {
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val profile = _uiState.value.profile ?: throw IllegalStateException("Perfil nao encontrado.")
+        val activeSession = ensureFreshSession(session)
+        val updated = repository.updateOwnProfile(
+            session = activeSession,
+            userId = profile.id,
+            name = name,
+            telefone = telefone,
+            externalId = externalId,
+        )
+        val updatedTeam = updated.teamId?.takeIf { it.isNotBlank() }?.let { teamId ->
+            repository.fetchTeam(activeSession, teamId)
+        }
+        _uiState.update {
+            it.copy(
+                profile = updated,
+                team = updatedTeam,
+                noticeMessage = "Perfil atualizado com sucesso.",
+            )
+        }
+        return updated
+    }
+
+    suspend fun updateTeamMemberAssignment(userId: String, teamId: String?) {
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val activeSession = ensureFreshSession(session)
+        repository.updateProfileTeamAssignment(activeSession, userId, teamId)
+        refreshAdminData(activeSession)
     }
 
     suspend fun createTeam(name: String): AdminTeam {

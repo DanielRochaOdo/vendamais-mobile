@@ -307,6 +307,7 @@ fun VendaMaisApp(
 
                     MainTab.PERFIL -> ProfileScreen(
                         state = state,
+                        viewModel = viewModel,
                         onLogout = viewModel::logout,
                         onRefresh = viewModel::refresh,
                         onToggleDarkMode = viewModel::setDarkModeEnabled,

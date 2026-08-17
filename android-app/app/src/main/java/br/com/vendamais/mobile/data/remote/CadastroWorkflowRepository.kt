@@ -1326,7 +1326,7 @@ class CadastroWorkflowRepository(
         if (cadastro.nome.isNullOrBlank()) throw IllegalStateException("Cadastro sem nome.")
         if (cadastro.dataNascimento.isNullOrBlank()) throw IllegalStateException("Cadastro sem data de nascimento.")
         if ((cadastro.empresaId ?: cadastro.empresaCodigo) == null) throw IllegalStateException("Selecione uma empresa antes de enviar.")
-        if (cadastro.arquivoPath.isNullOrBlank()) {
+        if (config?.exigirArquivo == true && cadastro.arquivoPath.isNullOrBlank()) {
             throw IllegalStateException("Anexo obrigatorio. Selecione um arquivo antes de finalizar.")
         }
         validateEnderecoCepForErp(cadastro.endereco)
