@@ -122,7 +122,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    let existingQuery = supabaseClient
+    const { data: existingItems, error: existingError } = await supabaseClient
       .from("erp_upload_queue")
       .select("*")
       .eq("id_funcionario", body.idFuncionario)
@@ -133,11 +133,6 @@ Deno.serve(async (req: Request) => {
       .order("created_at", { ascending: false })
       .limit(1);
 
-    existingQuery = body.cadastroId
-      ? existingQuery.eq("cadastro_id", body.cadastroId)
-      : existingQuery.is("cadastro_id", null);
-
-    const { data: existingItems, error: existingError } = await existingQuery;
     if (existingError) {
       console.warn("Não foi possível consultar retry existente; será tentado um novo enqueue:", existingError);
     }
@@ -149,6 +144,7 @@ Deno.serve(async (req: Request) => {
         const { data: reusedItem, error: reuseError } = await supabaseClient
           .from("erp_upload_queue")
           .update({
+            cadastro_id: body.cadastroId || existingItem.cadastro_id,
             status: "queued",
             attempts: isManualRestartAfterFinalFailure ? 0 : existingItem.attempts,
             next_attempt_at: new Date().toISOString(),
@@ -186,6 +182,13 @@ Deno.serve(async (req: Request) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           },
         );
+      }
+
+      if (body.cadastroId && !existingItem.cadastro_id) {
+        await supabaseClient
+          .from("erp_upload_queue")
+          .update({ cadastro_id: body.cadastroId, created_by: createdBy })
+          .eq("id", existingItem.id);
       }
 
       return new Response(
