@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -16,12 +17,12 @@ import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,7 +31,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -41,6 +41,10 @@ import br.com.vendamais.mobile.ui.components.InfoRow
 import br.com.vendamais.mobile.ui.components.ScreenHeading
 import br.com.vendamais.mobile.ui.components.WebCard
 import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
+import br.com.vendamais.mobile.ui.theme.Emerald
+import br.com.vendamais.mobile.ui.theme.EmeraldSoft
+import br.com.vendamais.mobile.ui.theme.Red100
+import br.com.vendamais.mobile.ui.theme.Red500
 import kotlinx.coroutines.launch
 
 @Composable
@@ -58,7 +62,9 @@ fun ProfileScreen(
     var saving by remember(profile.id) { mutableStateOf(false) }
     var error by remember(profile.id) { mutableStateOf<String?>(null) }
     var name by remember(profile.id, profile.name) { mutableStateOf(profile.name) }
-    var telefone by remember(profile.id, profile.telefone) { mutableStateOf(formatProfilePhone(profile.telefone.orEmpty())) }
+    var telefone by remember(profile.id, profile.telefone) {
+        mutableStateOf(formatProfilePhone(profile.telefone.orEmpty()))
+    }
     var externalId by remember(profile.id, profile.externalId) { mutableStateOf(profile.externalId.orEmpty()) }
 
     Column(
@@ -69,10 +75,38 @@ fun ProfileScreen(
     ) {
         ScreenHeading(
             title = "Meu Perfil",
-            subtitle = "Gerencie suas informacoes pessoais",
+            subtitle = "Identidade, preferencias e manutencao do aplicativo.",
         )
 
-        WebCard(title = "Informacoes Pessoais") {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            color = EmeraldSoft,
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = profile.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Emerald,
+                )
+                Text(
+                    text = roleLabel(profile.role),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Emerald,
+                )
+                Text(
+                    text = state.team?.name ?: "Sem equipe vinculada",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        WebCard(title = "Informacoes pessoais") {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 if (editing) {
                     OutlinedTextField(
@@ -80,6 +114,7 @@ fun ProfileScreen(
                         onValueChange = { name = it },
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Nome") },
+                        singleLine = true,
                     )
                     InfoRow("Email", profile.email)
                     OutlinedTextField(
@@ -88,19 +123,39 @@ fun ProfileScreen(
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Telefone") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        singleLine = true,
                     )
                     InfoRow("Funcao", roleLabel(profile.role))
                     OutlinedTextField(
                         value = externalId,
                         onValueChange = { externalId = it },
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                        label = { Text("Codigo do Usuario (ID Externo)") },
+                        label = { Text("Codigo do usuario (ID Externo)") },
+                        singleLine = true,
                     )
                     InfoRow("Equipe", state.team?.name ?: "-")
-                    InfoRow("Membro desde", profile.createdAt?.let(::formatDate) ?: "-")
-                    error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(
+                    InfoRow("Membro desde", profile.createdAt?.let(::formatProfileDate) ?: "-")
+
+                    error?.let { message ->
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            color = Red100,
+                        ) {
+                            Text(
+                                text = message,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                color = Red500,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(
                             onClick = {
                                 editing = false
                                 error = null
@@ -109,13 +164,18 @@ fun ProfileScreen(
                                 externalId = profile.externalId.orEmpty()
                             },
                             enabled = !saving,
-                        ) { Text("Cancelar") }
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("Cancelar")
+                        }
                         Button(
                             onClick = {
                                 val digits = telefone.filter(Char::isDigit)
                                 when {
                                     name.trim().isBlank() -> error = "Nome e obrigatorio."
-                                    digits.isNotBlank() && digits.length != 11 -> error = "Telefone deve estar no formato (XX) XXXXX XXXX."
+                                    digits.isNotBlank() && digits.length != 11 -> {
+                                        error = "Telefone deve estar no formato (XX) XXXXX XXXX."
+                                    }
                                     else -> {
                                         saving = true
                                         error = null
@@ -137,9 +197,13 @@ fun ProfileScreen(
                                 }
                             },
                             enabled = !saving,
+                            modifier = Modifier.weight(1f),
                         ) {
-                            if (saving) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                            else Text("Salvar Alteracoes")
+                            if (saving) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            } else {
+                                Text("Salvar")
+                            }
                         }
                     }
                 } else {
@@ -147,61 +211,94 @@ fun ProfileScreen(
                     InfoRow("Email", profile.email)
                     InfoRow("Telefone", formatProfilePhone(profile.telefone.orEmpty()).ifBlank { "-" })
                     InfoRow("Funcao", roleLabel(profile.role))
-                    InfoRow("Codigo do Usuario (ID Externo)", profile.externalId ?: "-")
+                    InfoRow("Codigo do usuario (ID Externo)", profile.externalId ?: "-")
                     InfoRow("Equipe", state.team?.name ?: "-")
-                    InfoRow("Membro desde", profile.createdAt?.let(::formatDate) ?: "-")
-                    Button(onClick = { editing = true }) { Text("Editar Perfil") }
+                    InfoRow("Membro desde", profile.createdAt?.let(::formatProfileDate) ?: "-")
+                    Button(
+                        onClick = { editing = true },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Editar perfil")
+                    }
                 }
             }
         }
 
         WebCard(title = "Preferencias") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = "Modo escuro",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = "Ajusta o tema visual em todas as telas do app.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = state.darkModeEnabled,
+                    onCheckedChange = onToggleDarkMode,
+                )
+            }
+        }
+
+        WebCard(title = "Aplicativo") {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                val refreshing = state.loading
-                Row(
+                InfoRow("Versao instalada", BuildConfig.VERSION_NAME)
+
+                Button(
+                    onClick = onCheckAndInstallUpdate,
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
-                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = onRefresh, enabled = !refreshing) {
-                        if (refreshing) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        } else {
-                            Icon(Icons.Rounded.Refresh, contentDescription = "Atualizar dados")
-                        }
-                    }
-                    IconButton(onClick = onLogout) {
+                    Icon(
+                        imageVector = Icons.Rounded.SystemUpdate,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Text(" Verificar atualizacao")
+                }
+
+                OutlinedButton(
+                    onClick = onRefresh,
+                    enabled = !state.loading,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (state.loading) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.Logout,
-                            contentDescription = "Sair",
-                            tint = Color(0xFFFF9800),
+                            imageVector = Icons.Rounded.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
                         )
                     }
+                    Text(" Atualizar dados")
                 }
-                Row(
+
+                OutlinedButton(
+                    onClick = onLogout,
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("Modo escuro", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "Ativa tema escuro para todo o aplicativo.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(checked = state.darkModeEnabled, onCheckedChange = onToggleDarkMode)
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    InfoRow("Versao atual", BuildConfig.VERSION_NAME, modifier = Modifier.weight(1f))
-                    IconButton(onClick = onCheckAndInstallUpdate) {
-                        Icon(Icons.Rounded.SystemUpdate, contentDescription = "Verificar atualizacao")
-                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.Logout,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Text(
+                        text = " Sair da conta",
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             }
         }
@@ -229,7 +326,7 @@ private fun roleLabel(role: String): String {
     }
 }
 
-private fun formatDate(value: String): String {
+private fun formatProfileDate(value: String): String {
     return runCatching {
         java.time.OffsetDateTime.parse(value)
             .format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))
