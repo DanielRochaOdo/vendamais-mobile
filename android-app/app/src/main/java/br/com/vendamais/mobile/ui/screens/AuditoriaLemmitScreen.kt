@@ -32,12 +32,14 @@ fun AuditoriaLemmitScreen(
     viewModel: AppViewModel,
 ) {
     var startDate by rememberSaveable { mutableStateOf(java.time.LocalDate.now().withDayOfMonth(1).toString()) }
-    var endDate by rememberSaveable { mutableStateOf(java.time.LocalDate.now().toString()) }
+    var endDate by rememberSaveable { mutableStateOf(java.time.LocalDate.now().withDayOfMonth(1).plusMonths(1).toString()) }
+    var currentPage by rememberSaveable { mutableStateOf(1) }
+    val itemsPerPage = 20
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(currentPage) {
         val startIso = "${startDate}T00:00:00Z"
-        val endIso = "${endDate}T23:59:59Z"
-        viewModel.loadAuditLemmit(startIso = startIso, endIso = endIso)
+        val endIso = "${endDate}T00:00:00Z"
+        viewModel.loadAuditLemmit(startIso = startIso, endIso = endIso, limit = itemsPerPage, offset = (currentPage - 1) * itemsPerPage)
     }
 
     val audit = state.auditLemmit
@@ -75,9 +77,10 @@ fun AuditoriaLemmitScreen(
 
                     Button(
                         onClick = {
+                            currentPage = 1
                             val startIso = "${startDate}T00:00:00Z"
-                            val endIso = "${endDate}T23:59:59Z"
-                            viewModel.loadAuditLemmit(startIso = startIso, endIso = endIso)
+                            val endIso = "${endDate}T00:00:00Z"
+                            viewModel.loadAuditLemmit(startIso = startIso, endIso = endIso, limit = itemsPerPage, offset = 0)
                         },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !state.adminFeatureLoading,
@@ -150,6 +153,13 @@ fun AuditoriaLemmitScreen(
                         Text("CPF: ${consulta.cpf.ifBlank { "N/A" }}")
                         Text("Hora: ${formatDateTime(consulta.hora)}")
                     }
+                }
+            }
+            item {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Button(onClick = { if (currentPage > 1) currentPage-- }, enabled = currentPage > 1) { Text("Anterior") }
+                    Text("Pagina $currentPage")
+                    Button(onClick = { currentPage++ }, enabled = audit.ultimasConsultas.size == itemsPerPage) { Text("Proxima") }
                 }
             }
         }

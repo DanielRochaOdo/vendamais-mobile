@@ -4,6 +4,30 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
+
+@Serializable
+data class ApiLogItem(
+    val id: String,
+    @SerialName("user_email")
+    val userEmail: String? = null,
+    val endpoint: String = "",
+    val method: String = "",
+    @SerialName("status_code")
+    val statusCode: Int? = null,
+    val success: Boolean = false,
+    @SerialName("error_message")
+    val errorMessage: String? = null,
+    @SerialName("duration_ms")
+    val durationMs: Long? = null,
+    val cost: Double? = null,
+    @SerialName("created_at")
+    val createdAt: String = "",
+    @SerialName("request_body")
+    val requestBody: JsonElement? = null,
+    @SerialName("response_body")
+    val responseBody: JsonElement? = null,
+)
+
 @Serializable
 data class AuditLemmitResponse(
     val cards: AuditLemmitCards = AuditLemmitCards(),

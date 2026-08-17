@@ -23,6 +23,7 @@ import io.ktor.client.call.body
 import io.ktor.client.plugins.ClientRequestException
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
+import io.ktor.client.request.delete
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
@@ -233,7 +234,7 @@ class SupabaseRepository(
     suspend fun fetchErpUploadQueue(
         session: SavedSession,
         statuses: List<String> = emptyList(),
-        limit: Int = 100,
+        limit: Int = 500,
     ): List<ErpUploadQueueItem> {
         return getList(
             path = "erp_upload_queue",
@@ -418,6 +419,130 @@ class SupabaseRepository(
             header("Prefer", "return=representation")
             contentType(ContentType.Application.Json)
         }.firstOrNull() ?: throw IllegalStateException("Falha ao atualizar configuracoes.")
+    }
+
+    suspend fun createPlanoMap(session: SavedSession, payload: JsonObject): br.com.vendamais.mobile.data.models.PlanoMap {
+        return client.safePost<List<br.com.vendamais.mobile.data.models.PlanoMap>>(
+            url = "${AppConfig.supabaseUrl}/rest/v1/cadastro_planos_map",
+            json = json,
+            body = payload,
+        ) {
+            applyAuthHeaders(session)
+            header("Prefer", "return=representation")
+        }.firstOrNull() ?: throw IllegalStateException("Falha ao criar plano.")
+    }
+
+    suspend fun updatePlanoMap(session: SavedSession, id: String, payload: JsonObject): br.com.vendamais.mobile.data.models.PlanoMap {
+        return client.safePatch<List<br.com.vendamais.mobile.data.models.PlanoMap>>(
+            url = "${AppConfig.supabaseUrl}/rest/v1/cadastro_planos_map?id=eq.$id",
+            json = json,
+            body = payload,
+        ) {
+            applyAuthHeaders(session)
+            header("Prefer", "return=representation")
+        }.firstOrNull() ?: throw IllegalStateException("Falha ao atualizar plano.")
+    }
+
+    suspend fun deletePlanoMap(session: SavedSession, id: String) {
+        client.delete("${AppConfig.supabaseUrl}/rest/v1/cadastro_planos_map?id=eq.$id") {
+            applyAuthHeaders(session)
+        }
+    }
+
+    suspend fun createParentescoMap(session: SavedSession, payload: JsonObject): br.com.vendamais.mobile.data.models.ParentescoMap {
+        return client.safePost<List<br.com.vendamais.mobile.data.models.ParentescoMap>>(
+            url = "${AppConfig.supabaseUrl}/rest/v1/cadastro_parentesco_map",
+            json = json,
+            body = payload,
+        ) {
+            applyAuthHeaders(session)
+            header("Prefer", "return=representation")
+        }.firstOrNull() ?: throw IllegalStateException("Falha ao criar parentesco.")
+    }
+
+    suspend fun updateParentescoMap(session: SavedSession, id: String, payload: JsonObject): br.com.vendamais.mobile.data.models.ParentescoMap {
+        return client.safePatch<List<br.com.vendamais.mobile.data.models.ParentescoMap>>(
+            url = "${AppConfig.supabaseUrl}/rest/v1/cadastro_parentesco_map?id=eq.$id",
+            json = json,
+            body = payload,
+        ) {
+            applyAuthHeaders(session)
+            header("Prefer", "return=representation")
+        }.firstOrNull() ?: throw IllegalStateException("Falha ao atualizar parentesco.")
+    }
+
+    suspend fun deleteParentescoMap(session: SavedSession, id: String) {
+        client.delete("${AppConfig.supabaseUrl}/rest/v1/cadastro_parentesco_map?id=eq.$id") {
+            applyAuthHeaders(session)
+        }
+    }
+
+    suspend fun createStatusAdesao(session: SavedSession, payload: JsonObject): br.com.vendamais.mobile.data.models.StatusAdesao {
+        return client.safePost<List<br.com.vendamais.mobile.data.models.StatusAdesao>>(
+            url = "${AppConfig.supabaseUrl}/rest/v1/status_adesoes",
+            json = json,
+            body = payload,
+        ) {
+            applyAuthHeaders(session)
+            header("Prefer", "return=representation")
+        }.firstOrNull() ?: throw IllegalStateException("Falha ao criar status.")
+    }
+
+    suspend fun updateStatusAdesao(session: SavedSession, id: String, payload: JsonObject): br.com.vendamais.mobile.data.models.StatusAdesao {
+        return client.safePatch<List<br.com.vendamais.mobile.data.models.StatusAdesao>>(
+            url = "${AppConfig.supabaseUrl}/rest/v1/status_adesoes?id=eq.$id",
+            json = json,
+            body = payload,
+        ) {
+            applyAuthHeaders(session)
+            header("Prefer", "return=representation")
+        }.firstOrNull() ?: throw IllegalStateException("Falha ao atualizar status.")
+    }
+
+    suspend fun deleteStatusAdesao(session: SavedSession, id: String) {
+        client.delete("${AppConfig.supabaseUrl}/rest/v1/status_adesoes?id=eq.$id") {
+            applyAuthHeaders(session)
+        }
+    }
+
+    suspend fun fetchApiLogs(
+        session: SavedSession,
+        success: Boolean? = null,
+        startIso: String? = null,
+        endIso: String? = null,
+        limit: Int = 100,
+        offset: Int = 0,
+    ): List<br.com.vendamais.mobile.data.models.ApiLogItem> {
+        return getList(
+            path = "api_logs",
+            session = session,
+            query = {
+                parameter("select", "id,user_email,endpoint,method,status_code,success,error_message,duration_ms,cost,created_at,request_body,response_body")
+                success?.let { parameter("success", "eq.$it") }
+                startIso?.takeIf { it.isNotBlank() }?.let { parameter("created_at", "gte.$it") }
+                endIso?.takeIf { it.isNotBlank() }?.let { parameter("created_at", "lte.$it") }
+                parameter("order", "created_at.desc")
+                parameter("limit", limit)
+                parameter("offset", offset)
+            },
+        )
+    }
+
+    suspend fun reprocessUploadQueueItem(session: SavedSession, id: String): ErpUploadQueueItem {
+        val payload = buildJsonObject {
+            put("status", "queued")
+            put("attempts", 0)
+            put("next_attempt_at", java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).toString())
+            put("last_error", JsonNull)
+        }
+        return client.safePatch<List<ErpUploadQueueItem>>(
+            url = "${AppConfig.supabaseUrl}/rest/v1/erp_upload_queue?id=eq.$id",
+            json = json,
+            body = payload,
+        ) {
+            applyAuthHeaders(session)
+            header("Prefer", "return=representation")
+        }.firstOrNull() ?: throw IllegalStateException("Falha ao reprocessar item da fila.")
     }
 
     private suspend inline fun <reified T> getList(
