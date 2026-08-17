@@ -1326,7 +1326,7 @@ class CadastroWorkflowRepository(
         if (cadastro.nome.isNullOrBlank()) throw IllegalStateException("Cadastro sem nome.")
         if (cadastro.dataNascimento.isNullOrBlank()) throw IllegalStateException("Cadastro sem data de nascimento.")
         if ((cadastro.empresaId ?: cadastro.empresaCodigo) == null) throw IllegalStateException("Selecione uma empresa antes de enviar.")
-        if (cadastro.arquivoPath.isNullOrBlank()) {
+        if (config?.exigirArquivo == true && cadastro.arquivoPath.isNullOrBlank()) {
             throw IllegalStateException("Anexo obrigatorio. Selecione um arquivo antes de finalizar.")
         }
         validateEnderecoCepForErp(cadastro.endereco)
@@ -2048,6 +2048,27 @@ class CadastroWorkflowRepository(
                 ?.takeIf { it.isNotBlank() }
                 ?.let { header("X-Idempotency-Key", it) }
         }
+    }
+
+    suspend fun consultarEnderecoPorCepPublic(cep: String): CadastroEndereco {
+        val cepNormalizado = CadastroPayloadBuilder.normalizeDigits(cep).take(8)
+        if (cepNormalizado.length != 8) {
+            throw IllegalStateException("CEP invalido. Informe os 8 digitos.")
+        }
+        val response: JsonElement = client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/erp-endereco-cep",
+            json = json,
+            body = buildJsonObject { put("cep", cepNormalizado) },
+        )
+        val root = runCatching { response.jsonObject }.getOrNull()
+        val explicitError = root?.get("error")?.jsonPrimitive?.contentOrNull
+            ?: root?.get("message")?.jsonPrimitive?.contentOrNull
+        if (!explicitError.isNullOrBlank()) throw IllegalStateException(explicitError)
+        val parsed = parseCadastroEnderecoFlex(response)?.copy(
+            cep = parseCadastroEnderecoFlex(response)?.cep?.ifBlank { cepNormalizado } ?: cepNormalizado,
+        )
+        if (!hasEnderecoData(parsed)) throw IllegalStateException("CEP nao encontrado.")
+        return parsed ?: throw IllegalStateException("CEP nao encontrado.")
     }
 
     private suspend fun checkErpAssociado(session: SavedSession, cpf: String): ErpAssociadoResponse {

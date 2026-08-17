@@ -1,4 +1,4 @@
-﻿package br.com.vendamais.mobile.ui
+package br.com.vendamais.mobile.ui
 
 import android.content.Context
 import android.util.Log
@@ -11,6 +11,7 @@ import br.com.vendamais.mobile.data.auth.SessionStore
 import br.com.vendamais.mobile.data.auth.SupabaseAuthService
 import br.com.vendamais.mobile.data.models.AdminTeam
 import br.com.vendamais.mobile.data.models.AdminUser
+import br.com.vendamais.mobile.data.models.ApiLogItem
 import br.com.vendamais.mobile.data.models.AuditLemmitResponse
 import br.com.vendamais.mobile.data.models.CadastroConfig
 import br.com.vendamais.mobile.data.models.CadastroDetalhe
@@ -185,6 +186,7 @@ data class AppUiState(
     val adminLoading: Boolean = false,
     val adminLoaded: Boolean = false,
     val auditLemmit: AuditLemmitResponse = AuditLemmitResponse(),
+    val apiLogs: List<ApiLogItem> = emptyList(),
     val uploadQueue: List<ErpUploadQueueItem> = emptyList(),
     val uploadQueueOperation: ProcessUploadQueueResponse? = null,
     val resetQueueResult: ResetStuckQueueResult? = null,
@@ -2167,7 +2169,7 @@ class AppViewModel(
         }
     }
 
-    fun loadCadastrosExcluidos(limit: Int = 100) {
+    fun loadCadastrosExcluidos(limit: Int = 1000) {
         val session = currentSession ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(adminFeatureLoading = true, errorMessage = null) }
@@ -2209,6 +2211,10 @@ class AppViewModel(
         return workflowRepository.submitPublicCadastro(token, payload, idempotencyKey)
     }
 
+    suspend fun consultarEnderecoCepPublic(cep: String): CadastroEndereco {
+        return workflowRepository.consultarEnderecoPorCepPublic(cep)
+    }
+
     suspend fun searchEmpresaDirect(value: String, type: EmpresaSearchType): List<EmpresaResumo> {
         val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
         val activeSession = ensureFreshSession(session)
@@ -2230,6 +2236,41 @@ class AppViewModel(
         return updated
     }
 
+    suspend fun updateOwnProfile(
+        name: String,
+        telefone: String?,
+        externalId: String?,
+    ): MobileProfile {
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val profile = _uiState.value.profile ?: throw IllegalStateException("Perfil nao encontrado.")
+        val activeSession = ensureFreshSession(session)
+        val updated = repository.updateOwnProfile(
+            session = activeSession,
+            userId = profile.id,
+            name = name,
+            telefone = telefone,
+            externalId = externalId,
+        )
+        val updatedTeam = updated.teamId?.takeIf { it.isNotBlank() }?.let { teamId ->
+            repository.fetchTeam(activeSession, teamId)
+        }
+        _uiState.update {
+            it.copy(
+                profile = updated,
+                team = updatedTeam,
+                noticeMessage = "Perfil atualizado com sucesso.",
+            )
+        }
+        return updated
+    }
+
+    suspend fun updateTeamMemberAssignment(userId: String, teamId: String?) {
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val activeSession = ensureFreshSession(session)
+        repository.updateProfileTeamAssignment(activeSession, userId, teamId)
+        refreshAdminData(activeSession)
+    }
+
     suspend fun createTeam(name: String): AdminTeam {
         val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
         val activeSession = ensureFreshSession(session)
@@ -2249,13 +2290,142 @@ class AppViewModel(
     suspend fun updateCadastroConfig(payload: JsonObject): CadastroConfig {
         val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
         val activeSession = ensureFreshSession(session)
-        val config = repository.updateCadastroConfig(activeSession, payload)
+        val updated = repository.updateCadastroConfig(activeSession, payload)
         _uiState.update {
-            it.copy(
-                cadastroWorkspace = it.cadastroWorkspace.copy(config = config),
-            )
+            it.copy(cadastroWorkspace = it.cadastroWorkspace.copy(config = updated))
         }
-        return config
+        return updated
+    }
+
+    suspend fun createPlanoMap(payload: JsonObject): PlanoMap {
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val activeSession = ensureFreshSession(session)
+        val created = repository.createPlanoMap(activeSession, payload)
+        val items = workflowRepository.fetchPlanosMap(activeSession)
+        _uiState.update { it.copy(planosMap = items) }
+        return created
+    }
+
+    suspend fun updatePlanoMap(id: String, payload: JsonObject): PlanoMap {
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val activeSession = ensureFreshSession(session)
+        val updated = repository.updatePlanoMap(activeSession, id, payload)
+        val items = workflowRepository.fetchPlanosMap(activeSession)
+        _uiState.update { it.copy(planosMap = items) }
+        return updated
+    }
+
+    suspend fun deletePlanoMap(id: String) {
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val activeSession = ensureFreshSession(session)
+        repository.deletePlanoMap(activeSession, id)
+        val items = workflowRepository.fetchPlanosMap(activeSession)
+        _uiState.update { it.copy(planosMap = items) }
+    }
+
+    suspend fun createParentescoMap(payload: JsonObject): ParentescoMap {
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val activeSession = ensureFreshSession(session)
+        val created = repository.createParentescoMap(activeSession, payload)
+        val items = workflowRepository.fetchParentescosMap(activeSession)
+        _uiState.update { it.copy(parentescosMap = items) }
+        return created
+    }
+
+    suspend fun updateParentescoMap(id: String, payload: JsonObject): ParentescoMap {
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val activeSession = ensureFreshSession(session)
+        val updated = repository.updateParentescoMap(activeSession, id, payload)
+        val items = workflowRepository.fetchParentescosMap(activeSession)
+        _uiState.update { it.copy(parentescosMap = items) }
+        return updated
+    }
+
+    suspend fun deleteParentescoMap(id: String) {
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val activeSession = ensureFreshSession(session)
+        repository.deleteParentescoMap(activeSession, id)
+        val items = workflowRepository.fetchParentescosMap(activeSession)
+        _uiState.update { it.copy(parentescosMap = items) }
+    }
+
+    suspend fun createStatusAdesao(payload: JsonObject): StatusAdesao {
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val activeSession = ensureFreshSession(session)
+        val created = repository.createStatusAdesao(activeSession, payload)
+        val items = workflowRepository.fetchStatusAdesoes(activeSession)
+        _uiState.update { it.copy(statusAdesoes = items) }
+        return created
+    }
+
+    suspend fun updateStatusAdesao(id: String, payload: JsonObject): StatusAdesao {
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val activeSession = ensureFreshSession(session)
+        val updated = repository.updateStatusAdesao(activeSession, id, payload)
+        val items = workflowRepository.fetchStatusAdesoes(activeSession)
+        _uiState.update { it.copy(statusAdesoes = items) }
+        return updated
+    }
+
+    suspend fun deleteStatusAdesao(id: String) {
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val activeSession = ensureFreshSession(session)
+        repository.deleteStatusAdesao(activeSession, id)
+        val items = workflowRepository.fetchStatusAdesoes(activeSession)
+        _uiState.update { it.copy(statusAdesoes = items) }
+    }
+
+    fun loadApiLogs(
+        success: Boolean? = null,
+        startIso: String? = null,
+        endIso: String? = null,
+        limit: Int = 100,
+        offset: Int = 0,
+    ) {
+        val session = currentSession ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(adminFeatureLoading = true, errorMessage = null) }
+            runCatching {
+                val activeSession = ensureFreshSession(session)
+                repository.fetchApiLogs(activeSession, success, startIso, endIso, limit, offset)
+            }.onSuccess { logs ->
+                _uiState.update { it.copy(apiLogs = logs, adminFeatureLoading = false) }
+            }.onFailure { throwable ->
+                _uiState.update { it.copy(adminFeatureLoading = false, errorMessage = throwable.message) }
+            }
+        }
+    }
+
+    suspend fun createQueueFileSignedUrl(item: ErpUploadQueueItem): String {
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val activeSession = ensureFreshSession(session)
+        return repository.createStorageSignedUrl(
+            session = activeSession,
+            bucket = item.bucket,
+            objectPath = item.arquivoPath,
+        )
+    }
+
+    fun reprocessUploadQueueItem(id: String) {
+        val session = currentSession ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(adminFeatureLoading = true, errorMessage = null) }
+            runCatching {
+                val activeSession = ensureFreshSession(session)
+                repository.reprocessUploadQueueItem(activeSession, id)
+                repository.fetchErpUploadQueue(activeSession)
+            }.onSuccess { items ->
+                _uiState.update {
+                    it.copy(
+                        uploadQueue = items,
+                        adminFeatureLoading = false,
+                        noticeMessage = "Item marcado para reprocessamento.",
+                    )
+                }
+            }.onFailure { throwable ->
+                _uiState.update { it.copy(adminFeatureLoading = false, errorMessage = throwable.message) }
+            }
+        }
     }
     suspend fun updateCadastroRecord(id: String, payload: kotlinx.serialization.json.JsonObject): CadastroDetalhe {
         val traceId = "close-${id.take(8)}-${System.currentTimeMillis()}"

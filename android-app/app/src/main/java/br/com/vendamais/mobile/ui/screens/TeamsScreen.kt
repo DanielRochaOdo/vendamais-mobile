@@ -118,9 +118,11 @@ fun TeamsScreen(
                                     color = Slate500,
                                 )
                             }
-                            if (state.profile?.role in setOf("ADMINISTRADOR", "GERENTE", "SUPERVISOR")) {
+                            val canEditTeam = state.profile?.role in setOf("ADMINISTRADOR", "GERENTE") ||
+                                (state.profile?.role == "SUPERVISOR" && state.profile?.teamId == team.id)
+                            if (canEditTeam) {
                                 TextButton(onClick = { editingTeam = team }) {
-                                    Text("Editar")
+                                    Text(if (state.profile?.role == "SUPERVISOR") "Gerenciar Membros" else "Editar")
                                 }
                             }
                         }
@@ -159,33 +161,32 @@ fun TeamsScreen(
             team = team,
             allUsers = state.adminUsers,
             onDismiss = { editingTeam = null },
+            canEditName = state.profile?.role in setOf("ADMINISTRADOR", "GERENTE"),
             onSubmit = { name, selectedUsers ->
                 scope.launch {
                     runCatching {
-                        viewModel.updateTeam(
-                            team.id,
-                            buildJsonObject {
-                                put("name", name)
-                                put("is_active", team.isActive)
-                            },
-                        )
-                        selectedUsers.forEach { member ->
-                            viewModel.updateUser(
-                                member.id,
+                        if (state.profile?.role in setOf("ADMINISTRADOR", "GERENTE")) {
+                            viewModel.updateTeam(
+                                team.id,
                                 buildJsonObject {
-                                    put("team_id", team.id)
+                                    put("name", name)
+                                    put("is_active", team.isActive)
                                 },
                             )
                         }
-                        state.adminUsers
-                            .filter { it.teamId == team.id && selectedUsers.none { selected -> selected.id == it.id } }
+                        val selectedIds = selectedUsers.map { it.id }.toSet()
+                        val currentMembers = state.adminUsers.filter {
+                            it.teamId == team.id && it.role in setOf("VENDEDOR", "ADESIONISTA")
+                        }
+                        selectedUsers
+                            .filter { it.teamId != team.id }
+                            .forEach { member ->
+                                viewModel.updateTeamMemberAssignment(member.id, team.id)
+                            }
+                        currentMembers
+                            .filter { it.id !in selectedIds }
                             .forEach { removed ->
-                                viewModel.updateUser(
-                                    removed.id,
-                                    buildJsonObject {
-                                        put("team_id", "")
-                                    },
-                                )
+                                viewModel.updateTeamMemberAssignment(removed.id, null)
                             }
                     }.onSuccess {
                         editingTeam = null
@@ -201,6 +202,7 @@ private fun TeamEditorDialog(
     title: String,
     allUsers: List<AdminUser>,
     team: AdminTeam? = null,
+    canEditName: Boolean = true,
     onDismiss: () -> Unit,
     onSubmit: (String, List<AdminUser>) -> Unit,
 ) {
@@ -210,8 +212,12 @@ private fun TeamEditorDialog(
             addAll(allUsers.filter { it.teamId == team?.id }.map { it.id })
         }
     }
-    val eligibleUsers = remember(allUsers) {
-        allUsers.filter { it.role in setOf("SUPERVISOR", "VENDEDOR", "ADESIONISTA", "CADASTRO") && it.isActive }
+    val eligibleUsers = remember(allUsers, team?.id) {
+        allUsers.filter {
+            it.role in setOf("VENDEDOR", "ADESIONISTA") &&
+                it.isActive &&
+                (it.teamId == team?.id || it.teamId.isNullOrBlank())
+        }
     }
 
     AlertDialog(
@@ -224,6 +230,7 @@ private fun TeamEditorDialog(
                     onValueChange = { name = it },
                     modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                     label = { Text("Nome da Equipe") },
+                    enabled = canEditName,
                 )
                 if (team != null) {
                     Text(

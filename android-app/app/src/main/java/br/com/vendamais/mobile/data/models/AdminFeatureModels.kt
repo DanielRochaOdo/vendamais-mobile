@@ -4,6 +4,30 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
+
+@Serializable
+data class ApiLogItem(
+    val id: String,
+    @SerialName("user_email")
+    val userEmail: String? = null,
+    val endpoint: String = "",
+    val method: String = "",
+    @SerialName("status_code")
+    val statusCode: Int? = null,
+    val success: Boolean = false,
+    @SerialName("error_message")
+    val errorMessage: String? = null,
+    @SerialName("duration_ms")
+    val durationMs: Long? = null,
+    val cost: Double? = null,
+    @SerialName("created_at")
+    val createdAt: String = "",
+    @SerialName("request_body")
+    val requestBody: JsonElement? = null,
+    @SerialName("response_body")
+    val responseBody: JsonElement? = null,
+)
+
 @Serializable
 data class AuditLemmitResponse(
     val cards: AuditLemmitCards = AuditLemmitCards(),
@@ -149,6 +173,9 @@ data class PublicCadastroLinkInfo(
     val empresaExigeMatricula: Int? = null,
     @SerialName("planosRaw")
     val planosRaw: JsonElement? = null,
+    @SerialName("planosOcultos")
+    val planosOcultos: List<String> = emptyList(),
+    val parentescos: List<PublicParentescoInfo> = emptyList(),
     @SerialName("vendedorCodigo")
     val vendedorCodigo: String? = null,
     @SerialName("vendedorNome")
@@ -158,10 +185,33 @@ data class PublicCadastroLinkInfo(
 )
 
 @Serializable
+data class PublicParentescoInfo(
+    @SerialName("parentescoId")
+    val parentescoId: Int,
+    val label: String,
+    val ativo: Boolean = true,
+)
+
+@Serializable
+data class PublicCadastroPrefill(
+    val nome: String? = null,
+    @SerialName("dataNascimento")
+    val dataNascimento: String? = null,
+    @SerialName("sexoCodigo")
+    val sexoCodigo: Int? = null,
+    val contatos: List<PublicCadastroContato> = emptyList(),
+    val endereco: PublicCadastroEndereco? = null,
+    @SerialName("nomeMae")
+    val nomeMae: String? = null,
+)
+
+@Serializable
 data class PublicCadastroCheckCpfResponse(
     val ok: Boolean = false,
     val error: String? = null,
     val code: String? = null,
+    val prefill: PublicCadastroPrefill? = null,
+    val message: String? = null,
 )
 
 @Serializable

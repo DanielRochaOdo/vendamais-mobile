@@ -1,5 +1,7 @@
 package br.com.vendamais.mobile.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,7 +18,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.ui.AppUiState
@@ -29,15 +35,26 @@ fun FilaUploadErpScreen(
     state: AppUiState,
     viewModel: AppViewModel,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var selectedFilter by rememberSaveable { mutableStateOf("todos") }
+    var currentPage by rememberSaveable { mutableStateOf(1) }
+    var fileError by rememberSaveable { mutableStateOf<String?>(null) }
+    val itemsPerPage = 20
 
     LaunchedEffect(Unit) {
-        viewModel.loadUploadQueue()
+        while (true) {
+            viewModel.loadUploadQueue()
+            delay(5000)
+        }
     }
 
     val filteredItems = state.uploadQueue.filter { item ->
         selectedFilter == "todos" || item.status == selectedFilter
     }
+    val totalPages = ((filteredItems.size + itemsPerPage - 1) / itemsPerPage).coerceAtLeast(1)
+    if (currentPage > totalPages) currentPage = totalPages
+    val pagedItems = filteredItems.drop((currentPage - 1) * itemsPerPage).take(itemsPerPage)
 
     LazyColumn(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
@@ -65,7 +82,7 @@ fun FilaUploadErpScreen(
                                 "success" to "success",
                                 "failed" to "failed",
                             ),
-                            onSelected = { selectedFilter = it },
+                            onSelected = { selectedFilter = it; currentPage = 1 },
                         )
                     }
 
@@ -107,6 +124,12 @@ fun FilaUploadErpScreen(
             }
         }
 
+        fileError?.let { message ->
+            item {
+                WebCard { Text(message, color = MaterialTheme.colorScheme.error) }
+            }
+        }
+
         if (filteredItems.isEmpty()) {
             item {
                 WebCard {
@@ -114,7 +137,7 @@ fun FilaUploadErpScreen(
                 }
             }
         } else {
-            items(filteredItems) { item ->
+            items(pagedItems) { item ->
                 WebCard {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("Arquivo: ${item.arquivoNome}", fontWeight = FontWeight.Medium)
@@ -124,7 +147,42 @@ fun FilaUploadErpScreen(
                         if (!item.lastError.isNullOrBlank()) {
                             Text("Erro: ${item.lastError}", color = MaterialTheme.colorScheme.error)
                         }
+                        Button(
+                            onClick = {
+                                fileError = null
+                                scope.launch {
+                                    runCatching { viewModel.createQueueFileSignedUrl(item) }
+                                        .onSuccess { signedUrl ->
+                                            runCatching {
+                                                context.startActivity(
+                                                    Intent(Intent.ACTION_VIEW, Uri.parse(signedUrl)).apply {
+                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    },
+                                                )
+                                            }.onFailure { fileError = "Nao foi possivel abrir o arquivo neste dispositivo." }
+                                        }
+                                        .onFailure { throwable ->
+                                            fileError = throwable.message ?: "Falha ao gerar link do arquivo."
+                                        }
+                                }
+                            },
+                            enabled = !state.adminFeatureLoading && item.arquivoPath.isNotBlank(),
+                        ) {
+                            Text("Abrir arquivo")
+                        }
+                        if (item.status == "failed" || item.status == "retry_wait") {
+                            Button(onClick = { viewModel.reprocessUploadQueueItem(item.id) }, enabled = !state.adminFeatureLoading) {
+                                Text("Reprocessar item")
+                            }
+                        }
                     }
+                }
+            }
+            item {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Button(onClick = { if (currentPage > 1) currentPage-- }, enabled = currentPage > 1) { Text("Anterior") }
+                    Text("Pagina $currentPage de $totalPages")
+                    Button(onClick = { if (currentPage < totalPages) currentPage++ }, enabled = currentPage < totalPages) { Text("Proxima") }
                 }
             }
         }

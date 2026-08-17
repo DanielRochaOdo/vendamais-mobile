@@ -1,0 +1,35 @@
+name: Validate Android
+
+on:
+  pull_request:
+    paths:
+      - 'android-app/**'
+      - '.github/workflows/apply-adesart-parity.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'android-app/**'
+      - '.github/workflows/apply-adesart-parity.yml'
+  workflow_dispatch:
+
+jobs:
+  compile-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: android-app/**/*.gradle*
+
+      - name: Compile Android Kotlin
+        working-directory: android-app
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:compileDebugKotlin --stacktrace --no-daemon

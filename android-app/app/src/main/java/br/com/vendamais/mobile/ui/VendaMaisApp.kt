@@ -77,7 +77,7 @@ import br.com.vendamais.mobile.ui.screens.FilaUploadErpScreen
 import br.com.vendamais.mobile.ui.screens.InclusaoDependenteDialog
 import br.com.vendamais.mobile.ui.screens.LoginScreen
 import br.com.vendamais.mobile.ui.screens.ProfileScreen
-import br.com.vendamais.mobile.ui.screens.PublicAdesaoTokenScreen
+import br.com.vendamais.mobile.ui.screens.PublicAdesaoParityScreen
 import br.com.vendamais.mobile.ui.screens.SettingsScreen
 import br.com.vendamais.mobile.ui.screens.TeamsScreen
 import br.com.vendamais.mobile.ui.screens.UsersScreen
@@ -194,7 +194,7 @@ fun VendaMaisApp(
     }
 
     state.publicToken?.let { token ->
-        PublicAdesaoTokenScreen(
+        PublicAdesaoParityScreen(
             token = token,
             viewModel = viewModel,
             onClose = viewModel::closePublicTokenFlow,
@@ -307,6 +307,7 @@ fun VendaMaisApp(
 
                     MainTab.PERFIL -> ProfileScreen(
                         state = state,
+                        viewModel = viewModel,
                         onLogout = viewModel::logout,
                         onRefresh = viewModel::refresh,
                         onToggleDarkMode = viewModel::setDarkModeEnabled,

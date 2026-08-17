@@ -1,4 +1,4 @@
-﻿package br.com.vendamais.mobile.ui.screens
+package br.com.vendamais.mobile.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -179,7 +179,7 @@ fun CadastrosScreen(
     val isVendedor = state.profile?.role == "VENDEDOR"
 
     val cadastrosPorPeriodo = baseCadastros.filter { cadastro ->
-        val cadastroData = parseCadastroDate(cadastro.createdAt)
+        val cadastroData = parseCadastroDate(resolveCadastroDateForFilter(cadastro, state.cadastroFiltro))
         val matchesDataInicio = dataInicio?.let { start -> cadastroData?.let { !it.isBefore(start) } ?: false } ?: true
         val matchesDataFim = dataFim?.let { end -> cadastroData?.let { !it.isAfter(end) } ?: false } ?: true
         matchesDataInicio && matchesDataFim
@@ -223,7 +223,7 @@ fun CadastrosScreen(
             cadastro.vendedorId == vendedorFiltroAplicadoTrim
         }
 
-        val cadastroData = parseCadastroDate(cadastro.createdAt)
+        val cadastroData = parseCadastroDate(resolveCadastroDateForFilter(cadastro, state.cadastroFiltro))
         val matchesDataInicio = dataInicio?.let { start -> cadastroData?.let { !it.isBefore(start) } ?: false } ?: true
         val matchesDataFim = dataFim?.let { end -> cadastroData?.let { !it.isAfter(end) } ?: false } ?: true
 
@@ -277,13 +277,9 @@ fun CadastrosScreen(
     val pendentesCount = state.cadastroStats.cadastro_incompletos + state.cadastroStats.inclusao_incompletos
     val completosCount = state.cadastroStats.cadastro_enviados + state.cadastroStats.inclusao_enviados
     val profileRole = state.profile?.role.orEmpty()
-    val useSupervisorGroupedView = state.cadastroTab == CadastroAreaTab.INCOMPLETOS && profileRole == "SUPERVISOR"
-    val useGerenteGroupedView = state.cadastroTab == CadastroAreaTab.INCOMPLETOS && profileRole == "GERENTE"
-    LaunchedEffect(state.cadastroTab) {
-        if (state.cadastroTab == CadastroAreaTab.LINK) {
-            onTabChange(CadastroAreaTab.NOVO)
-        }
-    }
+    val isListTab = state.cadastroTab in setOf(CadastroAreaTab.INCOMPLETOS, CadastroAreaTab.COMPLETOS)
+    val useSupervisorGroupedView = isListTab && profileRole == "SUPERVISOR"
+    val useGerenteGroupedView = isListTab && profileRole == "GERENTE"
 
     LazyColumn(
         modifier = Modifier
@@ -1097,6 +1093,12 @@ private fun CadastroTabBar(
                 onClick = { onTabSelected(CadastroAreaTab.NOVO) },
                 modifier = Modifier.weight(1f),
             )
+            CadastroTabButton(
+                label = "Link",
+                selected = selectedTab == CadastroAreaTab.LINK,
+                onClick = { onTabSelected(CadastroAreaTab.LINK) },
+                modifier = Modifier.weight(0.62f),
+            )
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1500,12 +1502,20 @@ private fun parseFilterDate(value: String): LocalDate? {
     return runCatching { LocalDate.parse(normalized) }.getOrNull()
 }
 
+private fun resolveCadastroDateForFilter(cadastro: CadastroResumo, filtro: CadastroFiltro): String {
+    return if (filtro == CadastroFiltro.ENVIADOS) {
+        cadastro.dataEnvio?.takeIf { it.isNotBlank() } ?: cadastro.updatedAt
+    } else {
+        cadastro.createdAt
+    }
+}
+
 private fun parseCadastroDate(value: String): LocalDate? {
     return runCatching { OffsetDateTime.parse(value).toLocalDate() }.getOrNull()
 }
 
 private fun canDeleteCadastroByRole(role: String?): Boolean {
-    return role in setOf("ADMINISTRADOR", "ADMIN", "VENDEDOR")
+    return role in setOf("VENDEDOR", "ADESIONISTA")
 }
 
 private fun truncateLabelWithEllipsis(value: String?, maxChars: Int): String {
