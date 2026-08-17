@@ -42,6 +42,12 @@ jobs:
           cache: gradle
           cache-dependency-path: android-app/**/*.gradle*
 
+      - name: Set up Deno
+        if: steps.detect.outputs.apply == 'true'
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
       - name: Apply performance changes
         if: steps.detect.outputs.apply == 'true'
         run: python3 scripts/apply_performance_cadastro_hotfix.py
