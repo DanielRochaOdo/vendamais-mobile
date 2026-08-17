@@ -53,6 +53,7 @@ private fun stringJsonArray(values: List<String>) = kotlinx.serialization.json.b
     values.forEach { add(it) }
 }
 
+@Composable
 private fun parseColor(value: String): androidx.compose.ui.graphics.Color {
     val normalized = value.trim().removePrefix("#")
     return runCatching {
