@@ -9,6 +9,7 @@ on:
       - '.github/scripts/apply_adesart_parity_stage2_pre.py'
       - '.github/scripts/apply_adesart_parity_stage2.py'
       - '.github/scripts/apply_adesart_parity_stage2_post.py'
+      - '.github/scripts/apply_adesart_parity_stage3.py'
       - '.github/workflows/apply-adesart-parity.yml'
   workflow_dispatch:
 
