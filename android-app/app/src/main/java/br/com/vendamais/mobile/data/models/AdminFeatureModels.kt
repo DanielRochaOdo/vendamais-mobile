@@ -193,10 +193,25 @@ data class PublicParentescoInfo(
 )
 
 @Serializable
+data class PublicCadastroPrefill(
+    val nome: String? = null,
+    @SerialName("dataNascimento")
+    val dataNascimento: String? = null,
+    @SerialName("sexoCodigo")
+    val sexoCodigo: Int? = null,
+    val contatos: List<PublicCadastroContato> = emptyList(),
+    val endereco: PublicCadastroEndereco? = null,
+    @SerialName("nomeMae")
+    val nomeMae: String? = null,
+)
+
+@Serializable
 data class PublicCadastroCheckCpfResponse(
     val ok: Boolean = false,
     val error: String? = null,
     val code: String? = null,
+    val prefill: PublicCadastroPrefill? = null,
+    val message: String? = null,
 )
 
 @Serializable

@@ -252,7 +252,50 @@ fun PublicAdesaoParityScreen(
                         val digits = cpf.filter(Char::isDigit)
                         if (!CadastroPayloadBuilder.validateCpf(digits)) { error = "CPF invalido. Verifique os digitos."; return@Button }
                         checkingCpf = true; error = null; notice = null
-                        scope.launch { runCatching { viewModel.checkPublicCadastroCpf(token, digits) }.onSuccess { result -> if (!result.ok) error = result.error ?: "CPF indisponivel para este link." else { cpf = digits; cpfLocked = true; notice = "CPF validado. Continue o cadastro." } }.onFailure { error = CadastroApiErrorMapper.mapUserMessage(it.message, "Falha ao validar CPF.") }; checkingCpf = false }
+                        scope.launch {
+                            runCatching { viewModel.checkPublicCadastroCpf(token, digits) }
+                                .onSuccess { result ->
+                                    if (!result.ok) {
+                                        error = result.error ?: "CPF indisponivel para este link."
+                                    } else {
+                                        cpf = digits
+                                        cpfLocked = true
+                                        result.prefill?.let { prefill ->
+                                            prefill.nome?.takeIf { it.isNotBlank() }?.let { nome = it }
+                                            prefill.dataNascimento?.takeIf { it.isNotBlank() }?.let { dataNascimento = it }
+                                            prefill.sexoCodigo?.takeIf { it in setOf(0, 1) }?.let { sexo = it }
+                                            prefill.nomeMae?.takeIf { it.isNotBlank() }?.let { nomeMae = it }
+                                            if (prefill.contatos.isNotEmpty()) {
+                                                contatos.clear()
+                                                prefill.contatos.forEachIndexed { index, contact ->
+                                                    contatos.add(
+                                                        PublicContactDraft(
+                                                            tipo = contact.tipo,
+                                                            valor = contact.valor,
+                                                            principal = contact.principal || (index == 0 && prefill.contatos.none { it.principal }),
+                                                        ),
+                                                    )
+                                                }
+                                            }
+                                            prefill.endereco?.let { address ->
+                                                if (address.cep.isNotBlank()) cep = address.cep.filter(Char::isDigit).take(8)
+                                                if (address.logradouro.isNotBlank()) logradouro = address.logradouro
+                                                if (address.numero.isNotBlank()) numero = address.numero
+                                                if (!address.complemento.isNullOrBlank()) complemento = address.complemento
+                                                if (address.bairro.isNotBlank()) bairro = address.bairro
+                                                if (address.cidade.isNotBlank()) cidade = address.cidade
+                                                if (address.uf.isNotBlank()) uf = address.uf.uppercase().take(2)
+                                            }
+                                        }
+                                        if (contatos.isEmpty()) contatos.add(PublicContactDraft(principal = true))
+                                        notice = result.message ?: "CPF validado. Continue o cadastro."
+                                    }
+                                }
+                                .onFailure {
+                                    error = CadastroApiErrorMapper.mapUserMessage(it.message, "Falha ao validar CPF.")
+                                }
+                            checkingCpf = false
+                        }
                     }, enabled = !checkingCpf && !submitting && !cpfLocked) { if (checkingCpf) CircularProgressIndicator(strokeWidth = 2.dp) else Text("Consultar CPF") }
                     if (cpfLocked) TextButton(onClick = { cpfLocked = false }, enabled = !submitting) { Text("Alterar CPF") }
                 }
