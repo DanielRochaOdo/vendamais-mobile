@@ -7,24 +7,39 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
 import br.com.vendamais.mobile.ui.components.ScreenHeading
 import br.com.vendamais.mobile.ui.components.WebCard
 import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
+import br.com.vendamais.mobile.ui.theme.Amber100
+import br.com.vendamais.mobile.ui.theme.Amber500
+import br.com.vendamais.mobile.ui.theme.Blue100
+import br.com.vendamais.mobile.ui.theme.Blue500
+import br.com.vendamais.mobile.ui.theme.Emerald
+import br.com.vendamais.mobile.ui.theme.EmeraldSoft
+import br.com.vendamais.mobile.ui.theme.Red100
+import br.com.vendamais.mobile.ui.theme.Red500
+import br.com.vendamais.mobile.ui.theme.Slate100
+import br.com.vendamais.mobile.ui.theme.Slate500
 
 @Composable
 fun AuditoriaLemmitScreen(
@@ -39,7 +54,12 @@ fun AuditoriaLemmitScreen(
     LaunchedEffect(currentPage) {
         val startIso = "${startDate}T00:00:00Z"
         val endIso = "${endDate}T00:00:00Z"
-        viewModel.loadAuditLemmit(startIso = startIso, endIso = endIso, limit = itemsPerPage, offset = (currentPage - 1) * itemsPerPage)
+        viewModel.loadAuditLemmit(
+            startIso = startIso,
+            endIso = endIso,
+            limit = itemsPerPage,
+            offset = (currentPage - 1) * itemsPerPage,
+        )
     }
 
     val audit = state.auditLemmit
@@ -51,26 +71,31 @@ fun AuditoriaLemmitScreen(
         item {
             ScreenHeading(
                 title = "Auditoria Lemmit",
-                subtitle = "Custos, uso por usuario e ultimas consultas.",
+                subtitle = "Acompanhe consumo, custo e comportamento das consultas de CPF.",
             )
         }
 
         item {
-            WebCard {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            WebCard(title = "Periodo analisado") {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         OutlinedTextField(
                             value = startDate,
                             onValueChange = { startDate = it },
                             modifier = Modifier.weight(1f).bringIntoViewOnFocus(),
-                            label = { Text("Data inicio (YYYY-MM-DD)") },
+                            label = { Text("Inicio") },
+                            supportingText = { Text("AAAA-MM-DD") },
                             singleLine = true,
                         )
                         OutlinedTextField(
                             value = endDate,
                             onValueChange = { endDate = it },
                             modifier = Modifier.weight(1f).bringIntoViewOnFocus(),
-                            label = { Text("Data fim (YYYY-MM-DD)") },
+                            label = { Text("Fim") },
+                            supportingText = { Text("AAAA-MM-DD") },
                             singleLine = true,
                         )
                     }
@@ -80,39 +105,91 @@ fun AuditoriaLemmitScreen(
                             currentPage = 1
                             val startIso = "${startDate}T00:00:00Z"
                             val endIso = "${endDate}T00:00:00Z"
-                            viewModel.loadAuditLemmit(startIso = startIso, endIso = endIso, limit = itemsPerPage, offset = 0)
+                            viewModel.loadAuditLemmit(
+                                startIso = startIso,
+                                endIso = endIso,
+                                limit = itemsPerPage,
+                                offset = 0,
+                            )
                         },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !state.adminFeatureLoading,
                     ) {
-                        Text("Atualizar auditoria")
+                        Text("Atualizar periodo")
                     }
                 }
             }
         }
 
         item {
-            WebCard {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Resumo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text("Total consultas: ${audit.cards.totalConsultas}")
-                    Text("Bem sucedidas: ${audit.cards.bemSucedidas}")
-                    Text("Com erro: ${audit.cards.comErro}")
-                    Text("Custo total: ${formatCurrency(audit.cards.custoTotal)}")
-                    Text("Limite ajustado: ${formatCurrency(audit.cards.totalLimiteAjustado)}")
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Resumo do consumo",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    AuditMetric(
+                        label = "Consultas",
+                        value = audit.cards.totalConsultas.toString(),
+                        container = Blue100,
+                        content = Blue500,
+                        modifier = Modifier.weight(1f),
+                    )
+                    AuditMetric(
+                        label = "Sucesso",
+                        value = audit.cards.bemSucedidas.toString(),
+                        container = EmeraldSoft,
+                        content = Emerald,
+                        modifier = Modifier.weight(1f),
+                    )
+                    AuditMetric(
+                        label = "Erros",
+                        value = audit.cards.comErro.toString(),
+                        container = Red100,
+                        content = Red500,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    AuditMetric(
+                        label = "Custo total",
+                        value = formatAuditCurrency(audit.cards.custoTotal),
+                        container = Amber100,
+                        content = Amber500,
+                        modifier = Modifier.weight(1f),
+                    )
+                    AuditMetric(
+                        label = "Limite ajustado",
+                        value = formatAuditCurrency(audit.cards.totalLimiteAjustado),
+                        container = Slate100,
+                        content = Slate500,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
             }
         }
 
         item {
-            WebCard {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Usuarios por consultas", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            WebCard(title = "Uso por usuario") {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (audit.usuarioConsulta.isEmpty()) {
-                        Text("Sem dados para o periodo.")
+                        Text(
+                            text = "Sem dados de consumo para o periodo.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     } else {
                         audit.usuarioConsulta.forEach { row ->
-                            Text("${row.nome.ifBlank { "Sem nome" }} - ${row.consultas}")
+                            AuditUserRow(
+                                name = row.nome.ifBlank { "Sem nome" },
+                                primaryValue = "${row.consultas} consulta(s)",
+                            )
                         }
                     }
                 }
@@ -120,14 +197,19 @@ fun AuditoriaLemmitScreen(
         }
 
         item {
-            WebCard {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Usuarios por custo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            WebCard(title = "Custo por usuario") {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (audit.usuarioCusto.isEmpty()) {
-                        Text("Sem dados para o periodo.")
+                        Text(
+                            text = "Sem dados de custo para o periodo.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     } else {
                         audit.usuarioCusto.forEach { row ->
-                            Text("${row.nome.ifBlank { "Sem nome" }} - ${formatCurrency(row.custoTotal)}")
+                            AuditUserRow(
+                                name = row.nome.ifBlank { "Sem nome" },
+                                primaryValue = formatAuditCurrency(row.custoTotal),
+                            )
                         }
                     }
                 }
@@ -135,45 +217,180 @@ fun AuditoriaLemmitScreen(
         }
 
         item {
-            WebCard {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Ultimas consultas", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    if (audit.ultimasConsultas.isEmpty()) {
-                        Text("Sem consultas registradas.")
-                    }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = "Ultimas consultas",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = "Pagina $currentPage",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
 
-        if (audit.ultimasConsultas.isNotEmpty()) {
+        if (audit.ultimasConsultas.isEmpty()) {
+            item {
+                WebCard {
+                    Text(
+                        text = "Sem consultas registradas para este periodo.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        } else {
             items(audit.ultimasConsultas) { consulta ->
                 WebCard {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(consulta.nome.ifBlank { "Desconhecido" }, fontWeight = FontWeight.Medium)
-                        Text("CPF: ${consulta.cpf.ifBlank { "N/A" }}")
-                        Text("Hora: ${formatDateTime(consulta.hora)}")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(
+                                text = consulta.nome.ifBlank { "Desconhecido" },
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = "CPF ${consulta.cpf.ifBlank { "N/A" }}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                        ) {
+                            Text(
+                                text = formatAuditDateTime(consulta.hora),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
             }
+
             item {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Button(onClick = { if (currentPage > 1) currentPage-- }, enabled = currentPage > 1) { Text("Anterior") }
-                    Text("Pagina $currentPage")
-                    Button(onClick = { currentPage++ }, enabled = audit.ultimasConsultas.size == itemsPerPage) { Text("Proxima") }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(
+                        onClick = { if (currentPage > 1) currentPage-- },
+                        enabled = currentPage > 1,
+                    ) {
+                        Text("Anterior")
+                    }
+                    Text(
+                        text = "Pagina $currentPage",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(
+                        onClick = { currentPage++ },
+                        enabled = audit.ultimasConsultas.size == itemsPerPage,
+                    ) {
+                        Text("Proxima")
+                    }
                 }
             }
         }
     }
 }
 
-private fun formatCurrency(value: Double): String {
+@Composable
+private fun AuditMetric(
+    label: String,
+    value: String,
+    container: androidx.compose.ui.graphics.Color,
+    content: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = container,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = content,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = content,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AuditUserRow(
+    name: String,
+    primaryValue: String,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = name,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = primaryValue,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+private fun formatAuditCurrency(value: Double): String {
     return runCatching {
         java.text.NumberFormat.getCurrencyInstance(java.util.Locale("pt", "BR")).format(value)
     }.getOrDefault(value.toString())
 }
 
-private fun formatDateTime(value: String): String {
+private fun formatAuditDateTime(value: String): String {
     return runCatching {
-        java.time.OffsetDateTime.parse(value).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+        java.time.OffsetDateTime.parse(value)
+            .format(java.time.format.DateTimeFormatter.ofPattern("dd/MM HH:mm"))
     }.getOrDefault(value)
 }
