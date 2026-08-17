@@ -7,6 +7,8 @@ settings = settings_path.read_text(encoding="utf-8-sig")
 for old, new in (
     ("SelectionField(", "SettingsChoiceField("),
     ("private fun <T> SelectionField(", "private fun <T> SettingsChoiceField("),
+    ("AdminLoadingCard(", "SettingsLoadingCard("),
+    ("private fun AdminLoadingCard(", "private fun SettingsLoadingCard("),
     ("intJsonArray(", "settingsIntJsonArray("),
     ("private fun intJsonArray(", "private fun settingsIntJsonArray("),
     ("stringJsonArray(", "settingsStringJsonArray("),
@@ -15,6 +17,14 @@ for old, new in (
     ("private fun parseColor(", "private fun settingsParseColor("),
 ):
     settings = settings.replace(old, new)
+settings = settings.replace(
+    "private fun settingsIntJsonArray(values: List<Int>) = kotlinx.serialization.json.buildJsonArray {\n    values.forEach { add(it) }\n}",
+    "private fun settingsIntJsonArray(values: List<Int>) = kotlinx.serialization.json.buildJsonArray {\n    values.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) }\n}",
+)
+settings = settings.replace(
+    "private fun settingsStringJsonArray(values: List<String>) = kotlinx.serialization.json.buildJsonArray {\n    values.forEach { add(it) }\n}",
+    "private fun settingsStringJsonArray(values: List<String>) = kotlinx.serialization.json.buildJsonArray {\n    values.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) }\n}",
+)
 settings_path.write_text(settings, encoding="utf-8")
 
 deleted_path = ROOT / "android-app/app/src/main/java/br/com/vendamais/mobile/ui/screens/AdesoesExcluidasScreen.kt"
