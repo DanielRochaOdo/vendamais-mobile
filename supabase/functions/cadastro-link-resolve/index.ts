@@ -94,6 +94,26 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    const [parentescosResult, configResult] = await Promise.all([
+      supabase
+        .from("cadastro_parentesco_map")
+        .select("parentesco_id,label,ativo")
+        .eq("ativo", true)
+        .order("parentesco_id", { ascending: true }),
+      supabase
+        .from("cadastro_config")
+        .select("planos_ocultos")
+        .eq("id", 1)
+        .maybeSingle(),
+    ]);
+
+    if (parentescosResult.error) {
+      console.error("[cadastro-link-resolve] parentescos error:", parentescosResult.error);
+    }
+    if (configResult.error) {
+      console.error("[cadastro-link-resolve] config error:", configResult.error);
+    }
+
     const { error: metricsError } = await supabase
       .from("cadastro_links")
       .update({
@@ -116,6 +136,14 @@ Deno.serve(async (req: Request) => {
         empresaRaw: link.empresa_raw,
         empresaExigeMatricula: link.empresa_exige_matricula,
         planosRaw: link.planos_raw,
+        planosOcultos: Array.isArray(configResult.data?.planos_ocultos)
+          ? configResult.data.planos_ocultos
+          : [],
+        parentescos: (parentescosResult.data || []).map((item) => ({
+          parentescoId: item.parentesco_id,
+          label: item.label,
+          ativo: item.ativo,
+        })),
         vendedorCodigo: link.vendedor_codigo,
         vendedorNome: link.vendedor_nome,
         vendedorTelefone,
