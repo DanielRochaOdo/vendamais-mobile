@@ -137,7 +137,7 @@ class SupabaseRepository(
                 query = {
                     parameter(
                         "select",
-                        "id,status,tipo_cadastro,nome,cpf,empresa_nome,empresa_cnpj,empresa_codigo,status_adesao_id,vendedor_id,vendedor_nome,adesionista_nome,dependentes,data_envio,created_at,updated_at"
+                        "id,status,tipo_cadastro,nome,cpf,empresa_nome,empresa_cnpj,empresa_codigo,status_adesao_id,vendedor_id,vendedor_nome,adesionista_nome,dependentes,created_at,updated_at"
                     )
                     parameter("order", "updated_at.desc")
                     parameter("limit", pageSize)

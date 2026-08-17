@@ -15,6 +15,9 @@ interface CreateUserRequest {
   team_id?: string;
 }
 
+const requiresTeamAndExternal = (role?: string | null) =>
+  ['SUPERVISOR', 'VENDEDOR', 'ADESIONISTA'].includes(role ?? '');
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -62,15 +65,17 @@ Deno.serve(async (req: Request) => {
       throw new Error('Invalid role');
     }
 
-    if (['CADASTRO', 'VENDEDOR', 'ADESIONISTA', 'SUPERVISOR'].includes(role)) {
-      if (!external_id || !team_id) {
-        throw new Error(`${role} requires external_id and team_id`);
+    if (requiresTeamAndExternal(role)) {
+      if (!external_id?.trim() || !team_id?.trim()) {
+        throw new Error(`${role} precisa ter ID Externo e Equipe definidos`);
       }
     }
 
-    if (['ADMINISTRADOR', 'GERENTE'].includes(role)) {
+    // A migration add_cadastro_role_v3 define CADASTRO como papel sem team_id
+    // e sem external_id, assim como GERENTE. Mantemos a criação coerente com o schema.
+    if (['ADMINISTRADOR', 'GERENTE', 'CADASTRO'].includes(role)) {
       if (external_id || team_id) {
-        throw new Error(`${role} should not have external_id or team_id`);
+        throw new Error(`${role} não deve possuir ID Externo ou Equipe`);
       }
     }
 
@@ -94,17 +99,19 @@ Deno.serve(async (req: Request) => {
       throw new Error(`Failed to create auth user: ${createAuthError?.message}`);
     }
 
+    const profilePayload = {
+      id: authData.user.id,
+      name,
+      email,
+      role,
+      external_id: requiresTeamAndExternal(role) ? external_id?.trim() || null : null,
+      team_id: requiresTeamAndExternal(role) ? team_id?.trim() || null : null,
+      is_active: true,
+    };
+
     const { data: profile, error: createProfileError } = await supabaseClient
       .from('profiles')
-      .insert({
-        id: authData.user.id,
-        name,
-        email,
-        role,
-        external_id: external_id || null,
-        team_id: team_id || null,
-        is_active: true,
-      })
+      .insert(profilePayload)
       .select()
       .single();
 

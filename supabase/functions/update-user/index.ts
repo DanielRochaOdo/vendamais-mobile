@@ -19,7 +19,16 @@ interface UpdateUserRequest {
 }
 
 const requiresTeamAndExternal = (role?: string | null) =>
-  ['CADASTRO', 'SUPERVISOR', 'VENDEDOR', 'ADESIONISTA'].includes(role ?? '');
+  ['SUPERVISOR', 'VENDEDOR', 'ADESIONISTA'].includes(role ?? '');
+
+const roleMustNotHaveTeamOrExternal = (role?: string | null) =>
+  ['GERENTE', 'CADASTRO'].includes(role ?? '');
+
+const normalizeOptionalText = (value: string | null | undefined): string | null => {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim();
+  return normalized || null;
+};
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -62,7 +71,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: targetProfile, error: targetError } = await supabaseClient
       .from('profiles')
-      .select('id, role, team_id, email')
+      .select('id, role, team_id, external_id, email')
       .eq('id', user_id)
       .maybeSingle();
 
@@ -75,15 +84,32 @@ Deno.serve(async (req: Request) => {
     }
 
     const effectiveRole = role ?? targetProfile.role;
-    const nextExternalId = requiresTeamAndExternal(effectiveRole) ? external_id ?? null : null;
-    const nextTeamId = requiresTeamAndExternal(effectiveRole) ? team_id ?? null : null;
+    const roleChanged = role !== undefined && role !== targetProfile.role;
 
-    if (requiresTeamAndExternal(effectiveRole) && (!nextExternalId || !nextTeamId)) {
-      throw new Error(`${effectiveRole} requires external_id and team_id`);
-    }
+    let nextExternalId: string | null = null;
+    let nextTeamId: string | null = null;
 
-    if (['ADMINISTRADOR', 'GERENTE'].includes(effectiveRole) && (nextExternalId || nextTeamId)) {
-      throw new Error(`${effectiveRole} should not have external_id or team_id`);
+    if (requiresTeamAndExternal(effectiveRole)) {
+      const requestedExternalId = normalizeOptionalText(external_id);
+      const requestedTeamId = normalizeOptionalText(team_id);
+
+      // Ao editar apenas nome/email/telefone/limite/ativo, preserve os vínculos
+      // atuais do vendedor/supervisor/adesionista em vez de exigir que todo
+      // cliente reenvie external_id e team_id em cada alteração.
+      nextExternalId = requestedExternalId ?? (!roleChanged ? normalizeOptionalText(targetProfile.external_id) : null);
+      nextTeamId = requestedTeamId ?? (!roleChanged ? normalizeOptionalText(targetProfile.team_id) : null);
+
+      if (!nextExternalId || !nextTeamId) {
+        throw new Error(`${effectiveRole} precisa ter ID Externo e Equipe definidos`);
+      }
+    } else if (roleMustNotHaveTeamOrExternal(effectiveRole)) {
+      nextExternalId = null;
+      nextTeamId = null;
+    } else {
+      // Mantém o comportamento histórico para os demais papéis (ex.: ADMINISTRADOR):
+      // a edição administrativa não introduz vínculo de equipe implicitamente.
+      nextExternalId = null;
+      nextTeamId = null;
     }
 
     const { error: authUpdateError } = await supabaseClient.auth.admin.updateUserById(user_id, {
