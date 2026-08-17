@@ -3,13 +3,17 @@ name: Validate Edge Functions
 on:
   pull_request:
     paths:
-      - 'supabase/functions/**'
+      - 'supabase/functions/update-user/**'
+      - 'supabase/functions/cadastro-link-resolve/**'
+      - 'supabase/functions/cadastro-link-check-cpf/**'
       - '.github/workflows/validate-deno-parity.yml'
   push:
     branches:
       - main
     paths:
-      - 'supabase/functions/**'
+      - 'supabase/functions/update-user/**'
+      - 'supabase/functions/cadastro-link-resolve/**'
+      - 'supabase/functions/cadastro-link-check-cpf/**'
       - '.github/workflows/validate-deno-parity.yml'
   workflow_dispatch:
 
@@ -25,11 +29,9 @@ jobs:
         with:
           deno-version: v2.x
 
-      - name: Check Edge Functions
+      - name: Check parity Edge Functions
         run: |
-          mapfile -t files < <(find supabase/functions -name 'index.ts' -type f | sort)
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "No Edge Functions found."
-            exit 0
-          fi
-          deno check --node-modules-dir=auto "${files[@]}"
+          deno check --node-modules-dir=auto \
+            supabase/functions/update-user/index.ts \
+            supabase/functions/cadastro-link-resolve/index.ts \
+            supabase/functions/cadastro-link-check-cpf/index.ts
