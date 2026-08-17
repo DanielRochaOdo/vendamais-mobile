@@ -925,33 +925,15 @@ class AppViewModel(
                         )
                     }
                 }.onSuccess { result ->
-                    val activeSession = ensureFreshSession(session)
-                    val currentCadastros = _uiState.value.cadastros
-                    val cadastrosRefreshResult = runCatching {
-                        withContext(Dispatchers.IO) { repository.fetchCadastros(activeSession) }
-                    }
-                    val cadastrosAtualizados = cadastrosRefreshResult.getOrElse {
-                        Log.w(logTag, "Rascunho criado, mas falhou o refresh da lista", it)
-                        currentCadastros
-                    }
                     val warning = result.warningMessage.orEmpty()
-                    val postSuccessNotice = buildList {
-                        if (warning.isBlank()) {
-                            if (cadastrosRefreshResult.isFailure) {
-                                add("Rascunho criado, mas houve falha ao atualizar a lista de cadastros.")
-                            }
-                        } else if (!warning.contains("Lemit", ignoreCase = true) && !warning.contains("Lemmit", ignoreCase = true)) {
-                            add(warning)
-                            if (cadastrosRefreshResult.isFailure) {
-                                add("Rascunho criado, mas houve falha ao atualizar a lista de cadastros.")
-                            }
-                        } else if (cadastrosRefreshResult.isFailure) {
-                            add("Rascunho criado, mas houve falha ao atualizar a lista de cadastros.")
+                    val postSuccessNotice = warning
+                        .takeIf {
+                            it.isNotBlank() &&
+                                !it.contains("Lemit", ignoreCase = true) &&
+                                !it.contains("Lemmit", ignoreCase = true)
                         }
-                    }.joinToString("\n\n").ifBlank { null }
                     _uiState.update {
                         it.copy(
-                            cadastros = cadastrosAtualizados,
                             selectedCadastro = result.draft,
                             cadastroWorkspace = it.cadastroWorkspace.copy(
                                 operationLoading = false,
@@ -963,6 +945,17 @@ class AppViewModel(
                             pendingCadastroPrompt = null,
                             pendingCadastroActionLoading = false,
                         )
+                    }
+                    viewModelScope.launch refreshDraftList@{
+                        val refreshSession = runCatching { ensureFreshSession(session) }.getOrNull()
+                            ?: return@refreshDraftList
+                        runCatching {
+                            withContext(Dispatchers.IO) { repository.fetchCadastros(refreshSession) }
+                        }.onSuccess { refreshed ->
+                            _uiState.update { current -> current.copy(cadastros = refreshed) }
+                        }.onFailure {
+                            Log.w(logTag, "Rascunho criado; refresh da lista ficou para a proxima sincronizacao", it)
+                        }
                     }
                     if (warning.contains("Limite mensal da Lemmit atingido", ignoreCase = true)) {
                         resolveCadastroOverlay(
@@ -1380,7 +1373,7 @@ class AppViewModel(
                 val arquivoPathFinalForSend = when {
                     arquivoPathForSend.isNullOrBlank() -> null
                     File(arquivoPathForSend).exists() -> {
-                        val bytes = File(arquivoPathForSend).readBytes()
+                        val bytes = withContext(Dispatchers.IO) { File(arquivoPathForSend).readBytes() }
                         val uploaded = uploadTempFile(
                             fileName = arquivoNomeForSend ?: File(arquivoPathForSend).name,
                             mimeType = arquivoMimeTypeForSend,
@@ -1652,33 +1645,14 @@ class AppViewModel(
                 if (!arquivoPathForSend.isNullOrBlank() && File(arquivoPathForSend).exists()) {
                     DraftAttachmentStorage.deleteDraftDirAfterSuccess(File(arquivoPathForSend).parentFile?.parentFile)
                 }
-                val cadastrosResult = runCatching { repository.fetchCadastros(activeSession) }
-                val statsResult = runCatching { repository.fetchCadastroStats(activeSession) }
-                val notice = buildString {
-                    append("Cadastro enviado com sucesso ao ERP.")
-                    if (cadastrosResult.isFailure || statsResult.isFailure) {
-                        append(" Houve falha ao atualizar a listagem local, mas o envio foi concluido.")
-                    }
-                }
-                val cadastrosAtualizados = cadastrosResult.getOrElse {
-                    Log.w(logTag, "Envio concluido, mas falhou ao atualizar lista de cadastros", it)
-                    _uiState.value.cadastros
-                }
-                val statsAtualizadas = statsResult.getOrElse {
-                    Log.w(logTag, "Envio concluido, mas falhou ao atualizar estatisticas", it)
-                    _uiState.value.cadastroStats
-                }
-                Triple(detalheAtualizado, cadastrosAtualizados, statsAtualizadas) to notice
-            }.onSuccess { (payload, noticeMessage) ->
+                detalheAtualizado to "Cadastro enviado com sucesso ao ERP."
+            }.onSuccess { (_, noticeMessage) ->
                 Log.i(logTag, "[$sendTraceId] flowSuccess")
-                val (_, cadastrosAtualizados, statsAtualizadas) = payload
                 draftUxStateCache.clear(originalCadastroId)
                 _uiState.update {
                     it.copy(
                         sendingCadastro = false,
                         selectedCadastro = null,
-                        cadastros = cadastrosAtualizados,
-                        cadastroStats = statsAtualizadas,
                         errorMessage = null,
                         noticeMessage = noticeMessage,
                         cadastroOverlay = null,
@@ -1686,6 +1660,27 @@ class AppViewModel(
                         cadastroTab = CadastroAreaTab.COMPLETOS,
                         cadastroFiltro = CadastroFiltro.ENVIADOS,
                     )
+                }
+                viewModelScope.launch refreshAfterSend@{
+                    val refreshSession = runCatching { ensureFreshSession(session) }.getOrNull()
+                        ?: return@refreshAfterSend
+                    val (cadastrosResult, statsResult) = coroutineScope {
+                        val cadastrosDeferred = async { runCatching { repository.fetchCadastros(refreshSession) } }
+                        val statsDeferred = async { runCatching { repository.fetchCadastroStats(refreshSession) } }
+                        cadastrosDeferred.await() to statsDeferred.await()
+                    }
+                    _uiState.update { current ->
+                        current.copy(
+                            cadastros = cadastrosResult.getOrElse {
+                                Log.w(logTag, "Envio concluido; falhou refresh da lista em background", it)
+                                current.cadastros
+                            },
+                            cadastroStats = statsResult.getOrElse {
+                                Log.w(logTag, "Envio concluido; falhou refresh das estatisticas em background", it)
+                                current.cadastroStats
+                            },
+                        )
+                    }
                 }
             }.onFailure { throwable ->
                 Log.e(logTag, "[$sendTraceId] flowFailure", throwable)
