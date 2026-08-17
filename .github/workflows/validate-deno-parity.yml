@@ -1,0 +1,21 @@
+name: Validate Parity Edge Functions
+
+on:
+  push:
+    branches:
+      - agent/adesart-parity
+    paths:
+      - '.github/workflows/validate-deno-parity.yml'
+  workflow_dispatch:
+
+jobs:
+  deno-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: agent/adesart-parity
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno check --node-modules-dir=auto supabase/functions/update-user/index.ts supabase/functions/cadastro-link-resolve/index.ts supabase/functions/cadastro-link-check-cpf/index.ts
