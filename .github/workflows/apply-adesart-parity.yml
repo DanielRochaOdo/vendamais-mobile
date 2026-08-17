@@ -6,6 +6,7 @@ on:
       - agent/adesart-parity
     paths:
       - '.github/scripts/apply_adesart_parity.py'
+      - '.github/scripts/apply_adesart_parity_stage2_pre.py'
       - '.github/scripts/apply_adesart_parity_stage2.py'
       - '.github/scripts/apply_adesart_parity_stage2_post.py'
       - '.github/workflows/apply-adesart-parity.yml'
@@ -27,6 +28,7 @@ jobs:
       - name: Apply parity patches
         run: |
           python3 .github/scripts/apply_adesart_parity.py
+          python3 .github/scripts/apply_adesart_parity_stage2_pre.py
           python3 .github/scripts/apply_adesart_parity_stage2.py
           python3 .github/scripts/apply_adesart_parity_stage2_post.py
 
