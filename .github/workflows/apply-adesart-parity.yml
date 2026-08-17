@@ -46,15 +46,15 @@ jobs:
         run: |
           chmod +x gradlew
           set +e
-          ./gradlew :app:compileDebugKotlin --stacktrace 2>&1 | tee ../parity-gradle.log
+          ./gradlew :app:compileDebugKotlin --stacktrace 2>&1 | tee ../parity-gradle.txt
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -ne 0 ]; then
-            cp ../parity-gradle.log ../.github/parity-compile-errors.log
+            grep -E '(^e: | error: |Unresolved reference|Type mismatch|Cannot infer|FAILURE:|Compilation error)' ../parity-gradle.txt | tail -n 200 > ../.github/parity-compile-errors.txt || true
             cd ..
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add .github/parity-compile-errors.log
+            git add -f .github/parity-compile-errors.txt
             git commit -m "Registra erros de compilacao da paridade" || true
             git push origin HEAD:agent/adesart-parity || true
             exit "$status"
@@ -62,7 +62,7 @@ jobs:
 
       - name: Commit generated parity changes
         run: |
-          rm -f .github/parity-compile-errors.log parity-gradle.log
+          rm -f .github/parity-compile-errors.txt parity-gradle.txt
           if git diff --quiet; then
             echo "No parity changes to commit."
             exit 0
@@ -70,6 +70,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add android-app
-          git add -u .github/parity-compile-errors.log || true
+          git add -u .github/parity-compile-errors.txt || true
           git commit -m "Completa paridade administrativa com Adesart"
           git push origin HEAD:agent/adesart-parity
