@@ -60,7 +60,7 @@ jobs:
       - name: Check parity Edge Functions
         run: |
           set +e
-          deno check supabase/functions/update-user/index.ts supabase/functions/cadastro-link-resolve/index.ts supabase/functions/cadastro-link-check-cpf/index.ts 2>&1 | tee parity-deno.txt
+          deno check --node-modules-dir=auto supabase/functions/update-user/index.ts supabase/functions/cadastro-link-resolve/index.ts supabase/functions/cadastro-link-check-cpf/index.ts 2>&1 | tee parity-deno.txt
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -ne 0 ]; then
