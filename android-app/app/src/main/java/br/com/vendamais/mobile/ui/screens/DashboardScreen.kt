@@ -1,5 +1,6 @@
 package br.com.vendamais.mobile.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -7,8 +8,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Assessment
@@ -17,19 +21,22 @@ import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.HourglassEmpty
 import androidx.compose.material.icons.rounded.Shield
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.data.models.VendedorStats
 import br.com.vendamais.mobile.ui.AppUiState
@@ -41,6 +48,7 @@ import br.com.vendamais.mobile.ui.theme.Amber500
 import br.com.vendamais.mobile.ui.theme.Blue100
 import br.com.vendamais.mobile.ui.theme.Blue500
 import br.com.vendamais.mobile.ui.theme.Emerald
+import br.com.vendamais.mobile.ui.theme.EmeraldDark
 import br.com.vendamais.mobile.ui.theme.EmeraldSoft
 
 @Composable
@@ -52,49 +60,110 @@ fun DashboardScreen(
     val profile = state.profile ?: return
     val canViewSystemOverview = profile.role in setOf("ADMINISTRADOR", "ADMIN", "GERENTE")
     val canOpenDrilldown = profile.role in setOf("ADMINISTRADOR", "ADMIN", "GERENTE", "SUPERVISOR")
+    val totalMes = state.cadastroStats.cadastro_total + state.cadastroStats.inclusao_total
+    val pendentesMes = state.cadastroStats.cadastro_incompletos + state.cadastroStats.inclusao_incompletos
+    val enviadosMes = state.cadastroStats.cadastro_enviados + state.cadastroStats.inclusao_enviados
 
     LazyColumn(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
             ScreenHeading(
-                title = "Dashboard",
-                subtitle = "Bem-vindo ao VENDA+",
+                title = "Visao geral",
+                subtitle = "Acompanhe a operacao do mes atual",
             )
         }
 
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = "Estati­sticas - Mes Atual",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                MetricSection(
-                    title = "Cadastro",
-                    total = state.cadastroStats.cadastro_total,
-                    pendentes = state.cadastroStats.cadastro_incompletos,
-                    enviados = state.cadastroStats.cadastro_enviados,
-                    totalDetail = "${state.cadastroStats.cadastro_cadastros} cadastros + ${state.cadastroStats.cadastro_dependentes} dependentes",
-                    pendentesDetail = "${state.cadastroStats.cadastro_incompletos_cadastros} cadastros + ${state.cadastroStats.cadastro_incompletos_dependentes} dependentes",
-                    enviadosDetail = "${state.cadastroStats.cadastro_enviados_cadastros} cadastros + ${state.cadastroStats.cadastro_enviados_dependentes} dependentes",
-                    clickable = canOpenDrilldown,
-                    onMetricClick = { metricType -> onOpenDrilldown("cadastro", metricType) },
-                )
-                MetricSection(
-                    title = "Inclusao de Dependente",
-                    total = state.cadastroStats.inclusao_total,
-                    pendentes = state.cadastroStats.inclusao_incompletos,
-                    enviados = state.cadastroStats.inclusao_enviados,
-                    totalDetail = "${state.cadastroStats.inclusao_cadastros} cadastros + ${state.cadastroStats.inclusao_dependentes} dependentes",
-                    pendentesDetail = "${state.cadastroStats.inclusao_incompletos_cadastros} cadastros + ${state.cadastroStats.inclusao_incompletos_dependentes} dependentes",
-                    enviadosDetail = "${state.cadastroStats.inclusao_enviados_cadastros} cadastros + ${state.cadastroStats.inclusao_enviados_dependentes} dependentes",
-                    clickable = canOpenDrilldown,
-                    onMetricClick = { metricType -> onOpenDrilldown("inclusao_dependente", metricType) },
-                )
+            WebCard {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = "Resumo do mes",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                text = "Cadastros e inclusoes de dependentes",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = EmeraldSoft,
+                        ) {
+                            Text(
+                                text = "Atual",
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = EmeraldDark,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        SummaryMetric(
+                            modifier = Modifier.weight(1f),
+                            label = "Total",
+                            value = totalMes,
+                            container = Blue100,
+                            content = Blue500,
+                        )
+                        SummaryMetric(
+                            modifier = Modifier.weight(1f),
+                            label = "Pendentes",
+                            value = pendentesMes,
+                            container = Amber100,
+                            content = Amber500,
+                        )
+                        SummaryMetric(
+                            modifier = Modifier.weight(1f),
+                            label = "Enviados",
+                            value = enviadosMes,
+                            container = EmeraldSoft,
+                            content = EmeraldDark,
+                        )
+                    }
+                }
             }
+        }
+
+        item {
+            MetricSection(
+                title = "Cadastro",
+                total = state.cadastroStats.cadastro_total,
+                pendentes = state.cadastroStats.cadastro_incompletos,
+                enviados = state.cadastroStats.cadastro_enviados,
+                totalDetail = "${state.cadastroStats.cadastro_cadastros} cad. + ${state.cadastroStats.cadastro_dependentes} dep.",
+                pendentesDetail = "${state.cadastroStats.cadastro_incompletos_cadastros} cad. + ${state.cadastroStats.cadastro_incompletos_dependentes} dep.",
+                enviadosDetail = "${state.cadastroStats.cadastro_enviados_cadastros} cad. + ${state.cadastroStats.cadastro_enviados_dependentes} dep.",
+                clickable = canOpenDrilldown,
+                onMetricClick = { metricType -> onOpenDrilldown("cadastro", metricType) },
+            )
+        }
+
+        item {
+            MetricSection(
+                title = "Inclusao de dependente",
+                total = state.cadastroStats.inclusao_total,
+                pendentes = state.cadastroStats.inclusao_incompletos,
+                enviados = state.cadastroStats.inclusao_enviados,
+                totalDetail = "${state.cadastroStats.inclusao_cadastros} cad. + ${state.cadastroStats.inclusao_dependentes} dep.",
+                pendentesDetail = "${state.cadastroStats.inclusao_incompletos_cadastros} cad. + ${state.cadastroStats.inclusao_incompletos_dependentes} dep.",
+                enviadosDetail = "${state.cadastroStats.inclusao_enviados_cadastros} cad. + ${state.cadastroStats.inclusao_enviados_dependentes} dep.",
+                clickable = canOpenDrilldown,
+                onMetricClick = { metricType -> onOpenDrilldown("inclusao_dependente", metricType) },
+            )
         }
 
         if (state.dashboardDrilldownLoading) {
@@ -104,59 +173,53 @@ fun DashboardScreen(
         }
 
         item {
-            Text(
-                text = "Visao Geral",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-
-        item {
-            WebCard {
-                OverviewLine(
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Rounded.Shield,
-                            contentDescription = null,
-                            tint = Emerald,
-                        )
-                    },
-                    title = "Seu Perfil",
-                    value = profile.role,
-                    detail = roleDescription(profile.role),
-                    background = EmeraldSoft,
-                )
-            }
-        }
-
-        state.team?.let { team ->
-            item {
-                WebCard {
+            WebCard(title = "Seu contexto") {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     OverviewLine(
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Rounded.Groups,
-                                contentDescription = null,
-                                tint = Blue500,
-                            )
-                        },
-                        title = "Sua Equipe",
-                        value = team.name,
-                        detail = if (team.isActive) "Equipe ativa" else "Equipe inativa",
-                        background = Blue100,
+                        icon = Icons.Rounded.Shield,
+                        title = "Perfil",
+                        value = profile.role,
+                        detail = roleDescription(profile.role),
+                        background = EmeraldSoft,
+                        tint = EmeraldDark,
                     )
+                    state.team?.let { team ->
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        OverviewLine(
+                            icon = Icons.Rounded.Groups,
+                            title = "Equipe",
+                            value = team.name,
+                            detail = if (team.isActive) "Equipe ativa" else "Equipe inativa",
+                            background = Blue100,
+                            tint = Blue500,
+                        )
+                    }
                 }
             }
         }
 
         if (canViewSystemOverview) {
             item {
-                WebCard(title = "Estati­sticas do Sistema") {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        SystemRow("Total de Usuarios", state.systemOverview.totalUsers.toString())
-                        SystemRow("Usuarios Ativos", state.systemOverview.activeUsers.toString())
-                        SystemRow("Total de Equipes", state.systemOverview.totalTeams.toString())
+                WebCard(title = "Sistema") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        SystemMetric(
+                            modifier = Modifier.weight(1f),
+                            label = "Usuarios",
+                            value = state.systemOverview.totalUsers,
+                        )
+                        SystemMetric(
+                            modifier = Modifier.weight(1f),
+                            label = "Ativos",
+                            value = state.systemOverview.activeUsers,
+                        )
+                        SystemMetric(
+                            modifier = Modifier.weight(1f),
+                            label = "Equipes",
+                            value = state.systemOverview.totalTeams,
+                        )
                     }
                 }
             }
@@ -164,12 +227,46 @@ fun DashboardScreen(
     }
 
     state.dashboardDrilldown?.let { drilldown ->
-        StatsByVendedorDialog(
+        StatsByVendedorSheet(
             title = drilldown.title,
             metricType = drilldown.metricType,
             stats = drilldown.items,
             onDismiss = onCloseDrilldown,
         )
+    }
+}
+
+@Composable
+private fun SummaryMetric(
+    label: String,
+    value: Int,
+    container: Color,
+    content: Color,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.small,
+        color = container,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = value.toString(),
+                style = MaterialTheme.typography.titleLarge,
+                color = content,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = content,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -185,148 +282,195 @@ private fun MetricSection(
     clickable: Boolean,
     onMetricClick: (DashboardMetricType) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.SemiBold,
-        )
-        MetricCard(
-            label = "Total",
-            value = total.toString(),
-            detail = totalDetail,
-            clickable = clickable,
-            background = Blue100,
-            textColor = Blue500,
-            icon = Icons.Rounded.Description,
-            onClick = { onMetricClick(DashboardMetricType.TOTAL) },
-        )
-        MetricCard(
-            label = "Pendentes",
-            value = pendentes.toString(),
-            detail = pendentesDetail,
-            clickable = clickable,
-            background = Amber100,
-            textColor = Amber500,
-            icon = Icons.Rounded.HourglassEmpty,
-            onClick = { onMetricClick(DashboardMetricType.PENDENTES) },
-        )
-        MetricCard(
-            label = "Cadastrados",
-            value = enviados.toString(),
-            detail = enviadosDetail,
-            clickable = clickable,
-            background = EmeraldSoft,
-            textColor = Emerald,
-            icon = Icons.Rounded.CheckCircle,
-            onClick = { onMetricClick(DashboardMetricType.CADASTRADOS) },
-        )
+    WebCard(title = title) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            MetricTile(
+                modifier = Modifier.weight(1f),
+                label = "Total",
+                value = total,
+                detail = totalDetail,
+                clickable = clickable,
+                container = Blue100,
+                content = Blue500,
+                icon = Icons.Rounded.Description,
+                onClick = { onMetricClick(DashboardMetricType.TOTAL) },
+            )
+            MetricTile(
+                modifier = Modifier.weight(1f),
+                label = "Pendentes",
+                value = pendentes,
+                detail = pendentesDetail,
+                clickable = clickable,
+                container = Amber100,
+                content = Amber500,
+                icon = Icons.Rounded.HourglassEmpty,
+                onClick = { onMetricClick(DashboardMetricType.PENDENTES) },
+            )
+            MetricTile(
+                modifier = Modifier.weight(1f),
+                label = "Enviados",
+                value = enviados,
+                detail = enviadosDetail,
+                clickable = clickable,
+                container = EmeraldSoft,
+                content = EmeraldDark,
+                icon = Icons.Rounded.CheckCircle,
+                onClick = { onMetricClick(DashboardMetricType.CADASTRADOS) },
+            )
+        }
     }
 }
 
 @Composable
-private fun MetricCard(
+private fun MetricTile(
     label: String,
-    value: String,
+    value: Int,
     detail: String,
     clickable: Boolean,
-    background: androidx.compose.ui.graphics.Color,
-    textColor: androidx.compose.ui.graphics.Color,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    container: Color,
+    content: Color,
+    icon: ImageVector,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val readableOnCard = if (background.luminance() > 0.6f) Color(0xFF172235) else MaterialTheme.colorScheme.onSurface
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(background)
+    Column(
+        modifier = modifier
+            .background(container.copy(alpha = 0.72f), MaterialTheme.shapes.small)
             .then(if (clickable) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(18.dp),
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(textColor)
-                    .padding(8.dp),
-            ) {
+        Surface(
+            modifier = Modifier.size(28.dp),
+            shape = RoundedCornerShape(9.dp),
+            color = content,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = androidx.compose.ui.graphics.Color.White,
+                    modifier = Modifier.size(16.dp),
+                    tint = Color.White,
                 )
             }
-            Text(
-                text = value,
-                style = MaterialTheme.typography.headlineLarge,
-                color = readableOnCard,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = label,
-                color = textColor,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = detail,
-                style = MaterialTheme.typography.bodySmall,
-                color = textColor,
-            )
         }
+        Text(
+            text = value.toString(),
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = content,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = detail,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            minLines = 2,
+            maxLines = 2,
+        )
     }
 }
 
 @Composable
 private fun OverviewLine(
-    icon: @Composable () -> Unit,
+    icon: ImageVector,
     title: String,
     value: String,
     detail: String,
-    background: androidx.compose.ui.graphics.Color,
+    background: Color,
+    tint: Color,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(14.dp))
-                .background(background)
-                .padding(12.dp),
-        ) { icon() }
-        Column {
-            Text(title, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(detail, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(
+            modifier = Modifier.size(40.dp),
+            shape = MaterialTheme.shapes.small,
+            color = background,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = tint,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = title,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelMedium,
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = detail,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }
 
 @Composable
-private fun SystemRow(label: String, value: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+private fun SystemMetric(
+    label: String,
+    value: Int,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
             Icon(
                 imageVector = Icons.Rounded.Assessment,
                 contentDescription = null,
+                modifier = Modifier.size(18.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                text = value.toString(),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
         }
-        Text(value, fontWeight = FontWeight.SemiBold)
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun StatsByVendedorDialog(
+private fun StatsByVendedorSheet(
     title: String,
     metricType: DashboardMetricType,
     stats: List<VendedorStats>,
@@ -340,30 +484,60 @@ private fun StatsByVendedorDialog(
         }
     }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Fechar")
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "Desempenho por vendedor",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(onClick = onDismiss) { Text("Fechar") }
             }
-        },
-        title = { Text(title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (sortedStats.isEmpty()) {
-                    Text("Nenhum dado disponivel.")
-                } else {
-                    sortedStats.forEach { stat ->
+
+            if (sortedStats.isEmpty()) {
+                WebCard {
+                    Text(
+                        text = "Nenhum dado disponivel.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 520.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(sortedStats) { stat ->
                         WebCard {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Column {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                                ) {
                                     Text(stat.vendedorNome, fontWeight = FontWeight.SemiBold)
                                     Text(
-                                        "Total ${stat.total} | Pendentes ${stat.incompletos} | Enviados ${stat.enviados}",
+                                        "Total ${stat.total} · Pendentes ${stat.incompletos} · Enviados ${stat.enviados}",
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         style = MaterialTheme.typography.bodySmall,
                                     )
@@ -383,8 +557,8 @@ private fun StatsByVendedorDialog(
                     }
                 }
             }
-        },
-    )
+        }
+    }
 }
 
 private fun roleDescription(role: String): String {
@@ -392,8 +566,9 @@ private fun roleDescription(role: String): String {
         "ADMINISTRADOR", "ADMIN" -> "Acesso total ao sistema"
         "GERENTE", "GESTOR" -> "Gerenciamento de equipes e usuarios"
         "SUPERVISOR" -> "Supervisao de equipe"
-        "VENDEDOR" -> "Execucaoo de vendas"
+        "VENDEDOR" -> "Execucao de vendas"
         "ADESIONISTA" -> "Processos de adesao"
+        "CADASTRO" -> "Operacao de cadastros"
         else -> ""
     }
 }

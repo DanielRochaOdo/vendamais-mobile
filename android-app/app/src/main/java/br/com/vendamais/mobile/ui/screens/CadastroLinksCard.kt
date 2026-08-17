@@ -1,4 +1,4 @@
-﻿package br.com.vendamais.mobile.ui.screens
+package br.com.vendamais.mobile.ui.screens
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -12,14 +12,16 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -36,10 +38,12 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -49,6 +53,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -64,7 +69,9 @@ import br.com.vendamais.mobile.data.models.EmpresaResumo
 import br.com.vendamais.mobile.data.models.EmpresaSearchType
 import br.com.vendamais.mobile.ui.LinkWorkspaceState
 import br.com.vendamais.mobile.ui.components.WebCard
+import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 import br.com.vendamais.mobile.ui.theme.Emerald
+import br.com.vendamais.mobile.ui.theme.EmeraldDark
 import br.com.vendamais.mobile.ui.theme.EmeraldSoft
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
@@ -72,7 +79,6 @@ import java.io.File
 import java.io.FileOutputStream
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
-import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 
 @Composable
 fun CadastroLinksCard(
@@ -91,16 +97,24 @@ fun CadastroLinksCard(
     val expandedLinks = remember { mutableStateMapOf<String, Boolean>() }
 
     WebCard {
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Links de adesao",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "Selecione uma empresa para gerar um link publico e acompanhe os links ativos.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+
             Text(
-                text = "Link",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = "Gere e gerencie links publicos usando a mesma tabela cadastro_links da versao web.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyMedium,
+                text = if (workspace.selectedEmpresa == null) "1. Localize a empresa" else "Empresa selecionada",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
             )
 
             if (workspace.selectedEmpresa == null) {
@@ -122,6 +136,15 @@ fun CadastroLinksCard(
                             },
                         )
                     },
+                    placeholder = {
+                        Text(
+                            when (workspace.empresaSearchType) {
+                                EmpresaSearchType.CODIGO -> "Digite o codigo"
+                                EmpresaSearchType.CNPJ -> "00.000.000/0000-00"
+                                EmpresaSearchType.NOME -> "Digite o nome da empresa"
+                            },
+                        )
+                    },
                     keyboardOptions = KeyboardOptions(
                         keyboardType = when (workspace.empresaSearchType) {
                             EmpresaSearchType.CODIGO -> KeyboardType.Number
@@ -135,93 +158,142 @@ fun CadastroLinksCard(
                         onDone = { onSearchEmpresa() },
                     ),
                     singleLine = true,
+                    shape = MaterialTheme.shapes.small,
                 )
 
-                Row(
+                Button(
+                    onClick = onSearchEmpresa,
+                    enabled = !workspace.operationLoading && workspace.empresaSearchValue.isNotBlank(),
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    shape = MaterialTheme.shapes.small,
                 ) {
-                    IconButton(
-                        onClick = onSearchEmpresa,
-                        enabled = !workspace.operationLoading && workspace.empresaSearchValue.isNotBlank(),
-                    ) {
-                        if (workspace.operationLoading) {
-                            CircularProgressIndicator(strokeWidth = 2.dp)
-                        } else {
-                            Icon(
-                                imageVector = Icons.Rounded.Search,
-                                contentDescription = "Buscar empresa",
+                    if (workspace.operationLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    } else {
+                        Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Text("Buscar empresa", modifier = Modifier.padding(start = 8.dp), fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
+                if (workspace.empresaSearchResults.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "Resultados",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        workspace.empresaSearchResults.forEach { empresa ->
+                            LinkEmpresaResultCard(
+                                empresa = empresa,
+                                onSelect = { onSelectEmpresa(empresa) },
                             )
                         }
                     }
                 }
-
-                workspace.empresaSearchResults.forEach { empresa ->
-                    LinkEmpresaResultCard(
-                        empresa = empresa,
-                        onSelect = { onSelectEmpresa(empresa) },
-                    )
-                }
             } else {
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    color = EmeraldSoft.copy(alpha = 0.72f),
+                    border = BorderStroke(1.dp, Emerald.copy(alpha = 0.20f)),
                 ) {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        Text(
-                            text = workspace.selectedEmpresa.nomeFantasia,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            text = workspace.selectedEmpresa.razaoSocial,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            text = "Codigo ${workspace.selectedEmpresa.id} • ${workspace.selectedEmpresa.cnpj}",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End,
-                        ) {
-                            IconButton(
-                                onClick = onGenerateLink,
-                                enabled = !workspace.operationLoading,
-                            ) {
-                                if (workspace.operationLoading) {
-                                    CircularProgressIndicator(strokeWidth = 2.dp)
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Share,
-                                        contentDescription = "Gerar link",
-                                    )
-                                }
-                            }
-                            IconButton(onClick = onClearEmpresa) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Edit,
-                                    contentDescription = "Alterar empresa",
+                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(
+                                text = workspace.selectedEmpresa.nomeFantasia.ifBlank {
+                                    workspace.selectedEmpresa.razaoSocial.ifBlank { "Empresa sem nome" }
+                                },
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            if (workspace.selectedEmpresa.razaoSocial.isNotBlank()) {
+                                Text(
+                                    text = workspace.selectedEmpresa.razaoSocial,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodySmall,
                                 )
                             }
+                            Text(
+                                text = "Codigo ${workspace.selectedEmpresa.id} · ${workspace.selectedEmpresa.cnpj}",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+
+                        Button(
+                            onClick = onGenerateLink,
+                            enabled = !workspace.operationLoading,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.small,
+                        ) {
+                            if (workspace.operationLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                )
+                            } else {
+                                Icon(Icons.Rounded.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Text("Gerar link publico", modifier = Modifier.padding(start = 8.dp), fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = onClearEmpresa,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.small,
+                        ) {
+                            Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(17.dp))
+                            Text("Alterar empresa", modifier = Modifier.padding(start = 7.dp))
                         }
                     }
                 }
             }
 
-            if (workspace.links.isEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
-                    text = "Nenhum link ativo encontrado.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
+                    text = "Links ativos",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
                 )
+                Surface(
+                    shape = MaterialTheme.shapes.extraSmall,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                ) {
+                    Text(
+                        text = workspace.links.size.toString(),
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+
+            if (workspace.links.isEmpty()) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                ) {
+                    Text(
+                        text = "Nenhum link ativo encontrado.",
+                        modifier = Modifier.padding(14.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             } else {
                 workspace.links.forEach { link ->
                     LinkListItem(
@@ -260,16 +332,19 @@ private fun LinkSearchTypeRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         LinkSearchTypePill(
+            modifier = Modifier.weight(1f),
             label = "Codigo",
             selected = selected == EmpresaSearchType.CODIGO,
             onClick = { onSelected(EmpresaSearchType.CODIGO) },
         )
         LinkSearchTypePill(
+            modifier = Modifier.weight(1f),
             label = "CNPJ",
             selected = selected == EmpresaSearchType.CNPJ,
             onClick = { onSelected(EmpresaSearchType.CNPJ) },
         )
         LinkSearchTypePill(
+            modifier = Modifier.weight(1f),
             label = "Nome",
             selected = selected == EmpresaSearchType.NOME,
             onClick = { onSelected(EmpresaSearchType.NOME) },
@@ -282,17 +357,24 @@ private fun LinkSearchTypePill(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(14.dp),
-        color = if (selected) EmeraldSoft else MaterialTheme.colorScheme.surfaceVariant,
+        modifier = modifier,
+        shape = MaterialTheme.shapes.small,
+        color = if (selected) EmeraldSoft else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            1.dp,
+            if (selected) Emerald.copy(alpha = 0.28f) else MaterialTheme.colorScheme.outline,
+        ),
     ) {
         Text(
             text = label,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            color = if (selected) Emerald else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+            color = if (selected) EmeraldDark else MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
         )
     }
 }
@@ -304,27 +386,29 @@ private fun LinkEmpresaResultCard(
 ) {
     Surface(
         onClick = onSelect,
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
+            modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
-                text = empresa.nomeFantasia,
+                text = empresa.nomeFantasia.ifBlank { empresa.razaoSocial.ifBlank { "Empresa sem nome" } },
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
+            if (empresa.razaoSocial.isNotBlank()) {
+                Text(
+                    text = empresa.razaoSocial,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             Text(
-                text = empresa.razaoSocial,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Text(
-                text = "Codigo ${empresa.id} • ${empresa.cnpj}",
+                text = "Codigo ${empresa.id} · ${empresa.cnpj}",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -332,6 +416,7 @@ private fun LinkEmpresaResultCard(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun LinkListItem(
     context: Context,
@@ -346,27 +431,48 @@ private fun LinkListItem(
     val linkUrl = link.linkUrl.orEmpty().trim()
     Surface(
         onClick = onToggleExpanded,
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = "${link.empresaCodigo} - ${link.empresaNome}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "${link.empresaCodigo} · ${link.empresaNome}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = "${link.clickCount ?: 0} cliques · criado ${formatDateTime(link.createdAt)}",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Surface(
+                    shape = MaterialTheme.shapes.extraSmall,
+                    color = EmeraldSoft,
+                ) {
+                    Text(
+                        text = "Ativo",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        color = EmeraldDark,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
                 Icon(
                     imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                     contentDescription = if (expanded) "Recolher link" else "Expandir link",
@@ -376,36 +482,42 @@ private fun LinkListItem(
 
             if (expanded) {
                 Text(
-                    text = "Vendedor: ${link.vendedorNome ?: "-"} • Codigo ${link.vendedorCodigo ?: "-"}",
+                    text = "Vendedor: ${link.vendedorNome ?: "-"} · Codigo ${link.vendedorCodigo ?: "-"}",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                 )
-                Text(
-                    text = linkUrl.ifBlank { "-" },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = "Criado em ${formatDateTime(link.createdAt)} • Cliques ${link.clickCount ?: 0}",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Row(
+                Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    shape = MaterialTheme.shapes.extraSmall,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
                 ) {
-                    LinkActionIconButton(
+                    Text(
+                        text = linkUrl.ifBlank { "Link indisponivel" },
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    LinkActionChip(
                         icon = Icons.Rounded.ContentCopy,
-                        contentDescription = "Copiar link",
+                        label = "Copiar",
                         enabled = linkUrl.isNotBlank(),
                         onClick = {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             clipboard.setPrimaryClip(ClipData.newPlainText("cadastro-link", linkUrl))
+                            Toast.makeText(context, "Link copiado.", Toast.LENGTH_SHORT).show()
                         },
                     )
-                    LinkActionIconButton(
+                    LinkActionChip(
                         icon = Icons.AutoMirrored.Rounded.OpenInNew,
-                        contentDescription = "Abrir link",
+                        label = "Abrir",
                         enabled = linkUrl.isNotBlank(),
                         onClick = {
                             if (linkUrl.isNotBlank()) {
@@ -413,21 +525,21 @@ private fun LinkListItem(
                             }
                         },
                     )
-                    LinkActionIconButton(
+                    LinkActionChip(
                         icon = Icons.Rounded.QrCode,
-                        contentDescription = "Abrir QRCode",
+                        label = "QR Code",
                         enabled = linkUrl.isNotBlank(),
                         onClick = onShowQrCode,
                     )
-                    LinkActionIconButton(
+                    LinkActionChip(
                         icon = Icons.Rounded.Refresh,
-                        contentDescription = "Regerar link",
+                        label = "Regerar",
                         enabled = !loading,
                         onClick = onRegenerate,
                     )
-                    LinkActionIconButton(
+                    LinkActionChip(
                         icon = Icons.Rounded.Delete,
-                        contentDescription = "Excluir link",
+                        label = "Excluir",
                         enabled = !loading,
                         danger = true,
                         onClick = onDelete,
@@ -439,25 +551,32 @@ private fun LinkListItem(
 }
 
 @Composable
-private fun LinkActionIconButton(
+private fun LinkActionChip(
     icon: ImageVector,
-    contentDescription: String,
+    label: String,
     enabled: Boolean = true,
     danger: Boolean = false,
     onClick: () -> Unit,
 ) {
-    val tint = when {
-        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+    val contentColor = when {
+        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
         danger -> MaterialTheme.colorScheme.error
         else -> MaterialTheme.colorScheme.primary
     }
-
-    IconButton(onClick = onClick, enabled = enabled) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = tint,
-        )
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = MaterialTheme.shapes.small,
+        color = if (danger) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(16.dp))
+            Text(label, color = contentColor, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
+        }
     }
 }
 
@@ -474,7 +593,7 @@ private fun LinkQrCodeDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("QRCode") },
+        title = { Text("QR Code") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
@@ -486,21 +605,19 @@ private fun LinkQrCodeDialog(
                 if (qrBitmap != null) {
                     Image(
                         bitmap = qrBitmap.asImageBitmap(),
-                        contentDescription = "QRCode do link",
-                        modifier = Modifier
-                            .size(240.dp)
-                            .padding(2.dp),
+                        contentDescription = "QR Code do link",
+                        modifier = Modifier.size(240.dp).padding(2.dp),
                     )
                 } else {
                     Text(
-                        text = "Nao foi possivel gerar o QRCode para este link.",
+                        text = "Nao foi possivel gerar o QR Code para este link.",
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    shape = MaterialTheme.shapes.extraSmall,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
                 ) {
                     Text(
                         text = linkUrl.ifBlank { "-" },
@@ -516,7 +633,7 @@ private fun LinkQrCodeDialog(
                 IconButton(
                     onClick = {
                         val bitmap = qrBitmap ?: run {
-                            Toast.makeText(context, "QRCode indisponivel para compartilhar.", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "QR Code indisponivel para compartilhar.", Toast.LENGTH_SHORT).show()
                             return@IconButton
                         }
                         val uri = saveQrToCacheForShare(context, bitmap, "qrcode_${link.id}.png")
@@ -530,34 +647,34 @@ private fun LinkQrCodeDialog(
                             putExtra(Intent.EXTRA_TEXT, linkUrl)
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         }
-                        context.startActivity(Intent.createChooser(shareIntent, "Compartilhar QRCode"))
+                        context.startActivity(Intent.createChooser(shareIntent, "Compartilhar QR Code"))
                     },
                     enabled = qrBitmap != null && linkUrl.isNotBlank(),
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Share,
-                        contentDescription = "Compartilhar QRCode",
+                        contentDescription = "Compartilhar QR Code",
                         tint = MaterialTheme.colorScheme.primary,
                     )
                 }
                 IconButton(
                     onClick = {
                         val bitmap = qrBitmap ?: run {
-                            Toast.makeText(context, "QRCode indisponivel para download.", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "QR Code indisponivel para download.", Toast.LENGTH_SHORT).show()
                             return@IconButton
                         }
                         val uri = saveQrToDownloads(context, bitmap, "qrcode_${link.id}.png")
                         if (uri == null) {
-                            Toast.makeText(context, "Falha ao salvar QRCode.", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Falha ao salvar QR Code.", Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, "QRCode salvo com sucesso.", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "QR Code salvo com sucesso.", Toast.LENGTH_SHORT).show()
                         }
                     },
                     enabled = qrBitmap != null,
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.FileDownload,
-                        contentDescription = "Baixar QRCode",
+                        contentDescription = "Baixar QR Code",
                         tint = MaterialTheme.colorScheme.primary,
                     )
                 }
@@ -618,8 +735,7 @@ private fun saveQrToDownloads(context: Context, bitmap: Bitmap, fileName: String
             resolver.update(uri, values, null, null)
             uri
         } else {
-            val dir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-                ?: context.filesDir
+            val dir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
             val file = File(dir, fileName)
             FileOutputStream(file).use { stream ->
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)

@@ -1,28 +1,31 @@
 package br.com.vendamais.mobile.ui.screens
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,11 +49,11 @@ import br.com.vendamais.mobile.data.models.EmpresaSearchType
 import br.com.vendamais.mobile.data.models.MobileProfile
 import br.com.vendamais.mobile.data.models.TeamMemberOption
 import br.com.vendamais.mobile.ui.CadastroWorkspaceState
-import br.com.vendamais.mobile.ui.components.ScreenHeading
 import br.com.vendamais.mobile.ui.components.WebCard
-import br.com.vendamais.mobile.ui.theme.Emerald
-import br.com.vendamais.mobile.ui.theme.EmeraldSoft
 import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
+import br.com.vendamais.mobile.ui.theme.Emerald
+import br.com.vendamais.mobile.ui.theme.EmeraldDark
+import br.com.vendamais.mobile.ui.theme.EmeraldSoft
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -88,13 +91,12 @@ fun CadastroOperationsCard(
         "CADASTRO",
     )
 
-    var cpfFieldValue by remember {
-        mutableStateOf(TextFieldValue(""))
-    }
+    var cpfFieldValue by remember { mutableStateOf(TextFieldValue("")) }
     val firstSearchResultBringIntoViewRequester = remember(workspace.empresaSearchResults) {
         BringIntoViewRequester()
     }
     val cpfDigitsFromState = workspace.cpfValue.filter(Char::isDigit).take(11)
+
     LaunchedEffect(cpfDigitsFromState) {
         if (cpfDigitsFromState != cpfFieldValue.text) {
             cpfFieldValue = TextFieldValue(
@@ -105,10 +107,24 @@ fun CadastroOperationsCard(
     }
 
     WebCard {
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            ScreenHeading(
-                title = "Nova Adesao",
-                subtitle = "Selecione a empresa, informe o CPF e inicie o cadastro.",
+        Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Iniciar nova adesao",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "Localize a empresa e confirme os responsaveis antes de consultar o CPF.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            OperationStepHeader(
+                number = "1",
+                title = "Empresa",
+                completed = workspace.selectedEmpresa != null,
             )
 
             if (workspace.selectedEmpresa == null) {
@@ -124,7 +140,7 @@ fun CadastroOperationsCard(
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = {
                             Text(
-                                text = when (workspace.empresaSearchType) {
+                                when (workspace.empresaSearchType) {
                                     EmpresaSearchType.CODIGO -> "Codigo da empresa"
                                     EmpresaSearchType.CNPJ -> "CNPJ"
                                     EmpresaSearchType.NOME -> "Nome da empresa"
@@ -133,7 +149,7 @@ fun CadastroOperationsCard(
                         },
                         placeholder = {
                             Text(
-                                text = when (workspace.empresaSearchType) {
+                                when (workspace.empresaSearchType) {
                                     EmpresaSearchType.CODIGO -> "Digite o codigo"
                                     EmpresaSearchType.CNPJ -> "00.000.000/0000-00"
                                     EmpresaSearchType.NOME -> "Digite o nome da empresa"
@@ -153,37 +169,49 @@ fun CadastroOperationsCard(
                             onDone = { onSearchEmpresa() },
                         ),
                         singleLine = true,
+                        shape = MaterialTheme.shapes.small,
                     )
 
-                    Row(
+                    Button(
+                        onClick = onSearchEmpresa,
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
+                        enabled = !workspace.operationLoading && workspace.empresaSearchValue.isNotBlank(),
+                        shape = MaterialTheme.shapes.small,
                     ) {
-                        IconButton(
-                            onClick = onSearchEmpresa,
-                            enabled = !workspace.operationLoading && workspace.empresaSearchValue.isNotBlank(),
-                        ) {
-                            if (workspace.operationLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    strokeWidth = 2.dp,
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Rounded.Search,
-                                    contentDescription = "Buscar empresa",
-                                )
-                            }
+                        if (workspace.operationLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Rounded.Search,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Text(
+                                text = "Buscar empresa",
+                                modifier = Modifier.padding(start = 8.dp),
+                                fontWeight = FontWeight.SemiBold,
+                            )
                         }
                     }
 
                     if (workspace.empresaSearchResults.isNotEmpty()) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = "Resultados",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.SemiBold,
+                            )
                             workspace.empresaSearchResults.forEachIndexed { index, empresa ->
                                 Surface(
                                     onClick = { onSelectEmpresa(empresa) },
-                                    shape = RoundedCornerShape(16.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                    shape = MaterialTheme.shapes.small,
+                                    color = MaterialTheme.colorScheme.surface,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                                     modifier = if (index == 0) {
                                         Modifier
                                             .fillMaxWidth()
@@ -205,13 +233,13 @@ fun CadastroOperationsCard(
                                             Text(
                                                 text = empresa.razaoSocial,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                style = MaterialTheme.typography.bodyMedium,
+                                                style = MaterialTheme.typography.bodySmall,
                                             )
                                         }
                                         Text(
                                             text = buildString {
                                                 append("Codigo ${empresa.id}")
-                                                if (empresa.cnpj.isNotBlank()) append(" - ${empresa.cnpj}")
+                                                if (empresa.cnpj.isNotBlank()) append(" · ${empresa.cnpj}")
                                             },
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             style = MaterialTheme.typography.bodySmall,
@@ -226,50 +254,21 @@ fun CadastroOperationsCard(
                     }
                 }
             } else {
-                WebCard(contentPadding = PaddingValues(16.dp)) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = workspace.selectedEmpresa.nomeFantasia.ifBlank {
-                                workspace.selectedEmpresa.razaoSocial.ifBlank { "Empresa sem nome" }
-                            },
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        if (workspace.selectedEmpresa.razaoSocial.isNotBlank()) {
-                            Text(
-                                text = workspace.selectedEmpresa.razaoSocial,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                        }
-                        Text(
-                            text = buildString {
-                                append("Codigo ${workspace.selectedEmpresa.id}")
-                                if (workspace.selectedEmpresa.cnpj.isNotBlank()) append(" - ${workspace.selectedEmpresa.cnpj}")
-                            },
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        workspace.selectedEmpresa.observacoesResolvidas
-                            ?.takeIf { it.isNotBlank() }
-                            ?.let { observacao ->
-                                Text(
-                                    text = observacao,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                        IconButton(onClick = onClearEmpresa) {
-                            Icon(
-                                imageVector = Icons.Rounded.Edit,
-                                contentDescription = "Alterar empresa",
-                            )
-                        }
-                    }
-                }
+                SelectedEmpresaCard(
+                    empresa = workspace.selectedEmpresa,
+                    onClearEmpresa = onClearEmpresa,
+                )
             }
 
             if (workspace.selectedEmpresa != null) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                OperationStepHeader(
+                    number = "2",
+                    title = "Responsaveis e CPF",
+                    completed = false,
+                )
+
                 if (canChooseVendedor) {
                     SelectionField(
                         label = "Vendedor",
@@ -282,8 +281,8 @@ fun CadastroOperationsCard(
                     )
                     if (vendedores.isEmpty()) {
                         Text(
-                            text = "Nenhum vendedor disponível. Entre em contato com o administrador.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            text = "Nenhum vendedor disponivel. Entre em contato com o administrador.",
+                            color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
@@ -291,13 +290,14 @@ fun CadastroOperationsCard(
                     OutlinedTextField(
                         value = buildString {
                             append(profile?.name.orEmpty())
-                            append(" - Codigo ")
+                            append(" · Codigo ")
                             append(profile?.externalId?.takeIf { it.isNotBlank() } ?: "-")
                         },
                         onValueChange = {},
-                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                        modifier = Modifier.fillMaxWidth(),
                         label = { Text("Vendedor") },
                         enabled = false,
+                        shape = MaterialTheme.shapes.small,
                     )
                 }
 
@@ -324,7 +324,7 @@ fun CadastroOperationsCard(
                         onCpfChange(digits)
                     },
                     modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                    label = { Text("CPF") },
+                    label = { Text("CPF do associado") },
                     placeholder = { Text("000.000.000-00") },
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Number,
@@ -336,30 +336,154 @@ fun CadastroOperationsCard(
                     ),
                     visualTransformation = CpfVisualTransformation(),
                     singleLine = true,
+                    shape = MaterialTheme.shapes.small,
                 )
 
-                Row(
+                Button(
+                    onClick = onConsultarCpf,
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    enabled = !workspace.operationLoading && workspace.cpfValue.isNotBlank(),
+                    shape = MaterialTheme.shapes.small,
                 ) {
-                    IconButton(
-                        onClick = onConsultarCpf,
-                        enabled = !workspace.operationLoading && workspace.cpfValue.isNotBlank(),
-                    ) {
-                        if (workspace.operationLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Rounded.Search,
-                                contentDescription = "Consultar CPF",
-                            )
-                        }
+                    if (workspace.operationLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            text = "Consultar CPF e iniciar",
+                            modifier = Modifier.padding(start = 8.dp),
+                            fontWeight = FontWeight.SemiBold,
+                        )
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun OperationStepHeader(
+    number: String,
+    title: String,
+    completed: Boolean,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(
+            modifier = Modifier.size(30.dp),
+            shape = MaterialTheme.shapes.small,
+            color = if (completed) EmeraldSoft else MaterialTheme.colorScheme.surfaceVariant,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                if (completed) {
+                    Icon(
+                        imageVector = Icons.Rounded.CheckCircle,
+                        contentDescription = null,
+                        tint = EmeraldDark,
+                        modifier = Modifier.size(18.dp),
+                    )
+                } else {
+                    Text(
+                        text = number,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
+private fun SelectedEmpresaCard(
+    empresa: EmpresaResumo,
+    onClearEmpresa: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = EmeraldSoft.copy(alpha = 0.72f),
+        border = BorderStroke(1.dp, Emerald.copy(alpha = 0.20f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Text(
+                        text = "Empresa selecionada",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = EmeraldDark,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = empresa.nomeFantasia.ifBlank { empresa.razaoSocial.ifBlank { "Empresa sem nome" } },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    if (empresa.razaoSocial.isNotBlank()) {
+                        Text(
+                            text = empresa.razaoSocial,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Text(
+                        text = buildString {
+                            append("Codigo ${empresa.id}")
+                            if (empresa.cnpj.isNotBlank()) append(" · ${empresa.cnpj}")
+                        },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                OutlinedButton(
+                    onClick = onClearEmpresa,
+                    shape = MaterialTheme.shapes.small,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Edit,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Text("Alterar", modifier = Modifier.padding(start = 6.dp))
+                }
+            }
+
+            empresa.observacoesResolvidas
+                ?.takeIf { it.isNotBlank() }
+                ?.let { observacao ->
+                    Text(
+                        text = observacao,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
         }
     }
 }
@@ -374,16 +498,19 @@ private fun SearchTypeRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         SearchTypePill(
+            modifier = Modifier.weight(1f),
             label = "Codigo",
             selected = selected == EmpresaSearchType.CODIGO,
             onClick = { onSelected(EmpresaSearchType.CODIGO) },
         )
         SearchTypePill(
+            modifier = Modifier.weight(1f),
             label = "CNPJ",
             selected = selected == EmpresaSearchType.CNPJ,
             onClick = { onSelected(EmpresaSearchType.CNPJ) },
         )
         SearchTypePill(
+            modifier = Modifier.weight(1f),
             label = "Nome",
             selected = selected == EmpresaSearchType.NOME,
             onClick = { onSelected(EmpresaSearchType.NOME) },
@@ -396,24 +523,31 @@ private fun SearchTypePill(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(14.dp),
-        color = if (selected) EmeraldSoft else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        modifier = modifier,
+        shape = MaterialTheme.shapes.small,
+        color = if (selected) EmeraldSoft else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            1.dp,
+            if (selected) Emerald.copy(alpha = 0.28f) else MaterialTheme.colorScheme.outline,
+        ),
     ) {
         Text(
             text = label,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            color = if (selected) Emerald else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+            color = if (selected) EmeraldDark else MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
         )
     }
 }
 
 private fun TeamMemberOption.toSelectionLabel(): String {
     val codigo = externalId?.takeIf { it.isNotBlank() } ?: "-"
-    return "$name - Codigo $codigo"
+    return "$name · Codigo $codigo"
 }
 
 private class CpfVisualTransformation : VisualTransformation {
@@ -447,4 +581,3 @@ private class CpfVisualTransformation : VisualTransformation {
         return TransformedText(AnnotatedString(formatted), offsetMapping)
     }
 }
-
