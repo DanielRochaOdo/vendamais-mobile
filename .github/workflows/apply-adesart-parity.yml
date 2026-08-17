@@ -1,17 +1,10 @@
-name: Apply Adesart Parity
+name: Validate Adesart Parity
 
 on:
   push:
     branches:
       - agent/adesart-parity
     paths:
-      - '.github/scripts/apply_adesart_parity.py'
-      - '.github/scripts/apply_adesart_parity_stage2_pre.py'
-      - '.github/scripts/apply_adesart_parity_stage2.py'
-      - '.github/scripts/apply_adesart_parity_stage2_post.py'
-      - '.github/scripts/apply_adesart_parity_stage2_fix.py'
-      - '.github/scripts/apply_adesart_parity_stage3.py'
-      - '.github/scripts/apply_adesart_parity_stage4.py'
       - '.github/scripts/apply_adesart_parity_stage5.py'
       - '.github/workflows/apply-adesart-parity.yml'
   workflow_dispatch:
@@ -20,7 +13,7 @@ permissions:
   contents: write
 
 jobs:
-  apply-and-validate:
+  validate-final-state:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
@@ -29,16 +22,8 @@ jobs:
           ref: agent/adesart-parity
           fetch-depth: 0
 
-      - name: Apply parity patches
-        run: |
-          python3 .github/scripts/apply_adesart_parity.py
-          python3 .github/scripts/apply_adesart_parity_stage2_pre.py
-          python3 .github/scripts/apply_adesart_parity_stage2.py
-          python3 .github/scripts/apply_adesart_parity_stage2_post.py
-          python3 .github/scripts/apply_adesart_parity_stage2_fix.py
-          python3 .github/scripts/apply_adesart_parity_stage3.py
-          python3 .github/scripts/apply_adesart_parity_stage4.py
-          python3 .github/scripts/apply_adesart_parity_stage5.py
+      - name: Apply final public-prefill patch
+        run: python3 .github/scripts/apply_adesart_parity_stage5.py
 
       - name: Set up Java
         uses: actions/setup-java@v5
@@ -88,16 +73,16 @@ jobs:
             exit "$status"
           fi
 
-      - name: Commit generated parity changes
+      - name: Commit final generated source
         run: |
           rm -f .github/parity-compile-errors.txt .github/parity-deno-errors.txt parity-gradle.txt parity-deno.txt
-          if git diff --quiet; then
-            echo "No parity changes to commit."
-            exit 0
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add android-app
           git add -u .github/parity-compile-errors.txt .github/parity-deno-errors.txt || true
-          git commit -m "Completa paridade publica com Adesart"
+          if git diff --cached --quiet; then
+            echo "No generated source changes to commit."
+            exit 0
+          fi
+          git commit -m "Completa autopreenchimento publico com Adesart"
           git push origin HEAD:agent/adesart-parity
