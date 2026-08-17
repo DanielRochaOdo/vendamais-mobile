@@ -9,6 +9,7 @@ on:
       - '.github/scripts/apply_adesart_parity_stage2_pre.py'
       - '.github/scripts/apply_adesart_parity_stage2.py'
       - '.github/scripts/apply_adesart_parity_stage2_post.py'
+      - '.github/scripts/apply_adesart_parity_stage2_fix.py'
       - '.github/scripts/apply_adesart_parity_stage3.py'
       - '.github/workflows/apply-adesart-parity.yml'
   workflow_dispatch:
@@ -32,6 +33,7 @@ jobs:
           python3 .github/scripts/apply_adesart_parity_stage2_pre.py
           python3 .github/scripts/apply_adesart_parity_stage2.py
           python3 .github/scripts/apply_adesart_parity_stage2_post.py
+          python3 .github/scripts/apply_adesart_parity_stage2_fix.py
 
       - name: Set up Java
         uses: actions/setup-java@v5
