@@ -1,0 +1,32 @@
+name: Sincronizar Redesign do Figma
+
+on:
+  push:
+    branches:
+      - layout
+    paths:
+      - 'tokens.json' # Roda apenas se o arquivo do Figma mudar
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Permissão para commitar o arquivo Kotlin de volta
+
+    steps:
+    - name: Clone do Repositório
+      uses: actions/checkout@v4
+
+    - name: Configurar Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Converter Tokens para Kotlin
+      run: python parse_tokens.py
+
+    - name: Commit e Push do Código Kotlin
+      uses: stefanzweifel/git-auto-commit-action@v5
+      with:
+        commit_message: "chore: atualizar cores do redesign (Jetpack Compose)"
+        branch: layout
