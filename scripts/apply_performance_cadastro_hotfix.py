@@ -112,7 +112,6 @@ vm_path = Path("android-app/app/src/main/java/br/com/vendamais/mobile/ui/AppView
 vm = vm_path.read_text()
 start = vm.index("                }.onSuccess { result ->\n                    val activeSession = ensureFreshSession(session)\n", vm.index("workflowRepository.createDraftFromCpf"))
 end = vm.index('                    if (warning.contains("Limite mensal da Lemmit atingido", ignoreCase = true)) {', start)
-old = vm[start:end]
 new = '''                }.onSuccess { result ->
                     val warning = result.warningMessage.orEmpty()
                     val postSuccessNotice = warning
@@ -360,5 +359,16 @@ new_fetch = '''    const controller = new AbortController();
     statusCode = lemmitResponse.status;'''
 edge = replace_once(edge, old_fetch, new_fetch, "timeout fetch lemmit")
 edge_path.write_text(edge)
+
+
+api_utils_path = Path("supabase/functions/_shared/api-utils.ts")
+api_utils = api_utils_path.read_text()
+api_utils = replace_once(
+    api_utils,
+    "    insert: (payload: unknown) => Promise<unknown>;",
+    "    insert: (payload: any) => PromiseLike<any>;",
+    "tipagem SupabaseLike insert",
+)
+api_utils_path.write_text(api_utils)
 
 print("Performance hotfix aplicado aos arquivos de produto.")
