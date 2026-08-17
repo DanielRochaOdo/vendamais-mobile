@@ -5,6 +5,7 @@ import { corsHeaders, resolveRequestUser, saveLog } from "../_shared/api-utils.t
 const DEFAULT_ERP_UPLOAD_TIMEOUT_MS = 12_000;
 const MIN_ERP_UPLOAD_TIMEOUT_MS = 3_000;
 const MAX_ERP_UPLOAD_TIMEOUT_MS = 45_000;
+const RETRYABLE_QUEUE_STATUSES = ["queued", "retry_wait", "processing", "failed"];
 
 function resolveErpUploadTimeoutMs(): number {
   const configured = Number(Deno.env.get("ERP_UPLOAD_TIMEOUT_MS"));
@@ -43,6 +44,109 @@ async function fetchWithTimeout(
     return await fetch(url, { ...init, signal: controller.signal });
   } finally {
     clearTimeout(timeoutId);
+  }
+}
+
+async function enqueueForRetry(
+  supabase: any,
+  requestBody: any,
+  userId: string | undefined,
+  arquivoNome: string,
+  reason: string,
+): Promise<{ queued: boolean; queueId?: string; reused?: boolean }> {
+  const arquivoPath = requestBody.arquivoPath?.trim();
+  if (!arquivoPath || !requestBody.idFuncionario || !requestBody.idDependente) {
+    return { queued: false };
+  }
+
+  const bucket = requestBody.bucket?.trim() || "cadastros-temp-files";
+  let existingQuery = supabase
+    .from("erp_upload_queue")
+    .select("*")
+    .eq("id_funcionario", requestBody.idFuncionario)
+    .eq("id_dependente", requestBody.idDependente)
+    .eq("arquivo_path", arquivoPath)
+    .eq("bucket", bucket)
+    .in("status", RETRYABLE_QUEUE_STATUSES)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  existingQuery = requestBody.cadastroId
+    ? existingQuery.eq("cadastro_id", requestBody.cadastroId)
+    : existingQuery.is("cadastro_id", null);
+
+  const { data: existingItems, error: existingError } = await existingQuery;
+  if (existingError) {
+    console.warn("Falha ao consultar retry existente no upload direto:", existingError);
+  }
+
+  const existingItem = existingItems?.[0];
+  if (existingItem) {
+    if (existingItem.status === "processing") {
+      return { queued: true, queueId: existingItem.id, reused: true };
+    }
+
+    const { data: reusedItem, error: reuseError } = await supabase
+      .from("erp_upload_queue")
+      .update({
+        status: "queued",
+        attempts: existingItem.status === "failed" ? 0 : existingItem.attempts,
+        next_attempt_at: new Date().toISOString(),
+        last_error: reason,
+        arquivo_nome: arquivoNome,
+      })
+      .eq("id", existingItem.id)
+      .select("id")
+      .single();
+
+    if (!reuseError && reusedItem) {
+      return { queued: true, queueId: reusedItem.id, reused: true };
+    }
+    console.warn("Falha ao reativar retry existente no upload direto:", reuseError);
+  }
+
+  const { data: queueData, error: queueError } = await supabase
+    .from("erp_upload_queue")
+    .insert({
+      cadastro_id: requestBody.cadastroId || null,
+      created_by: userId || null,
+      id_funcionario: requestBody.idFuncionario,
+      id_dependente: requestBody.idDependente,
+      arquivo_path: arquivoPath,
+      arquivo_nome: arquivoNome,
+      bucket,
+      tipo: requestBody.tipo === "dependente" ? "dependente" : "titular",
+      status: "queued",
+      attempts: 0,
+      next_attempt_at: new Date().toISOString(),
+      last_error: reason,
+    })
+    .select("id")
+    .single();
+
+  if (queueError || !queueData) {
+    console.error("Falha ao enfileirar retry dentro do upload direto:", queueError);
+    return { queued: false };
+  }
+
+  return { queued: true, queueId: queueData.id, reused: false };
+}
+
+function triggerQueueProcessor(supabaseUrl: string, serviceRoleKey: string) {
+  const promise = fetch(`${supabaseUrl}/functions/v1/erp-process-upload-queue`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${serviceRoleKey}`,
+    },
+    body: "{}",
+  }).catch((error) => {
+    console.warn("Falha ao disparar worker após enqueue interno:", error);
+  });
+
+  const edgeRuntime = (globalThis as any).EdgeRuntime;
+  if (edgeRuntime?.waitUntil) {
+    edgeRuntime.waitUntil(promise);
   }
 }
 
@@ -113,9 +217,29 @@ Deno.serve(async (req: Request) => {
         .download(requestBody.arquivoPath);
 
       if (downloadError || !fileData) {
-        statusCode = 400;
         errorMessage = `Erro ao baixar arquivo do storage: ${downloadError?.message || "Arquivo não encontrado"}`;
-        responseBody = { error: errorMessage, retryable: true };
+        const queued = await enqueueForRetry(
+          supabase,
+          requestBody,
+          userId,
+          requestBody.arquivoNome || requestBody.arquivoPath.split("/").pop() || "documento.pdf",
+          errorMessage,
+        );
+
+        if (queued.queued) {
+          triggerQueueProcessor(supabaseUrl, supabaseServiceKey);
+          statusCode = 202;
+          responseBody = {
+            success: true,
+            attached: false,
+            queued: true,
+            queue_id: queued.queueId,
+            message: "Documento ainda não foi anexado ao ERP, mas ficou salvo para retry automático.",
+          };
+        } else {
+          statusCode = 400;
+          responseBody = { error: errorMessage, retryable: true };
+        }
 
         await saveLog(supabase, {
           user_id: userId,
@@ -213,15 +337,30 @@ Deno.serve(async (req: Request) => {
       );
     } catch (error) {
       const timedOut = error instanceof DOMException && error.name === "AbortError";
-      statusCode = timedOut ? 504 : 502;
       errorMessage = timedOut
-        ? `Upload do documento no ERP excedeu ${timeoutMs}ms. O aplicativo pode enfileirar o contrato para retry.`
+        ? `Upload do documento no ERP excedeu ${timeoutMs}ms.`
         : `Falha de rede ao enviar documento para o ERP: ${error instanceof Error ? error.message : "erro desconhecido"}`;
-      responseBody = {
-        error: errorMessage,
-        retryable: true,
-        timeout: timedOut,
-      };
+      const queued = await enqueueForRetry(supabase, requestBody, userId, arquivoNome, errorMessage);
+
+      if (queued.queued) {
+        triggerQueueProcessor(supabaseUrl, supabaseServiceKey);
+        statusCode = 202;
+        responseBody = {
+          success: true,
+          attached: false,
+          queued: true,
+          queue_id: queued.queueId,
+          timeout: timedOut,
+          message: "Cadastro pode continuar: o contrato ficou salvo e será reintegrado automaticamente ao ERP.",
+        };
+      } else {
+        statusCode = timedOut ? 504 : 502;
+        responseBody = {
+          error: `${errorMessage} Não foi possível registrar o retry automático.`,
+          retryable: true,
+          timeout: timedOut,
+        };
+      }
 
       await saveLog(supabase, {
         user_id: userId,
@@ -247,12 +386,27 @@ Deno.serve(async (req: Request) => {
 
     if (!erpResponse.ok) {
       errorMessage = responseData.message || responseData?.mensagem || responseData?.error || "Erro ao enviar documento para o ERP";
-      responseBody = {
-        error: errorMessage,
-        details: responseData,
-        status: statusCode,
-        retryable: statusCode >= 408 || statusCode === 429,
-      };
+      const queued = await enqueueForRetry(supabase, requestBody, userId, arquivoNome, errorMessage);
+
+      if (queued.queued) {
+        triggerQueueProcessor(supabaseUrl, supabaseServiceKey);
+        statusCode = 202;
+        responseBody = {
+          success: true,
+          attached: false,
+          queued: true,
+          queue_id: queued.queueId,
+          details: responseData,
+          message: "O ERP não confirmou o anexo agora. O contrato ficou salvo para retry automático.",
+        };
+      } else {
+        responseBody = {
+          error: errorMessage,
+          details: responseData,
+          status: statusCode,
+          retryable: true,
+        };
+      }
 
       await saveLog(supabase, {
         user_id: userId,
@@ -275,6 +429,8 @@ Deno.serve(async (req: Request) => {
 
     responseBody = {
       success: true,
+      attached: true,
+      queued: false,
       data: responseData,
     };
 
