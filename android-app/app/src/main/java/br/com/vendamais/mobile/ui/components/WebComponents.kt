@@ -7,35 +7,28 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 @Composable
 fun ScreenBackground(content: @Composable () -> Unit) {
-    val colors = MaterialTheme.colorScheme
     Box(
-        modifier = Modifier.background(
-            brush = Brush.verticalGradient(
-                colors = listOf(
-                    colors.background,
-                    colors.surface,
-                    colors.surfaceVariant.copy(alpha = 0.72f),
-                ),
-            ),
-        ),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
     ) {
         content()
     }
@@ -45,29 +38,26 @@ fun ScreenBackground(content: @Composable () -> Unit) {
 fun WebCard(
     modifier: Modifier = Modifier,
     title: String? = null,
-    contentPadding: PaddingValues = PaddingValues(20.dp),
+    contentPadding: PaddingValues = PaddingValues(16.dp),
     content: @Composable () -> Unit,
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         if (title != null) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
-            ) {
+            Column {
                 Text(
                     text = title,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold,
                 )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
         Box(modifier = Modifier.padding(contentPadding)) {
@@ -78,11 +68,14 @@ fun WebCard(
 
 @Composable
 fun ScreenHeading(title: String, subtitle: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onBackground,
             fontWeight = FontWeight.Bold,
         )
         Text(
@@ -114,13 +107,19 @@ fun InfoRow(label: String, value: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun MetricBadge(label: String, value: String, bgColor: Color, textColor: Color, modifier: Modifier = Modifier) {
+fun MetricBadge(
+    label: String,
+    value: String,
+    bgColor: Color,
+    textColor: Color,
+    modifier: Modifier = Modifier,
+) {
     Row(
         modifier = modifier
-            .background(bgColor, RoundedCornerShape(16.dp))
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .background(bgColor, RoundedCornerShape(999.dp))
+            .padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
         Text(
             text = label,
@@ -129,7 +128,7 @@ fun MetricBadge(label: String, value: String, bgColor: Color, textColor: Color, 
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.labelLarge,
             color = textColor,
             fontWeight = FontWeight.Bold,
         )
