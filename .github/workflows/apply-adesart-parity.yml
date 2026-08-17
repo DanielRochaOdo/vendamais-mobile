@@ -6,6 +6,8 @@ on:
       - agent/adesart-parity
     paths:
       - '.github/scripts/apply_adesart_parity.py'
+      - '.github/scripts/apply_adesart_parity_stage2.py'
+      - '.github/scripts/apply_adesart_parity_stage2_post.py'
       - '.github/workflows/apply-adesart-parity.yml'
   workflow_dispatch:
 
@@ -22,8 +24,11 @@ jobs:
           ref: agent/adesart-parity
           fetch-depth: 0
 
-      - name: Apply parity patch
-        run: python3 .github/scripts/apply_adesart_parity.py
+      - name: Apply parity patches
+        run: |
+          python3 .github/scripts/apply_adesart_parity.py
+          python3 .github/scripts/apply_adesart_parity_stage2.py
+          python3 .github/scripts/apply_adesart_parity_stage2_post.py
 
       - name: Set up Java
         uses: actions/setup-java@v5
@@ -48,5 +53,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add android-app
-          git commit -m "Aplica paridade funcional com Adesart"
+          git commit -m "Completa paridade administrativa com Adesart"
           git push origin HEAD:agent/adesart-parity
