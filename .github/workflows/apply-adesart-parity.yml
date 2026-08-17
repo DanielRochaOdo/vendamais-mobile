@@ -1,32 +1,24 @@
-name: Validate Adesart Parity
+name: Validate Android
 
 on:
+  pull_request:
+    paths:
+      - 'android-app/**'
+      - '.github/workflows/apply-adesart-parity.yml'
   push:
     branches:
-      - agent/adesart-parity
+      - main
     paths:
-      - '.github/scripts/apply_adesart_parity_stage5.py'
-      - 'supabase/functions/update-user/**'
-      - 'supabase/functions/cadastro-link-resolve/**'
-      - 'supabase/functions/cadastro-link-check-cpf/**'
+      - 'android-app/**'
       - '.github/workflows/apply-adesart-parity.yml'
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  validate-final-state:
+  compile-android:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout branch
+      - name: Checkout
         uses: actions/checkout@v5
-        with:
-          ref: agent/adesart-parity
-          fetch-depth: 0
-
-      - name: Apply final public-prefill patch
-        run: python3 .github/scripts/apply_adesart_parity_stage5.py
 
       - name: Set up Java
         uses: actions/setup-java@v5
@@ -40,52 +32,4 @@ jobs:
         working-directory: android-app
         run: |
           chmod +x gradlew
-          set +e
-          ./gradlew :app:compileDebugKotlin --stacktrace --no-daemon 2>&1 | tee ../parity-gradle.txt
-          status=${PIPESTATUS[0]}
-          set -e
-          if [ "$status" -ne 0 ]; then
-            grep -E '(^e: | error: |Unresolved reference|Type mismatch|Cannot infer|FAILURE:|Compilation error)' ../parity-gradle.txt | tail -n 240 > ../.github/parity-compile-errors.txt || true
-            cd ..
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -f .github/parity-compile-errors.txt
-            git commit -m "Registra erros finais de compilacao da paridade" || true
-            git push origin HEAD:agent/adesart-parity || true
-            exit "$status"
-          fi
-
-      - name: Set up Deno
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-
-      - name: Check parity Edge Functions
-        run: |
-          set +e
-          deno check --node-modules-dir=auto supabase/functions/update-user/index.ts supabase/functions/cadastro-link-resolve/index.ts supabase/functions/cadastro-link-check-cpf/index.ts 2>&1 | tee parity-deno.txt
-          status=${PIPESTATUS[0]}
-          set -e
-          if [ "$status" -ne 0 ]; then
-            tail -n 240 parity-deno.txt > .github/parity-deno-errors.txt
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -f .github/parity-deno-errors.txt
-            git commit -m "Registra erros finais de Deno da paridade" || true
-            git push origin HEAD:agent/adesart-parity || true
-            exit "$status"
-          fi
-
-      - name: Commit final generated source
-        run: |
-          rm -f .github/parity-compile-errors.txt .github/parity-deno-errors.txt parity-gradle.txt parity-deno.txt
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add android-app
-          git add -u .github/parity-compile-errors.txt .github/parity-deno-errors.txt || true
-          if git diff --cached --quiet; then
-            echo "No generated source changes to commit."
-            exit 0
-          fi
-          git commit -m "Completa autopreenchimento publico com Adesart"
-          git push origin HEAD:agent/adesart-parity
+          ./gradlew :app:compileDebugKotlin --stacktrace --no-daemon
