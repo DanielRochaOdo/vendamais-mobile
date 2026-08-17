@@ -61,7 +61,7 @@ jobs:
 
       - name: Check Lemmit Edge Function
         if: steps.detect.outputs.apply == 'true'
-        run: deno check supabase/functions/lemit-consulta-pessoa/index.ts
+        run: deno check --node-modules-dir=auto supabase/functions/lemit-consulta-pessoa/index.ts
 
       - name: Commit validated hotfix
         if: steps.detect.outputs.apply == 'true'
