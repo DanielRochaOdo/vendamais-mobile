@@ -50,20 +50,15 @@ jobs:
         working-directory: android-app
         run: |
           chmod +x gradlew
-          set +e
-          ./gradlew :app:compileDebugKotlin --stacktrace 2>&1 | tee ../parity-gradle.txt
-          status=${PIPESTATUS[0]}
-          set -e
-          if [ "$status" -ne 0 ]; then
-            grep -E '(^e: | error: |Unresolved reference|Type mismatch|Cannot infer|FAILURE:|Compilation error)' ../parity-gradle.txt | tail -n 200 > ../.github/parity-compile-errors.txt || true
-            cd ..
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -f .github/parity-compile-errors.txt
-            git commit -m "Registra erros de compilacao da paridade" || true
-            git push origin HEAD:agent/adesart-parity || true
-            exit "$status"
-          fi
+          ./gradlew :app:compileDebugKotlin --stacktrace
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Check parity Edge Functions
+        run: deno check supabase/functions/update-user/index.ts supabase/functions/cadastro-link-resolve/index.ts
 
       - name: Commit generated parity changes
         run: |
