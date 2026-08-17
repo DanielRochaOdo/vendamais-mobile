@@ -1,4 +1,4 @@
-﻿package br.com.vendamais.mobile.ui.screens
+package br.com.vendamais.mobile.ui.screens
 
 import android.content.Context
 import android.content.Intent
@@ -1268,19 +1268,22 @@ fun CadastroEditorDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
-                            text = "Cadastro",
+                            text = if (currentStep == 1) "Dados da adesao" else "Documento e confirmacao",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                         )
                         Text(
-                            text = "Etapa $currentStep de 2",
+                            text = if (currentStep == 1) "Etapa 1 de 2 · Titular, contatos, endereco e dependentes" else "Etapa 2 de 2 · Revise e conclua o envio",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
                         )
                         Text(
                             text = cadastro.empresaNome ?: "Sem empresa vinculada",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
                         )
                     }
                     TextButton(
@@ -1301,6 +1304,7 @@ fun CadastroEditorDialog(
                 HorizontalDivider(
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
                 )
+                CadastroWizardProgress(currentStep)
 
                 Column(
                     modifier = Modifier
@@ -3119,3 +3123,38 @@ private fun resolvePreviewMimeType(fileName: String): String {
 
 
 
+
+@Composable
+private fun CadastroWizardProgress(step: Int) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        listOf(1 to "Dados", 2 to "Finalizar").forEach { (number, label) ->
+            val active = step >= number
+            Surface(
+                modifier = Modifier.weight(1f),
+                shape = MaterialTheme.shapes.medium,
+                color = if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = number.toString(),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (active) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
