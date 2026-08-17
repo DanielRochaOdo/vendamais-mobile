@@ -1,0 +1,50 @@
+name: Apply Adesart Parity
+
+on:
+  push:
+    branches:
+      - agent/adesart-parity
+    paths:
+      - '.github/scripts/apply_adesart_parity.py'
+      - '.github/workflows/apply-adesart-parity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/adesart-parity
+          fetch-depth: 0
+
+      - name: Apply parity patch
+        run: python3 .github/scripts/apply_adesart_parity.py
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: android-app/**/*.gradle*
+
+      - name: Compile Android Kotlin
+        working-directory: android-app
+        run: ./gradlew :app:compileDebugKotlin --stacktrace
+
+      - name: Commit generated parity changes
+        run: |
+          if git diff --quiet; then
+            echo "No parity changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-app
+          git commit -m "Aplica paridade funcional com Adesart"
+          git push origin HEAD:agent/adesart-parity
