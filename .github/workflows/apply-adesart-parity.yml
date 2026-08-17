@@ -52,7 +52,20 @@ jobs:
         working-directory: android-app
         run: |
           chmod +x gradlew
-          ./gradlew :app:compileDebugKotlin --stacktrace
+          set +e
+          ./gradlew :app:compileDebugKotlin --stacktrace --no-daemon 2>&1 | tee ../parity-gradle.txt
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            grep -E '(^e: | error: |Unresolved reference|Type mismatch|Cannot infer|FAILURE:|Compilation error)' ../parity-gradle.txt | tail -n 240 > ../.github/parity-compile-errors.txt || true
+            cd ..
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -f .github/parity-compile-errors.txt
+            git commit -m "Registra erros finais de compilacao da paridade" || true
+            git push origin HEAD:agent/adesart-parity || true
+            exit "$status"
+          fi
 
       - name: Set up Deno
         uses: denoland/setup-deno@v2
@@ -60,11 +73,24 @@ jobs:
           deno-version: v2.x
 
       - name: Check parity Edge Functions
-        run: deno check supabase/functions/update-user/index.ts supabase/functions/cadastro-link-resolve/index.ts supabase/functions/cadastro-link-check-cpf/index.ts
+        run: |
+          set +e
+          deno check supabase/functions/update-user/index.ts supabase/functions/cadastro-link-resolve/index.ts supabase/functions/cadastro-link-check-cpf/index.ts 2>&1 | tee parity-deno.txt
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            tail -n 240 parity-deno.txt > .github/parity-deno-errors.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -f .github/parity-deno-errors.txt
+            git commit -m "Registra erros finais de Deno da paridade" || true
+            git push origin HEAD:agent/adesart-parity || true
+            exit "$status"
+          fi
 
       - name: Commit generated parity changes
         run: |
-          rm -f .github/parity-compile-errors.txt parity-gradle.txt
+          rm -f .github/parity-compile-errors.txt .github/parity-deno-errors.txt parity-gradle.txt parity-deno.txt
           if git diff --quiet; then
             echo "No parity changes to commit."
             exit 0
@@ -72,6 +98,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add android-app
-          git add -u .github/parity-compile-errors.txt || true
+          git add -u .github/parity-compile-errors.txt .github/parity-deno-errors.txt || true
           git commit -m "Completa paridade publica com Adesart"
           git push origin HEAD:agent/adesart-parity
