@@ -6,7 +6,7 @@ export const corsHeaders = {
 
 type SupabaseLike = {
   from: (table: string) => {
-    insert: (payload: unknown) => Promise<unknown>;
+    insert: (payload: any) => PromiseLike<any>;
   };
   auth: {
     getUser: (token: string) => Promise<{

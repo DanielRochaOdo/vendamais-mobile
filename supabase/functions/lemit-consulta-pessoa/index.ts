@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { corsHeaders, resolveRequestUser, saveLog } from "../_shared/api-utils.ts";
 
 const LEMMIT_COST = 0.12;
+const LEMMIT_REQUEST_TIMEOUT_MS = 7500;
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -94,21 +95,54 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const lemmitResponse = await fetch(
-      "http://189.84.127.130:8080/webhook/5e534e38-6f87-400b-a441-821559c6c2e9",
-      {
-        method: "POST",
-        headers: {
-          "ApiKey": LEMMIT_API_KEY,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          documento: cpfLimpo,
-        }),
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), LEMMIT_REQUEST_TIMEOUT_MS);
+    let lemmitResponse: Response;
+    let responseData: any;
+    try {
+      lemmitResponse = await fetch(
+        "http://189.84.127.130:8080/webhook/5e534e38-6f87-400b-a441-821559c6c2e9",
+        {
+          method: "POST",
+          headers: {
+            "ApiKey": LEMMIT_API_KEY,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            documento: cpfLimpo,
+          }),
+          signal: controller.signal,
+        }
+      );
+      responseData = await lemmitResponse.json();
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        statusCode = 504;
+        errorMessage = "Consulta Lemmit excedeu o tempo limite";
+        responseBody = { error: errorMessage, timeout: true, canContinue: true };
+        await saveLog(supabase, {
+          user_id: userId,
+          user_email: userEmail,
+          endpoint: "lemit-consulta-pessoa",
+          method: "POST",
+          request_body: requestBody,
+          response_body: responseBody,
+          status_code: statusCode,
+          success: false,
+          error_message: errorMessage,
+          duration_ms: Date.now() - startTime,
+          cost: 0,
+        });
+        return new Response(JSON.stringify(responseBody), {
+          status: statusCode,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
-    );
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
-    const responseData = await lemmitResponse.json();
     statusCode = lemmitResponse.status;
 
     if (statusCode === 404) {

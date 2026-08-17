@@ -338,7 +338,7 @@ class CadastroWorkflowRepository(
 
         if (config?.ativarLemmit != false) {
             val canUse = runCatching {
-                withTimeoutOrNull(8000) { canUseLemmit(session, profile.id) }
+                withTimeoutOrNull(2500) { canUseLemmit(session, profile.id) }
             }.onFailure { throwable ->
                 Log.w(logTag, "createDraftFromCpf canUseLemmit falhou, seguindo sem lemmit", throwable)
             }.getOrNull()
@@ -346,7 +346,7 @@ class CadastroWorkflowRepository(
             if (canUse == true) {
                 var lemmitFailureMessage: String? = null
                 val lemmitResponse = runCatching {
-                    withTimeoutOrNull(12000) { consultarCpfLemmit(session, cpf) }
+                    withTimeoutOrNull(8500) { consultarCpfLemmit(session, cpf) }
                 }.onFailure { throwable ->
                     lemmitFailureMessage = throwable.message
                     Log.w(logTag, "createDraftFromCpf consultarCpfLemmit falhou, seguindo sem lemmit", throwable)
@@ -423,7 +423,7 @@ class CadastroWorkflowRepository(
         val enderecoEnriquecido = cadastroBase.endereco
             ?.takeIf { it.cep.isNotBlank() }
             ?.let { endereco ->
-                withTimeoutOrNull(7000) { CadastroPayloadBuilder.enrichEndereco(endereco, consultarEnderecoCep(session, endereco.cep)) }
+                withTimeoutOrNull(2000) { CadastroPayloadBuilder.enrichEndereco(endereco, consultarEnderecoCep(session, endereco.cep)) }
                     ?: endereco
             }
 
@@ -1355,45 +1355,19 @@ class CadastroWorkflowRepository(
         funcionarioCadastroId: Int,
         dependenteId: Int,
     ) {
-        val payload = buildJsonObject {
-            put("idFuncionario", funcionarioCadastroId)
-            put("idDependente", dependenteId)
-            put("arquivoPath", cadastro.arquivoPath)
-            put("arquivoNome", cadastro.arquivoPath?.substringAfterLast('/'))
-            put("bucket", "cadastros-temp-files")
-        }
-
-        val uploadResponse = runCatching {
-            client.safePost<JsonElement>(
-                url = "${AppConfig.supabaseUrl}/functions/v1/erp-upload-documento",
-                json = json,
-                body = payload,
-            ) {
-                applyAuthHeaders(session)
-            }
-        }.getOrNull()
-
-        val success = uploadResponse
-            ?.jsonObject
-            ?.get("success")
-            ?.jsonPrimitive
-            ?.content == "true"
-
-        if (!success) {
-            client.safePost<JsonElement>(
-                url = "${AppConfig.supabaseUrl}/functions/v1/erp-enqueue-upload",
-                json = json,
-                body = buildJsonObject {
-                    put("cadastroId", cadastro.id)
-                    put("idFuncionario", funcionarioCadastroId)
-                    put("idDependente", dependenteId)
-                    put("arquivoPath", cadastro.arquivoPath)
-                    put("arquivoNome", cadastro.arquivoPath?.substringAfterLast('/'))
-                    put("tipo", "titular")
-                },
-            ) {
-                applyAuthHeaders(session)
-            }
+        client.safePost<JsonElement>(
+            url = "${AppConfig.supabaseUrl}/functions/v1/erp-enqueue-upload",
+            json = json,
+            body = buildJsonObject {
+                put("cadastroId", cadastro.id)
+                put("idFuncionario", funcionarioCadastroId)
+                put("idDependente", dependenteId)
+                put("arquivoPath", cadastro.arquivoPath)
+                put("arquivoNome", cadastro.arquivoNome ?: cadastro.arquivoPath?.substringAfterLast('/'))
+                put("tipo", "titular")
+            },
+        ) {
+            applyAuthHeaders(session)
         }
     }
 

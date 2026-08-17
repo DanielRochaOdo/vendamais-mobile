@@ -101,6 +101,8 @@ import br.com.vendamais.mobile.ui.theme.Red100
 import br.com.vendamais.mobile.ui.theme.Red500
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -124,9 +126,9 @@ import java.text.Normalizer
 import java.util.Locale
 
 private const val MAX_UPLOAD_BYTES = 10 * 1024 * 1024
-private const val LEMMIT_DEPENDENTE_MAX_ATTEMPTS = 3
-private const val LEMMIT_DEPENDENTE_TIMEOUT_MS = 12000L
-private const val LEMMIT_DEPENDENTE_RETRY_DELAY_MS = 900L
+private const val LEMMIT_DEPENDENTE_MAX_ATTEMPTS = 1
+private const val LEMMIT_DEPENDENTE_TIMEOUT_MS = 9000L
+private const val LEMMIT_DEPENDENTE_RETRY_DELAY_MS = 0L
 private val cadastroEditorJsonParser = Json {
     ignoreUnknownKeys = true
     isLenient = true
@@ -379,26 +381,27 @@ fun CadastroEditorDialog(
         bytes: ByteArray,
     ) {
         if (arquivoPath.isNotBlank()) {
-            runCatching { viewModel.deleteTempFile(arquivoPath) }
+            val existingFile = File(arquivoPath)
+            if (existingFile.exists()) {
+                withContext(Dispatchers.IO) { runCatching { existingFile.delete() } }
+            } else {
+                runCatching { viewModel.deleteTempFile(arquivoPath) }
+            }
         }
         validateUpload(
             fileName = fileName,
             mimeType = mimeType,
             size = bytes.size.toLong(),
         )
-        val uploaded = viewModel.uploadTempFile(
-            fileName = fileName,
-            mimeType = mimeType,
-            bytes = bytes,
-            prefix = "cadastros/${cadastro.id}",
-        )
-        val draftAttachment = DraftAttachmentStorage.copyBytesToDraftStorage(
-            context = context,
-            draftId = cadastro.id,
-            originalName = uploaded.nome,
-            mimeType = uploaded.mime,
-            bytes = bytes,
-        )
+        val draftAttachment = withContext(Dispatchers.IO) {
+            DraftAttachmentStorage.copyBytesToDraftStorage(
+                context = context,
+                draftId = cadastro.id,
+                originalName = fileName,
+                mimeType = mimeType,
+                bytes = bytes,
+            )
+        }
         arquivoPath = draftAttachment.path
         arquivoNome = draftAttachment.name
         arquivoMimeType = draftAttachment.mimeType
@@ -455,8 +458,10 @@ fun CadastroEditorDialog(
         scope.launch {
             uploading = true
             runCatching {
-                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                    ?: error("Nao foi possivel ler o arquivo.")
+                val bytes = withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        ?: error("Nao foi possivel ler o arquivo.")
+                }
                 uploadSelectedArquivo(
                     fileName = resolveFileName(context, uri),
                     mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream",
@@ -483,7 +488,7 @@ fun CadastroEditorDialog(
             uploading = true
             runCatching {
                 val cameraFile = File(cameraPath)
-                val bytes = cameraFile.readBytes()
+                val bytes = withContext(Dispatchers.IO) { cameraFile.readBytes() }
                 uploadSelectedArquivo(
                     fileName = cameraFile.name,
                     mimeType = "image/jpeg",
@@ -2016,16 +2021,9 @@ fun CadastroEditorDialog(
                                         return@launch
                                     }
                                     val payload = buildPayload(requireStatus = false) ?: return@launch
-                                    saving = true
-                                    runCatching { viewModel.updateCadastroRecord(cadastro.id, payload) }
-                                        .onSuccess { currentStep = 2 }
-                                        .onFailure { throwable ->
-                                            localMessage = CadastroApiErrorMapper.mapUserMessage(
-                                                throwable.message,
-                                                "Falha ao salvar antes de avancar.",
-                                            )
-                                        }
-                                    saving = false
+                                    localMessage = null
+                                    currentStep = 2
+                                    viewModel.persistCadastroDraftSilently(cadastro.id, payload)
                                 }
                             },
                             enabled = !saving && !uploading && !state.sendingCadastro,
