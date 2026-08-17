@@ -1,0 +1,36 @@
+name: Apply Settings Redesign Stage 2
+on:
+  push:
+    branches: [agent/stitch-redesign-stage2]
+    paths:
+      - 'scripts/apply_settings_redesign_stage2.py'
+      - '.github/workflows/apply-settings-redesign-stage2.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: agent/stitch-redesign-stage2
+      - run: python scripts/apply_settings_redesign_stage2.py
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Compile Android Kotlin
+        working-directory: android-app
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:compileDebugKotlin --stacktrace --no-daemon
+      - name: Commit validated redesign
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-app/app/src/main/java/br/com/vendamais/mobile/ui/screens/SettingsScreen.kt
+          if ! git diff --cached --quiet; then
+            git commit -m "Redesenha navegacao de configuracoes"
+            git push origin HEAD:agent/stitch-redesign-stage2
+          fi
