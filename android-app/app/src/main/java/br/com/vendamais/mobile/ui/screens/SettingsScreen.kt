@@ -308,12 +308,15 @@ private fun settingsStringJsonArray(values: List<String>) = kotlinx.serializatio
 
 @Composable
 private fun settingsParseColor(value: String): androidx.compose.ui.graphics.Color {
+    val fallback = MaterialTheme.colorScheme.primary
     val normalized = value.trim().removePrefix("#")
+    if (!normalized.matches(Regex("^(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$"))) return fallback
+
     return runCatching {
         when (normalized.length) {
-            6 -> androidx.compose.ui.graphics.Color((0xFF000000L or normalized.toLong(16)).toULong())
-            8 -> androidx.compose.ui.graphics.Color(normalized.toLong(16).toULong())
-            else -> MaterialTheme.colorScheme.primary
+            6 -> androidx.compose.ui.graphics.Color(0xFF000000L or normalized.toLong(16))
+            8 -> androidx.compose.ui.graphics.Color(normalized.toLong(16))
+            else -> fallback
         }
-    }.getOrElse { MaterialTheme.colorScheme.primary }
+    }.getOrElse { fallback }
 }
