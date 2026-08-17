@@ -1,5 +1,7 @@
 package br.com.vendamais.mobile.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,8 +18,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.ui.AppUiState
@@ -30,8 +35,11 @@ fun FilaUploadErpScreen(
     state: AppUiState,
     viewModel: AppViewModel,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var selectedFilter by rememberSaveable { mutableStateOf("todos") }
     var currentPage by rememberSaveable { mutableStateOf(1) }
+    var fileError by rememberSaveable { mutableStateOf<String?>(null) }
     val itemsPerPage = 20
 
     LaunchedEffect(Unit) {
@@ -116,6 +124,12 @@ fun FilaUploadErpScreen(
             }
         }
 
+        fileError?.let { message ->
+            item {
+                WebCard { Text(message, color = MaterialTheme.colorScheme.error) }
+            }
+        }
+
         if (filteredItems.isEmpty()) {
             item {
                 WebCard {
@@ -132,6 +146,29 @@ fun FilaUploadErpScreen(
                         Text("Proxima tentativa: ${item.nextAttemptAt?.let(::formatDateTime) ?: "-"}")
                         if (!item.lastError.isNullOrBlank()) {
                             Text("Erro: ${item.lastError}", color = MaterialTheme.colorScheme.error)
+                        }
+                        Button(
+                            onClick = {
+                                fileError = null
+                                scope.launch {
+                                    runCatching { viewModel.createQueueFileSignedUrl(item) }
+                                        .onSuccess { signedUrl ->
+                                            runCatching {
+                                                context.startActivity(
+                                                    Intent(Intent.ACTION_VIEW, Uri.parse(signedUrl)).apply {
+                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    },
+                                                )
+                                            }.onFailure { fileError = "Nao foi possivel abrir o arquivo neste dispositivo." }
+                                        }
+                                        .onFailure { throwable ->
+                                            fileError = throwable.message ?: "Falha ao gerar link do arquivo."
+                                        }
+                                }
+                            },
+                            enabled = !state.adminFeatureLoading && item.arquivoPath.isNotBlank(),
+                        ) {
+                            Text("Abrir arquivo")
                         }
                         if (item.status == "failed" || item.status == "retry_wait") {
                             Button(onClick = { viewModel.reprocessUploadQueueItem(item.id) }, enabled = !state.adminFeatureLoading) {

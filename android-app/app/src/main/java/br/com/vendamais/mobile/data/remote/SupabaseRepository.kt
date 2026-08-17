@@ -528,6 +528,41 @@ class SupabaseRepository(
         )
     }
 
+    suspend fun createStorageSignedUrl(
+        session: SavedSession,
+        bucket: String,
+        objectPath: String,
+        expiresIn: Int = 60,
+    ): String {
+        val safeBucket = java.net.URLEncoder.encode(bucket, Charsets.UTF_8.name()).replace("+", "%20")
+        val safePath = objectPath
+            .split('/')
+            .filter { it.isNotBlank() }
+            .joinToString("/") { segment ->
+                java.net.URLEncoder.encode(segment, Charsets.UTF_8.name()).replace("+", "%20")
+            }
+        if (safePath.isBlank()) throw IllegalStateException("Caminho do arquivo nao informado.")
+        val response: JsonObject = client.safePost(
+            url = "${AppConfig.supabaseUrl}/storage/v1/object/sign/$safeBucket/$safePath",
+            json = json,
+            body = buildJsonObject { put("expiresIn", expiresIn.coerceIn(30, 3600)) },
+        ) {
+            applyAuthHeaders(session)
+        }
+        val raw = listOf("signedURL", "signedUrl", "signed_url")
+            .firstNotNullOfOrNull { key ->
+                (response[key] as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }
+            }
+            ?: throw IllegalStateException("Nao foi possivel gerar link temporario do arquivo.")
+        val base = AppConfig.supabaseUrl.trimEnd('/')
+        return when {
+            raw.startsWith("http://") || raw.startsWith("https://") -> raw
+            raw.startsWith("/storage/v1/") -> "$base$raw"
+            raw.startsWith("/") -> "$base/storage/v1$raw"
+            else -> "$base/storage/v1/$raw"
+        }
+    }
+
     suspend fun reprocessUploadQueueItem(session: SavedSession, id: String): ErpUploadQueueItem {
         val payload = buildJsonObject {
             put("status", "queued")

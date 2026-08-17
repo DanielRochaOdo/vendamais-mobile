@@ -2396,6 +2396,16 @@ class AppViewModel(
         }
     }
 
+    suspend fun createQueueFileSignedUrl(item: ErpUploadQueueItem): String {
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val activeSession = ensureFreshSession(session)
+        return repository.createStorageSignedUrl(
+            session = activeSession,
+            bucket = item.bucket,
+            objectPath = item.arquivoPath,
+        )
+    }
+
     fun reprocessUploadQueueItem(id: String) {
         val session = currentSession ?: return
         viewModelScope.launch {
