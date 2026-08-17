@@ -13,8 +13,28 @@ interface EnqueueRequest {
   idDependente: number;
   arquivoPath: string;
   arquivoNome: string;
-  tipo: 'titular' | 'dependente';
+  tipo: "titular" | "dependente";
   bucket?: string;
+}
+
+const RETRYABLE_QUEUE_STATUSES = ["queued", "retry_wait", "processing", "failed"];
+
+function triggerQueueProcessor(supabaseUrl: string, serviceRoleKey: string) {
+  const promise = fetch(`${supabaseUrl}/functions/v1/erp-process-upload-queue`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${serviceRoleKey}`,
+    },
+    body: "{}",
+  }).catch((error) => {
+    console.warn("Falha ao disparar processamento imediato da fila:", error);
+  });
+
+  const edgeRuntime = (globalThis as any).EdgeRuntime;
+  if (edgeRuntime?.waitUntil) {
+    edgeRuntime.waitUntil(promise);
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -26,39 +46,35 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      supabaseUrl,
+      serviceRoleKey,
       {
         auth: {
           autoRefreshToken: false,
           persistSession: false,
         },
-      }
+      },
     );
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Autorização necessária" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: "Autorização necessária" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
 
     if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Token inválido" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: "Token inválido" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const { data: profile } = await supabaseClient
@@ -68,25 +84,28 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (!profile) {
-      return new Response(
-        JSON.stringify({ error: "Perfil não encontrado" }),
-        {
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: "Perfil não encontrado" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const body: EnqueueRequest = await req.json();
+    const bucket = body.bucket?.trim() || "cadastros-temp-files";
+    const arquivoPath = body.arquivoPath?.trim();
+    const arquivoNome = body.arquivoNome?.trim();
 
-    if (!body.idFuncionario || !body.idDependente || !body.arquivoPath || !body.arquivoNome || !body.tipo) {
-      return new Response(
-        JSON.stringify({ error: "Parâmetros obrigatórios faltando" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+    if (
+      !body.idFuncionario ||
+      !body.idDependente ||
+      !arquivoPath ||
+      !arquivoNome ||
+      !["titular", "dependente"].includes(body.tipo)
+    ) {
+      return new Response(JSON.stringify({ error: "Parâmetros obrigatórios faltando ou inválidos" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     let createdBy = user.id;
@@ -103,16 +122,97 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    let existingQuery = supabaseClient
+      .from("erp_upload_queue")
+      .select("*")
+      .eq("id_funcionario", body.idFuncionario)
+      .eq("id_dependente", body.idDependente)
+      .eq("arquivo_path", arquivoPath)
+      .eq("bucket", bucket)
+      .in("status", RETRYABLE_QUEUE_STATUSES)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    existingQuery = body.cadastroId
+      ? existingQuery.eq("cadastro_id", body.cadastroId)
+      : existingQuery.is("cadastro_id", null);
+
+    const { data: existingItems, error: existingError } = await existingQuery;
+    if (existingError) {
+      console.warn("Não foi possível consultar retry existente; será tentado um novo enqueue:", existingError);
+    }
+
+    const existingItem = existingItems?.[0];
+    if (existingItem) {
+      if (existingItem.status !== "processing") {
+        const isManualRestartAfterFinalFailure = existingItem.status === "failed";
+        const { data: reusedItem, error: reuseError } = await supabaseClient
+          .from("erp_upload_queue")
+          .update({
+            status: "queued",
+            attempts: isManualRestartAfterFinalFailure ? 0 : existingItem.attempts,
+            next_attempt_at: new Date().toISOString(),
+            last_error: null,
+            last_status_code: null,
+            arquivo_nome: arquivoNome,
+            tipo: body.tipo,
+            created_by: createdBy,
+          })
+          .eq("id", existingItem.id)
+          .select()
+          .single();
+
+        if (reuseError || !reusedItem) {
+          console.error("Erro ao reativar upload existente:", reuseError);
+          return new Response(
+            JSON.stringify({ error: "Erro ao reativar upload", details: reuseError?.message }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
+        }
+
+        triggerQueueProcessor(supabaseUrl, serviceRoleKey);
+        return new Response(
+          JSON.stringify({
+            queued: true,
+            reused: true,
+            queue_id: reusedItem.id,
+            message: "Contrato já armazenado. Retry reativado sem necessidade de anexar o arquivo novamente.",
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          queued: true,
+          reused: true,
+          processing: true,
+          queue_id: existingItem.id,
+          message: "Este contrato já está sendo enviado. Não é necessário anexar o arquivo novamente.",
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
     const queueItem = {
       cadastro_id: body.cadastroId,
       created_by: createdBy,
       id_funcionario: body.idFuncionario,
       id_dependente: body.idDependente,
-      arquivo_path: body.arquivoPath,
-      arquivo_nome: body.arquivoNome,
-      bucket: body.bucket || 'cadastros-temp-files',
+      arquivo_path: arquivoPath,
+      arquivo_nome: arquivoNome,
+      bucket,
       tipo: body.tipo,
-      status: 'queued',
+      status: "queued",
       attempts: 0,
       next_attempt_at: new Date().toISOString(),
     };
@@ -130,29 +230,35 @@ Deno.serve(async (req: Request) => {
         {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        },
       );
     }
+
+    triggerQueueProcessor(supabaseUrl, serviceRoleKey);
 
     return new Response(
       JSON.stringify({
         queued: true,
+        reused: false,
         queue_id: queueData.id,
-        message: "Arquivo enfileirado para envio ao ERP. O processamento será realizado automaticamente."
+        message: "Contrato enfileirado para envio ao ERP. O processamento será iniciado automaticamente.",
       }),
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   } catch (error) {
     console.error("Erro na função erp-enqueue-upload:", error);
     return new Response(
-      JSON.stringify({ error: "Erro interno", details: error.message }),
+      JSON.stringify({
+        error: "Erro interno",
+        details: error instanceof Error ? error.message : String(error),
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 });
