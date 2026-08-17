@@ -173,12 +173,23 @@ data class PublicCadastroLinkInfo(
     val empresaExigeMatricula: Int? = null,
     @SerialName("planosRaw")
     val planosRaw: JsonElement? = null,
+    @SerialName("planosOcultos")
+    val planosOcultos: List<String> = emptyList(),
+    val parentescos: List<PublicParentescoInfo> = emptyList(),
     @SerialName("vendedorCodigo")
     val vendedorCodigo: String? = null,
     @SerialName("vendedorNome")
     val vendedorNome: String? = null,
     @SerialName("vendedorTelefone")
     val vendedorTelefone: String? = null,
+)
+
+@Serializable
+data class PublicParentescoInfo(
+    @SerialName("parentescoId")
+    val parentescoId: Int,
+    val label: String,
+    val ativo: Boolean = true,
 )
 
 @Serializable

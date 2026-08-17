@@ -2050,6 +2050,27 @@ class CadastroWorkflowRepository(
         }
     }
 
+    suspend fun consultarEnderecoPorCepPublic(cep: String): CadastroEndereco {
+        val cepNormalizado = CadastroPayloadBuilder.normalizeDigits(cep).take(8)
+        if (cepNormalizado.length != 8) {
+            throw IllegalStateException("CEP invalido. Informe os 8 digitos.")
+        }
+        val response: JsonElement = client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/erp-endereco-cep",
+            json = json,
+            body = buildJsonObject { put("cep", cepNormalizado) },
+        )
+        val root = runCatching { response.jsonObject }.getOrNull()
+        val explicitError = root?.get("error")?.jsonPrimitive?.contentOrNull
+            ?: root?.get("message")?.jsonPrimitive?.contentOrNull
+        if (!explicitError.isNullOrBlank()) throw IllegalStateException(explicitError)
+        val parsed = parseCadastroEnderecoFlex(response)?.copy(
+            cep = parseCadastroEnderecoFlex(response)?.cep?.ifBlank { cepNormalizado } ?: cepNormalizado,
+        )
+        if (!hasEnderecoData(parsed)) throw IllegalStateException("CEP nao encontrado.")
+        return parsed ?: throw IllegalStateException("CEP nao encontrado.")
+    }
+
     private suspend fun checkErpAssociado(session: SavedSession, cpf: String): ErpAssociadoResponse {
         return client.safePost(
             url = "${AppConfig.supabaseUrl}/functions/v1/erp-check-associado",

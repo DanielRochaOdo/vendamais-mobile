@@ -2211,6 +2211,10 @@ class AppViewModel(
         return workflowRepository.submitPublicCadastro(token, payload, idempotencyKey)
     }
 
+    suspend fun consultarEnderecoCepPublic(cep: String): CadastroEndereco {
+        return workflowRepository.consultarEnderecoPorCepPublic(cep)
+    }
+
     suspend fun searchEmpresaDirect(value: String, type: EmpresaSearchType): List<EmpresaResumo> {
         val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
         val activeSession = ensureFreshSession(session)
