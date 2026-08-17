@@ -6,6 +6,9 @@ on:
       - agent/adesart-parity
     paths:
       - '.github/scripts/apply_adesart_parity_stage5.py'
+      - 'supabase/functions/update-user/**'
+      - 'supabase/functions/cadastro-link-resolve/**'
+      - 'supabase/functions/cadastro-link-check-cpf/**'
       - '.github/workflows/apply-adesart-parity.yml'
   workflow_dispatch:
 
