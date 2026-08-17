@@ -30,12 +30,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -289,8 +289,8 @@ fun CadastrosScreen(
     ) {
         item {
             ScreenHeading(
-                title = "Cadastro",
-                subtitle = "Consulte CPF e gerencie cadastros",
+                title = "Cadastros",
+                subtitle = "Inicie adesoes, resolva pendencias e acompanhe o que ja foi enviado.",
             )
         }
 
@@ -361,8 +361,11 @@ fun CadastrosScreen(
                                 color = Slate500,
                                 style = MaterialTheme.typography.bodyMedium,
                             )
-                            TextButton(onClick = { showInclusaoDialog = true }) {
-                                Text("Iniciar Inclusao")
+                            Button(
+                                onClick = { showInclusaoDialog = true },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("Iniciar inclusao de dependente")
                             }
                         }
                     }
@@ -946,17 +949,11 @@ private fun CadastrosFilterPanel(
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    IconButton(onClick = onToggleExpanded) {
-                        Icon(
-                            imageVector = if (expanded) Icons.Rounded.Search else Icons.Rounded.Search,
-                            contentDescription = if (expanded) "Ocultar filtros" else "Mostrar filtros",
-                        )
+                    OutlinedButton(onClick = onClearFilters) {
+                        Text("Limpar")
                     }
-                    IconButton(onClick = onClearFilters) {
-                        Icon(
-                            imageVector = Icons.Rounded.CleaningServices,
-                            contentDescription = "Limpar filtros",
-                        )
+                    Button(onClick = onToggleExpanded) {
+                        Text(if (expanded) "Ocultar" else "Filtrar")
                     }
                 }
             }
@@ -1062,13 +1059,11 @@ private fun CadastrosFilterPanel(
                     onValueChange = onDataFimFiltroChange,
                 )
 
-                Row(
+                Button(
+                    onClick = onApplyFilters,
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
                 ) {
-                    Button(onClick = onApplyFilters) {
-                        Text("Filtrar")
-                    }
+                    Text("Aplicar filtros")
                 }
             }
         }
@@ -1088,7 +1083,7 @@ private fun CadastroTabBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             CadastroTabButton(
-                label = "Nova Adesao",
+                label = "Nova",
                 selected = selectedTab == CadastroAreaTab.NOVO,
                 onClick = { onTabSelected(CadastroAreaTab.NOVO) },
                 modifier = Modifier.weight(1f),
@@ -1105,13 +1100,13 @@ private fun CadastroTabBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             CadastroTabButton(
-                label = "Incluir Dep.",
+                label = "Dependente",
                 selected = selectedTab == CadastroAreaTab.DEPENDENTE,
                 onClick = { onTabSelected(CadastroAreaTab.DEPENDENTE) },
                 modifier = Modifier.weight(0.88f),
             )
             CadastroTabButton(
-                label = "Adesoes Pendentes",
+                label = "Pendentes",
                 selected = selectedTab == CadastroAreaTab.INCOMPLETOS,
                 badge = pendentesCount.takeIf { it > 0 }?.toString(),
                 onClick = { onTabSelected(CadastroAreaTab.INCOMPLETOS) },
@@ -1279,54 +1274,26 @@ private fun CadastroCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (isPendingCadastro) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (canDeleteCadastro) {
-                            IconButton(
-                                onClick = {
-                                    val titularNome = cadastro.nome.orEmpty().ifBlank {
-                                        cadastro.cpf
-                                            .filter(Char::isDigit)
-                                            .takeIf { it.isNotBlank() }
-                                            ?.let(::formatCpf)
-                                            ?: "Cadastro ${cadastro.id.take(8)}"
-                                    }
-                                    viewModel.resolveCadastroOverlay(
-                                        CadastroModalSignal(
-                                            excluirCadastroId = cadastro.id,
-                                            excluirCadastroTitular = titularNome,
-                                        ),
-                                    )
-                                },
-                                enabled = !updatingStatus,
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Delete,
-                                    contentDescription = "Excluir adesao pendente",
-                                    tint = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                        }
-                        IconButton(
-                            onClick = onClick,
-                            enabled = !updatingStatus,
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                                contentDescription = "Continuar adesao pendente",
-                            )
-                        }
-                    }
+                if (!isPendingCadastro) {
+                    Text(
+                        text = formatDateTime(cadastro.updatedAt),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
-            Text(
-                text = "${tipoCadastroLabel(cadastro.tipoCadastro)} - ${statusLabel(cadastro.status)}",
-                style = MaterialTheme.typography.labelLarge,
-                color = if (cadastro.status == "enviado") Emerald else Amber500,
-            )
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = if (cadastro.status == "enviado") EmeraldSoft else Amber100,
+            ) {
+                Text(
+                    text = "${tipoCadastroLabel(cadastro.tipoCadastro)} · ${statusLabel(cadastro.status)}",
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (cadastro.status == "enviado") Emerald else Amber500,
+                )
+            }
             Text("CPF: ${formatCpf(cadastro.cpf)}", style = MaterialTheme.typography.bodyMedium)
             Text("Empresa: ${cadastro.empresaNome ?: "-"}", style = MaterialTheme.typography.bodyMedium)
             Text(
@@ -1368,6 +1335,41 @@ private fun CadastroCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (canDeleteCadastro) {
+                        OutlinedButton(
+                            onClick = {
+                                val titularNome = cadastro.nome.orEmpty().ifBlank {
+                                    cadastro.cpf
+                                        .filter(Char::isDigit)
+                                        .takeIf { it.isNotBlank() }
+                                        ?.let(::formatCpf)
+                                        ?: "Cadastro ${cadastro.id.take(8)}"
+                                }
+                                viewModel.resolveCadastroOverlay(
+                                    CadastroModalSignal(
+                                        excluirCadastroId = cadastro.id,
+                                        excluirCadastroTitular = titularNome,
+                                    ),
+                                )
+                            },
+                            enabled = !updatingStatus,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("Excluir")
+                        }
+                    }
+                    Button(
+                        onClick = onClick,
+                        enabled = !updatingStatus,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text("Continuar")
+                    }
                 }
             }
         }
