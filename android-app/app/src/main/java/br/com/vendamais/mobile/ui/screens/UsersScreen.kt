@@ -1,4 +1,4 @@
-﻿package br.com.vendamais.mobile.ui.screens
+package br.com.vendamais.mobile.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -7,16 +7,21 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,9 +31,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.data.models.AdminTeam
 import br.com.vendamais.mobile.data.models.AdminUser
@@ -36,6 +41,7 @@ import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
 import br.com.vendamais.mobile.ui.components.ScreenHeading
 import br.com.vendamais.mobile.ui.components.WebCard
+import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 import br.com.vendamais.mobile.ui.theme.Amber100
 import br.com.vendamais.mobile.ui.theme.Amber500
 import br.com.vendamais.mobile.ui.theme.Emerald
@@ -47,9 +53,8 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.Locale
-import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun UsersScreen(
     state: AppUiState,
@@ -72,6 +77,10 @@ fun UsersScreen(
     }
     val canCreate = state.profile?.role in setOf("ADMINISTRADOR", "GERENTE", "SUPERVISOR")
     val canEditRole = state.profile?.role == "ADMINISTRADOR"
+    val activeUsers = state.adminUsers.count { it.isActive }
+    val commercialUsers = state.adminUsers.count {
+        normalizeRole(it.role) in setOf("VENDEDOR", "ADESIONISTA", "SUPERVISOR")
+    }
 
     LazyColumn(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
@@ -80,8 +89,31 @@ fun UsersScreen(
         item {
             ScreenHeading(
                 title = "Usuarios",
-                subtitle = "Gerencie os usuarios do sistema",
+                subtitle = "Gerencie acesso, funcao, equipe e identificacao operacional de cada pessoa.",
             )
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                UserMetric(
+                    value = state.adminUsers.size.toString(),
+                    label = "Usuarios",
+                    modifier = Modifier.weight(1f),
+                )
+                UserMetric(
+                    value = activeUsers.toString(),
+                    label = "Ativos",
+                    modifier = Modifier.weight(1f),
+                )
+                UserMetric(
+                    value = commercialUsers.toString(),
+                    label = "Comerciais",
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
 
         item {
@@ -91,19 +123,42 @@ fun UsersScreen(
                         value = searchTerm,
                         onValueChange = { searchTerm = it },
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                        label = { Text("Pesquisar por nome") },
+                        label = { Text("Buscar usuario") },
+                        placeholder = { Text("Nome ou email") },
                         singleLine = true,
                     )
                     if (canCreate) {
-                        Button(onClick = {
-                            userSubmitError = null
-                            userSubmitting = false
-                            creatingUser = true
-                        }) {
-                            Text("Novo Usuario")
+                        Button(
+                            onClick = {
+                                userSubmitError = null
+                                userSubmitting = false
+                                creatingUser = true
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Adicionar usuario")
                         }
                     }
                 }
+            }
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Pessoas",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "${filteredUsers.size} resultado(s)",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 
@@ -113,10 +168,8 @@ fun UsersScreen(
             item { EmptyAdminCard("Nenhum usuario encontrado.") }
         } else {
             items(filteredUsers) { user ->
-                WebCard(
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                WebCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -130,27 +183,29 @@ fun UsersScreen(
                                     text = user.name,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
                                     text = user.email,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Slate500,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
-                            TextButton(onClick = {
-                                userSubmitError = null
-                                userSubmitting = false
-                                editingUser = user
-                            }) {
-                                Text("Editar")
-                            }
+                            AdminBadge(
+                                if (user.isActive) "Ativo" else "Inativo",
+                                if (user.isActive) EmeraldSoft else Slate100,
+                                if (user.isActive) Emerald else Slate500,
+                            )
                         }
+
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             AdminBadge(user.role.roleLabel(), EmeraldSoft, Emerald)
-                            AdminBadge(if (user.isActive) "Ativo" else "Inativo", Slate100, Slate500)
                             teamNames[user.teamId]?.let { teamName ->
                                 AdminBadge(teamName, Amber100, Amber500)
                             }
@@ -158,8 +213,24 @@ fun UsersScreen(
                                 AdminBadge("ID $code", Slate100, Slate500)
                             }
                         }
+
                         user.telefone?.takeIf { it.isNotBlank() }?.let { phone ->
-                            Text("Telefone: ${formatPhone(phone)}", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                text = formatPhone(phone),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                userSubmitError = null
+                                userSubmitting = false
+                                editingUser = user
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Editar dados e acesso")
                         }
                     }
                 }
@@ -168,7 +239,7 @@ fun UsersScreen(
     }
 
     if (creatingUser) {
-        UserEditorDialog(
+        UserEditorSheet(
             title = "Novo Usuario",
             teams = state.adminTeams,
             canEditRole = canEditRole,
@@ -195,7 +266,7 @@ fun UsersScreen(
     }
 
     editingUser?.let { user ->
-        UserEditorDialog(
+        UserEditorSheet(
             title = "Editar Usuario",
             teams = state.adminTeams,
             canEditRole = canEditRole,
@@ -224,7 +295,42 @@ fun UsersScreen(
 }
 
 @Composable
-private fun UserEditorDialog(
+private fun UserMetric(
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.65f),
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UserEditorSheet(
     title: String,
     teams: List<AdminTeam>,
     canEditRole: Boolean,
@@ -239,12 +345,29 @@ private fun UserEditorDialog(
     val requiresTeam = requiresTeamAndExternal(normalizedRole)
     val validationError = form.validationError(initialUser == null, initialUser)
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "Dados de acesso e vinculo operacional.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
             LazyColumn(
-                modifier = Modifier.heightIn(max = 480.dp),
+                modifier = Modifier.heightIn(max = 520.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 item {
@@ -253,6 +376,7 @@ private fun UserEditorDialog(
                         onValueChange = { form = form.copy(name = it) },
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Nome") },
+                        singleLine = true,
                     )
                 }
                 item {
@@ -262,6 +386,7 @@ private fun UserEditorDialog(
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Email") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        singleLine = true,
                     )
                 }
                 if (initialUser == null) {
@@ -270,7 +395,7 @@ private fun UserEditorDialog(
                             value = form.password,
                             onValueChange = { form = form.copy(password = it) },
                             modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                            label = { Text("Senha") },
+                            label = { Text("Senha inicial") },
                         )
                     }
                 }
@@ -290,6 +415,7 @@ private fun UserEditorDialog(
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Telefone") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        singleLine = true,
                     )
                 }
                 item {
@@ -297,18 +423,34 @@ private fun UserEditorDialog(
                         value = form.lemmitLimite,
                         onValueChange = { form = form.copy(lemmitLimite = normalizeLemmitEditableInput(it)) },
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                        label = { Text("Limite Lemmit (R$)") },
+                        label = { Text("Limite Lemmit") },
                         prefix = { Text("R$ ") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
                     )
                 }
                 if (requiresTeam) {
+                    item {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            color = Amber100,
+                        ) {
+                            Text(
+                                text = "Esta funcao exige ID Externo e Equipe para manter o vinculo com o ERP.",
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Amber500,
+                            )
+                        }
+                    }
                     item {
                         OutlinedTextField(
                             value = form.externalId,
                             onValueChange = { form = form.copy(externalId = it) },
                             modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                             label = { Text("ID Externo") },
+                            singleLine = true,
                         )
                     }
                     item {
@@ -321,23 +463,29 @@ private fun UserEditorDialog(
                     }
                 }
                 item {
-                    Row(
+                    Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Usuario ativo", fontWeight = FontWeight.Medium)
-                            Text(
-                                text = "Ative ou desative o acesso ao sistema.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Slate500,
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Acesso ativo", fontWeight = FontWeight.Medium)
+                                Text(
+                                    text = "Desative para impedir novos logins sem excluir o usuario.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Switch(
+                                checked = form.isActive,
+                                onCheckedChange = { form = form.copy(isActive = it) },
                             )
                         }
-                        Switch(
-                            checked = form.isActive,
-                            onCheckedChange = { form = form.copy(isActive = it) },
-                        )
                     }
                 }
                 submitError?.takeIf { it.isNotBlank() }?.let { message ->
@@ -359,25 +507,28 @@ private fun UserEditorDialog(
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = !isSubmitting && validationError == null,
-                onClick = { onSubmit(form) },
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    text = if (isSubmitting) "Salvando..." else "Salvar",
-                    maxLines = 1,
-                    softWrap = false,
-                )
+                OutlinedButton(
+                    onClick = onDismiss,
+                    enabled = !isSubmitting,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Cancelar")
+                }
+                Button(
+                    enabled = !isSubmitting && validationError == null,
+                    onClick = { onSubmit(form) },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(if (isSubmitting) "Salvando..." else "Salvar")
+                }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !isSubmitting) {
-                Text("Cancelar")
-            }
-        },
-    )
+        }
+    }
 }
 
 private data class UserFormState(
@@ -539,6 +690,3 @@ private fun normalizeLemmitEditableInput(rawValue: String): String {
 private fun formatLemmitEditableValue(value: Double): String {
     return String.format(Locale.US, "%.2f", value).replace('.', ',')
 }
-
-
-

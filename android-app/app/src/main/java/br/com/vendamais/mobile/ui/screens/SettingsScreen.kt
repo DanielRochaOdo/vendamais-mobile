@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
@@ -12,6 +13,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -56,7 +58,7 @@ fun SettingsScreen(state: AppUiState, viewModel: AppViewModel) {
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        item { ScreenHeading(title = "Configuracoes", subtitle = "Gerencie as regras e tabelas do cadastro") }
+        item { ScreenHeading(title = "Configuracoes", subtitle = "Regras operacionais, tabelas do ERP e diagnostico do sistema.") }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -95,8 +97,25 @@ fun SettingsScreen(state: AppUiState, viewModel: AppViewModel) {
 
 @Composable
 private fun SectionButton(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    if (selected) Button(onClick = onClick, modifier = modifier) { Text(label) }
-    else TextButton(onClick = onClick, modifier = modifier) { Text(label) }
+    Surface(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+            else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
+        ),
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 11.dp),
+            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+        )
+    }
 }
 
 @Composable
@@ -107,7 +126,7 @@ private fun PlanosEditor(state: AppUiState, viewModel: AppViewModel, canModify: 
     WebCard {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Planos", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            if (canModify) Button(onClick = { creating = true }) { Text("Adicionar Plano") }
+            if (canModify) Button(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) { Text("Adicionar plano") }
             state.planosMap.forEach { item ->
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
@@ -157,7 +176,7 @@ private fun ParentescosEditor(state: AppUiState, viewModel: AppViewModel, canMod
     val scope = rememberCoroutineScope(); var editing by remember { mutableStateOf<ParentescoMap?>(null) }; var creating by remember { mutableStateOf(false) }
     WebCard { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Parentesco", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        if (canModify) Button(onClick = { creating = true }) { Text("Adicionar Parentesco") }
+        if (canModify) Button(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) { Text("Adicionar parentesco") }
         state.parentescosMap.forEach { item -> Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) { Text("${item.parentescoId} - ${item.label}"); Text(if (item.ativo) "Ativo" else "Inativo", style = MaterialTheme.typography.bodySmall) }
             if (canModify) TextButton(onClick = { editing = item }) { Text("Editar") }
@@ -187,7 +206,7 @@ private fun StatusEditor(state: AppUiState, viewModel: AppViewModel) {
     val scope = rememberCoroutineScope(); var editing by remember { mutableStateOf<StatusAdesao?>(null) }; var creating by remember { mutableStateOf(false) }
     WebCard { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Status de Adesoes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Button(onClick = { creating = true }) { Text("Adicionar Status") }
+        Button(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) { Text("Adicionar status") }
         state.statusAdesoes.forEach { status -> Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) { Text(status.nome, color = settingsParseColor(status.cor)); Text("${status.cor} | ordem ${status.ordem}", style = MaterialTheme.typography.bodySmall) }
             TextButton(onClick = { editing = status }) { Text("Editar") }
@@ -221,6 +240,7 @@ private fun ApiLogsEditor(state: AppUiState, viewModel: AppViewModel) {
     LaunchedEffect(filter, start, end, page) { load() }
     WebCard { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Logs de API", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text("Investigue chamadas, latencia e erros sem sair do aplicativo.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         SettingsChoiceField("Status", filter, listOf("all" to "Todos", "success" to "Sucesso", "error" to "Erros"), onSelected = { filter = it; page = 1 })
         OutlinedTextField(start, { start = it; page = 1 }, label = { Text("Data Inicio (YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(end, { end = it; page = 1 }, label = { Text("Data Fim (YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth())

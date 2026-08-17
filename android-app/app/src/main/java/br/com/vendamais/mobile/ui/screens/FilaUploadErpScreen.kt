@@ -2,33 +2,51 @@ package br.com.vendamais.mobile.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
 import br.com.vendamais.mobile.ui.components.ScreenHeading
 import br.com.vendamais.mobile.ui.components.WebCard
+import br.com.vendamais.mobile.ui.theme.Amber100
+import br.com.vendamais.mobile.ui.theme.Amber500
+import br.com.vendamais.mobile.ui.theme.Blue100
+import br.com.vendamais.mobile.ui.theme.Blue500
+import br.com.vendamais.mobile.ui.theme.Emerald
+import br.com.vendamais.mobile.ui.theme.EmeraldSoft
+import br.com.vendamais.mobile.ui.theme.Red100
+import br.com.vendamais.mobile.ui.theme.Red500
+import br.com.vendamais.mobile.ui.theme.Slate100
+import br.com.vendamais.mobile.ui.theme.Slate500
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun FilaUploadErpScreen(
@@ -55,6 +73,9 @@ fun FilaUploadErpScreen(
     val totalPages = ((filteredItems.size + itemsPerPage - 1) / itemsPerPage).coerceAtLeast(1)
     if (currentPage > totalPages) currentPage = totalPages
     val pagedItems = filteredItems.drop((currentPage - 1) * itemsPerPage).take(itemsPerPage)
+    val pendingCount = state.uploadQueue.count { it.status in setOf("queued", "retry_wait") }
+    val processingCount = state.uploadQueue.count { it.status == "processing" }
+    val failedCount = state.uploadQueue.count { it.status == "failed" }
 
     LazyColumn(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
@@ -62,32 +83,65 @@ fun FilaUploadErpScreen(
     ) {
         item {
             ScreenHeading(
-                title = "Fila Upload ERP",
-                subtitle = "Monitoramento do fallback de upload (direto -> fila -> reprocesso).",
+                title = "Fila ERP",
+                subtitle = "Acompanhe documentos aguardando sincronizacao e resolva falhas sem perder o cadastro.",
             )
         }
 
         item {
-            WebCard {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SelectionField(
-                            label = "Filtro de status",
-                            value = selectedFilter,
-                            options = listOf(
-                                "todos" to "todos",
-                                "queued" to "queued",
-                                "processing" to "processing",
-                                "retry_wait" to "retry_wait",
-                                "success" to "success",
-                                "failed" to "failed",
-                            ),
-                            onSelected = { selectedFilter = it; currentPage = 1 },
-                        )
-                    }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                QueueMetric(
+                    label = "Aguardando",
+                    value = pendingCount,
+                    container = Amber100,
+                    content = Amber500,
+                    modifier = Modifier.weight(1f),
+                )
+                QueueMetric(
+                    label = "Processando",
+                    value = processingCount,
+                    container = Blue100,
+                    content = Blue500,
+                    modifier = Modifier.weight(1f),
+                )
+                QueueMetric(
+                    label = "Falhas",
+                    value = failedCount,
+                    container = Red100,
+                    content = Red500,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
+        item {
+            WebCard(title = "Operacao da fila") {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SelectionField(
+                        label = "Status",
+                        value = queueStatusLabel(selectedFilter),
+                        options = listOf(
+                            "todos" to "Todos",
+                            "queued" to "Aguardando",
+                            "processing" to "Processando",
+                            "retry_wait" to "Aguardando nova tentativa",
+                            "success" to "Concluidos",
+                            "failed" to "Falhas",
+                        ),
+                        onSelected = {
+                            selectedFilter = it
+                            currentPage = 1
+                        },
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(
                             onClick = { viewModel.loadUploadQueue() },
                             enabled = !state.adminFeatureLoading,
                             modifier = Modifier.weight(1f),
@@ -99,98 +153,310 @@ fun FilaUploadErpScreen(
                             enabled = !state.adminFeatureLoading,
                             modifier = Modifier.weight(1f),
                         ) {
-                            Text("Processar fila")
+                            Text("Processar agora")
                         }
                     }
-                    Button(
+                    TextButton(
                         onClick = { viewModel.resetStuckQueue() },
                         enabled = !state.adminFeatureLoading,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.align(Alignment.End),
                     ) {
-                        Text("Resetar travados")
+                        Text("Liberar itens travados")
                     }
-                }
-            }
-        }
 
-        item {
-            WebCard {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Resumo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text("Itens carregados: ${state.uploadQueue.size}")
-                    state.uploadQueueOperation?.message?.let { Text("Ultima operacao: $it") }
-                    state.resetQueueResult?.let { Text("Ultimo reset: ${it.resetCount} item(ns)") }
+                    state.uploadQueueOperation?.message?.takeIf { it.isNotBlank() }?.let { message ->
+                        OperationalNotice(message = message, isError = false)
+                    }
+                    state.resetQueueResult?.let { result ->
+                        OperationalNotice(
+                            message = "${result.resetCount} item(ns) liberado(s) no ultimo reset.",
+                            isError = false,
+                        )
+                    }
                 }
             }
         }
 
         fileError?.let { message ->
-            item {
-                WebCard { Text(message, color = MaterialTheme.colorScheme.error) }
+            item { OperationalNotice(message = message, isError = true) }
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Documentos",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "${filteredItems.size} item(ns)",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 
         if (filteredItems.isEmpty()) {
             item {
                 WebCard {
-                    Text("Nenhum item encontrado.")
+                    Text(
+                        text = "Nenhum documento encontrado para este filtro.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         } else {
             items(pagedItems) { item ->
                 WebCard {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("Arquivo: ${item.arquivoNome}", fontWeight = FontWeight.Medium)
-                        Text("Status: ${item.status}  Tentativas: ${item.attempts}")
-                        Text("Cadastro: ${item.cadastroId ?: "-"}  Tipo: ${item.tipo}")
-                        Text("Proxima tentativa: ${item.nextAttemptAt?.let(::formatDateTime) ?: "-"}")
-                        if (!item.lastError.isNullOrBlank()) {
-                            Text("Erro: ${item.lastError}", color = MaterialTheme.colorScheme.error)
-                        }
-                        Button(
-                            onClick = {
-                                fileError = null
-                                scope.launch {
-                                    runCatching { viewModel.createQueueFileSignedUrl(item) }
-                                        .onSuccess { signedUrl ->
-                                            runCatching {
-                                                context.startActivity(
-                                                    Intent(Intent.ACTION_VIEW, Uri.parse(signedUrl)).apply {
-                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                    },
-                                                )
-                                            }.onFailure { fileError = "Nao foi possivel abrir o arquivo neste dispositivo." }
-                                        }
-                                        .onFailure { throwable ->
-                                            fileError = throwable.message ?: "Falha ao gerar link do arquivo."
-                                        }
-                                }
-                            },
-                            enabled = !state.adminFeatureLoading && item.arquivoPath.isNotBlank(),
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.Top,
                         ) {
-                            Text("Abrir arquivo")
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Text(
+                                    text = item.arquivoNome.ifBlank { "Documento sem nome" },
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = item.tipo.ifBlank { "Documento ERP" },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            QueueStatusPill(item.status)
                         }
-                        if (item.status == "failed" || item.status == "retry_wait") {
-                            Button(onClick = { viewModel.reprocessUploadQueueItem(item.id) }, enabled = !state.adminFeatureLoading) {
-                                Text("Reprocessar item")
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            QueueDetail(
+                                label = "Tentativas",
+                                value = item.attempts.toString(),
+                                modifier = Modifier.weight(1f),
+                            )
+                            QueueDetail(
+                                label = "Proxima tentativa",
+                                value = item.nextAttemptAt?.let(::formatQueueDateTime) ?: "-",
+                                modifier = Modifier.weight(2f),
+                            )
+                        }
+
+                        item.cadastroId?.takeIf { it.isNotBlank() }?.let { cadastroId ->
+                            Text(
+                                text = "Cadastro ${cadastroId.take(8)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+
+                        item.lastError?.takeIf { it.isNotBlank() }?.let { error ->
+                            OperationalNotice(message = error, isError = true)
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    fileError = null
+                                    scope.launch {
+                                        runCatching { viewModel.createQueueFileSignedUrl(item) }
+                                            .onSuccess { signedUrl ->
+                                                runCatching {
+                                                    context.startActivity(
+                                                        Intent(Intent.ACTION_VIEW, Uri.parse(signedUrl)).apply {
+                                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                        },
+                                                    )
+                                                }.onFailure {
+                                                    fileError = "Nao foi possivel abrir o arquivo neste dispositivo."
+                                                }
+                                            }
+                                            .onFailure { throwable ->
+                                                fileError = throwable.message ?: "Falha ao gerar link do arquivo."
+                                            }
+                                    }
+                                },
+                                enabled = !state.adminFeatureLoading && item.arquivoPath.isNotBlank(),
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text("Abrir arquivo")
+                            }
+                            if (item.status == "failed" || item.status == "retry_wait") {
+                                Button(
+                                    onClick = { viewModel.reprocessUploadQueueItem(item.id) },
+                                    enabled = !state.adminFeatureLoading,
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Text("Tentar novamente")
+                                }
                             }
                         }
                     }
                 }
             }
+
             item {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Button(onClick = { if (currentPage > 1) currentPage-- }, enabled = currentPage > 1) { Text("Anterior") }
-                    Text("Pagina $currentPage de $totalPages")
-                    Button(onClick = { if (currentPage < totalPages) currentPage++ }, enabled = currentPage < totalPages) { Text("Proxima") }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(
+                        onClick = { if (currentPage > 1) currentPage-- },
+                        enabled = currentPage > 1,
+                    ) {
+                        Text("Anterior")
+                    }
+                    Text(
+                        text = "$currentPage / $totalPages",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(
+                        onClick = { if (currentPage < totalPages) currentPage++ },
+                        enabled = currentPage < totalPages,
+                    ) {
+                        Text("Proxima")
+                    }
                 }
             }
         }
     }
 }
 
-private fun formatDateTime(value: String): String {
+@Composable
+private fun QueueMetric(
+    label: String,
+    value: Int,
+    container: androidx.compose.ui.graphics.Color,
+    content: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = container,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = value.toString(),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = content,
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = content,
+                maxLines = 2,
+            )
+        }
+    }
+}
+
+@Composable
+private fun QueueStatusPill(status: String) {
+    val (container, content) = when (status) {
+        "success" -> EmeraldSoft to Emerald
+        "failed" -> Red100 to Red500
+        "processing" -> Blue100 to Blue500
+        "queued", "retry_wait" -> Amber100 to Amber500
+        else -> Slate100 to Slate500
+    }
+    Text(
+        text = queueStatusLabel(status),
+        modifier = Modifier
+            .widthIn(max = 124.dp)
+            .background(container, RoundedCornerShape(999.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        color = content,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 2,
+    )
+}
+
+@Composable
+private fun QueueDetail(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun OperationalNotice(message: String, isError: Boolean) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = if (isError) Red100 else EmeraldSoft,
+    ) {
+        Text(
+            text = message,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            color = if (isError) Red500 else Emerald,
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+}
+
+private fun queueStatusLabel(status: String): String {
+    return when (status) {
+        "todos" -> "Todos"
+        "queued" -> "Aguardando"
+        "processing" -> "Processando"
+        "retry_wait" -> "Nova tentativa"
+        "success" -> "Concluido"
+        "failed" -> "Falhou"
+        else -> status
+    }
+}
+
+private fun formatQueueDateTime(value: String): String {
     return runCatching {
-        java.time.OffsetDateTime.parse(value).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+        java.time.OffsetDateTime.parse(value)
+            .format(java.time.format.DateTimeFormatter.ofPattern("dd/MM HH:mm"))
     }.getOrDefault(value)
 }
