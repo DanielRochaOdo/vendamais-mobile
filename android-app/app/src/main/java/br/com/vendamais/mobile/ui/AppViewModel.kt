@@ -1645,7 +1645,12 @@ class AppViewModel(
                 if (!arquivoPathForSend.isNullOrBlank() && File(arquivoPathForSend).exists()) {
                     DraftAttachmentStorage.deleteDraftDirAfterSuccess(File(arquivoPathForSend).parentFile?.parentFile)
                 }
-                detalheAtualizado to "Cadastro enviado com sucesso ao ERP."
+                val successMessage = if (!arquivoPathFinalForSend.isNullOrBlank() || !arquivoPathForSend.isNullOrBlank()) {
+                    "Cadastro enviado com sucesso ao ERP. O documento sera sincronizado automaticamente."
+                } else {
+                    "Cadastro enviado com sucesso ao ERP."
+                }
+                detalheAtualizado to successMessage
             }.onSuccess { (_, noticeMessage) ->
                 Log.i(logTag, "[$sendTraceId] flowSuccess")
                 draftUxStateCache.clear(originalCadastroId)

@@ -21,9 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -37,10 +35,15 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.ui.AppUiState
-import br.com.vendamais.mobile.ui.components.OdontoartBadge
 import br.com.vendamais.mobile.ui.components.VendaBrandWordmark
+import br.com.vendamais.mobile.ui.components.VendaButton
+import br.com.vendamais.mobile.ui.components.VendaButtonSize
+import br.com.vendamais.mobile.ui.components.VendaFeedbackTone
+import br.com.vendamais.mobile.ui.components.VendaInlineFeedback
 import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 import br.com.vendamais.mobile.ui.theme.Emerald
+import br.com.vendamais.mobile.ui.theme.VendaRadius
+import br.com.vendamais.mobile.ui.theme.VendaSpacing
 import br.com.vendamais.mobile.ui.theme.White
 
 @Composable
@@ -64,26 +67,28 @@ fun LoginScreen(
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
                 .verticalScroll(rememberScrollState())
                 .imePadding()
-                .padding(horizontal = 20.dp, vertical = 24.dp),
+                .padding(horizontal = VendaSpacing.x5, vertical = VendaSpacing.x6),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            VendaBrandWordmark(subtitle = "Operacao comercial e adesoes")
+            // O prototipo usa ODONTOART como texto. Aqui a marca oficial versionada
+            // no Android substitui esse tratamento, sem distorcer a identidade.
+            VendaBrandWordmark()
 
-            Spacer(modifier = Modifier.height(22.dp))
+            Spacer(modifier = Modifier.height(VendaSpacing.x5))
 
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.large,
                 color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 0.dp,
-                border = BorderStroke(1.dp, White.copy(alpha = 0.18f)),
+                border = BorderStroke(1.dp, White.copy(alpha = 0.20f)),
             ) {
                 Column(
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 22.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.padding(horizontal = VendaSpacing.x5, vertical = VendaSpacing.x6),
+                    verticalArrangement = Arrangement.spacedBy(VendaSpacing.x4),
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(VendaSpacing.x1)) {
                         Text(
                             text = "Acesse sua conta",
                             style = MaterialTheme.typography.headlineSmall,
@@ -91,7 +96,7 @@ fun LoginScreen(
                             fontWeight = FontWeight.Bold,
                         )
                         Text(
-                            text = "Use suas credenciais do Venda+ para continuar.",
+                            text = "Use suas credenciais do Venda+ para continuar",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -101,14 +106,14 @@ fun LoginScreen(
                         value = state.email,
                         onValueChange = onEmailChange,
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                        label = { Text("Email") },
-                        placeholder = { Text("seu@email.com") },
+                        label = { Text("E-mail") },
+                        placeholder = { Text("seu.usuario@odontoart.com.br") },
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Email,
                             imeAction = ImeAction.Next,
                         ),
                         singleLine = true,
-                        shape = MaterialTheme.shapes.small,
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(VendaRadius.md),
                     )
 
                     OutlinedTextField(
@@ -116,22 +121,23 @@ fun LoginScreen(
                         onValueChange = onPasswordChange,
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Senha") },
-                        placeholder = { Text("Sua senha") },
+                        placeholder = { Text("Sua senha secreta") },
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Password,
                             imeAction = ImeAction.Done,
                         ),
                         keyboardActions = KeyboardActions(
-                            onDone = {
-                                if (!state.loading) onLogin()
-                            },
+                            onDone = { if (!state.loading) onLogin() },
                         ),
                         singleLine = true,
-                        shape = MaterialTheme.shapes.small,
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(VendaRadius.md),
                     )
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Checkbox(
                             checked = rememberConnected,
                             onCheckedChange = if (state.loading) null else onRememberConnectedChange,
@@ -144,59 +150,36 @@ fun LoginScreen(
                     }
 
                     state.errorMessage?.let { message ->
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = MaterialTheme.shapes.small,
-                            color = MaterialTheme.colorScheme.errorContainer,
-                        ) {
-                            Text(
-                                text = message,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                    }
-
-                    Button(
-                        onClick = onLogin,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        enabled = !state.loading,
-                        shape = MaterialTheme.shapes.small,
-                    ) {
-                        if (state.loading) {
-                            CircularProgressIndicator(
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.height(22.dp),
-                            )
-                        } else {
-                            Text(
-                                text = "Entrar",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                            )
-                        }
+                        VendaInlineFeedback(
+                            title = "Nao foi possivel entrar",
+                            message = message,
+                            tone = VendaFeedbackTone.ERROR,
+                        )
                     }
 
                     if (state.configurationMissing) {
-                        Text(
-                            text = "Configure supabaseUrl e supabaseAnonKey em android-app/local.properties antes de autenticar.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        VendaInlineFeedback(
+                            title = "Configuracao do aplicativo incompleta",
+                            message = "Contate o suporte responsavel pelo Venda+ para liberar o acesso.",
+                            tone = VendaFeedbackTone.WARNING,
                         )
                     }
+
+                    VendaButton(
+                        label = "Entrar",
+                        onClick = onLogin,
+                        modifier = Modifier.fillMaxWidth(),
+                        size = VendaButtonSize.LARGE,
+                        enabled = !state.loading,
+                        loading = state.loading,
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(22.dp))
-            OdontoartBadge(modifier = Modifier.fillMaxWidth())
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(VendaSpacing.x5))
             Text(
                 text = "Acesso restrito a usuarios autorizados",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.labelSmall,
                 color = White.copy(alpha = 0.82f),
             )
         }

@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -35,6 +34,9 @@ import br.com.vendamais.mobile.data.models.CadastroExcluidoItem
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
 import br.com.vendamais.mobile.ui.components.ScreenHeading
+import br.com.vendamais.mobile.ui.components.VendaButton
+import br.com.vendamais.mobile.ui.components.VendaEmptyState
+import br.com.vendamais.mobile.ui.components.VendaMetricCard
 import br.com.vendamais.mobile.ui.components.WebCard
 import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 import br.com.vendamais.mobile.ui.theme.Red100
@@ -408,12 +410,11 @@ fun AdesoesExcluidasScreen(
                     }
                 }
 
-                Button(
+                VendaButton(
+                    label = "Fechar",
                     onClick = { selected = null },
                     modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Fechar")
-                }
+                )
             }
         }
     }
@@ -425,28 +426,13 @@ private fun DeletedMetric(
     label: String,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    VendaMetricCard(
+        label = label,
+        value = value,
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        color = Slate100,
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = Slate500,
-            )
-        }
-    }
+        containerColor = Slate100,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+    )
 }
 
 @Composable

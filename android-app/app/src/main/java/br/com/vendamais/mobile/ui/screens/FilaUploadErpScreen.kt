@@ -2,19 +2,15 @@ package br.com.vendamais.mobile.ui.screens
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -34,6 +30,14 @@ import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
 import br.com.vendamais.mobile.ui.components.ScreenHeading
+import br.com.vendamais.mobile.ui.components.VendaButton
+import br.com.vendamais.mobile.ui.components.VendaButtonStyle
+import br.com.vendamais.mobile.ui.components.VendaEmptyState
+import br.com.vendamais.mobile.ui.components.VendaFeedbackTone
+import br.com.vendamais.mobile.ui.components.VendaInlineFeedback
+import br.com.vendamais.mobile.ui.components.VendaMetricCard
+import br.com.vendamais.mobile.ui.components.VendaStatusChip
+import br.com.vendamais.mobile.ui.components.VendaStatusTone
 import br.com.vendamais.mobile.ui.components.WebCard
 import br.com.vendamais.mobile.ui.theme.Amber100
 import br.com.vendamais.mobile.ui.theme.Amber500
@@ -141,20 +145,19 @@ fun FilaUploadErpScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        OutlinedButton(
+                        VendaButton(
+                            label = "Atualizar",
                             onClick = { viewModel.loadUploadQueue() },
                             enabled = !state.adminFeatureLoading,
+                            style = VendaButtonStyle.SECONDARY,
                             modifier = Modifier.weight(1f),
-                        ) {
-                            Text("Atualizar")
-                        }
-                        Button(
+                        )
+                        VendaButton(
+                            label = "Processar agora",
                             onClick = { viewModel.processUploadQueue() },
                             enabled = !state.adminFeatureLoading,
                             modifier = Modifier.weight(1f),
-                        ) {
-                            Text("Processar agora")
-                        }
+                        )
                     }
                     TextButton(
                         onClick = { viewModel.resetStuckQueue() },
@@ -202,12 +205,10 @@ fun FilaUploadErpScreen(
 
         if (filteredItems.isEmpty()) {
             item {
-                WebCard {
-                    Text(
-                        text = "Nenhum documento encontrado para este filtro.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                VendaEmptyState(
+                    title = "Nenhum documento na fila",
+                    message = "Nao ha itens correspondentes ao status selecionado.",
+                )
             }
         } else {
             items(pagedItems) { item ->
@@ -263,14 +264,16 @@ fun FilaUploadErpScreen(
                         }
 
                         item.lastError?.takeIf { it.isNotBlank() }?.let { error ->
-                            OperationalNotice(message = error, isError = true)
+                            OperationalNotice(message = "Nao foi possivel sincronizar o documento. Detalhes tecnicos: $error", isError = true)
                         }
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            OutlinedButton(
+                            VendaButton(
+                                label = "Abrir arquivo",
+                                style = VendaButtonStyle.SECONDARY,
                                 onClick = {
                                     fileError = null
                                     scope.launch {
@@ -287,23 +290,20 @@ fun FilaUploadErpScreen(
                                                 }
                                             }
                                             .onFailure { throwable ->
-                                                fileError = throwable.message ?: "Falha ao gerar link do arquivo."
+                                                fileError = "Nao foi possivel preparar o arquivo para abertura."
                                             }
                                     }
                                 },
                                 enabled = !state.adminFeatureLoading && item.arquivoPath.isNotBlank(),
                                 modifier = Modifier.weight(1f),
-                            ) {
-                                Text("Abrir arquivo")
-                            }
+                            )
                             if (item.status == "failed" || item.status == "retry_wait") {
-                                Button(
+                                VendaButton(
+                                    label = "Tentar novamente",
                                     onClick = { viewModel.reprocessUploadQueueItem(item.id) },
                                     enabled = !state.adminFeatureLoading,
                                     modifier = Modifier.weight(1f),
-                                ) {
-                                    Text("Tentar novamente")
-                                }
+                                )
                             }
                         }
                     }
@@ -347,51 +347,25 @@ private fun QueueMetric(
     content: androidx.compose.ui.graphics.Color,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    VendaMetricCard(
+        label = label,
+        value = value.toString(),
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        color = container,
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                text = value.toString(),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = content,
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = content,
-                maxLines = 2,
-            )
-        }
-    }
+        containerColor = container,
+        contentColor = content,
+    )
 }
 
 @Composable
 private fun QueueStatusPill(status: String) {
-    val (container, content) = when (status) {
-        "success" -> EmeraldSoft to Emerald
-        "failed" -> Red100 to Red500
-        "processing" -> Blue100 to Blue500
-        "queued", "retry_wait" -> Amber100 to Amber500
-        else -> Slate100 to Slate500
+    val tone = when (status) {
+        "success" -> VendaStatusTone.SUCCESS
+        "failed" -> VendaStatusTone.ERROR
+        "processing" -> VendaStatusTone.PROCESSING
+        "queued", "retry_wait" -> VendaStatusTone.PENDING
+        else -> VendaStatusTone.NEUTRAL
     }
-    Text(
-        text = queueStatusLabel(status),
-        modifier = Modifier
-            .widthIn(max = 124.dp)
-            .background(container, RoundedCornerShape(999.dp))
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-        color = content,
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.SemiBold,
-        maxLines = 2,
-    )
+    VendaStatusChip(label = queueStatusLabel(status), tone = tone)
 }
 
 @Composable
@@ -428,18 +402,11 @@ private fun QueueDetail(
 
 @Composable
 private fun OperationalNotice(message: String, isError: Boolean) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = if (isError) Red100 else EmeraldSoft,
-    ) {
-        Text(
-            text = message,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            color = if (isError) Red500 else Emerald,
-            style = MaterialTheme.typography.bodySmall,
-        )
-    }
+    VendaInlineFeedback(
+        title = if (isError) "Atencao na sincronizacao" else "Operacao concluida",
+        message = message,
+        tone = if (isError) VendaFeedbackTone.ERROR else VendaFeedbackTone.SUCCESS,
+    )
 }
 
 private fun queueStatusLabel(status: String): String {

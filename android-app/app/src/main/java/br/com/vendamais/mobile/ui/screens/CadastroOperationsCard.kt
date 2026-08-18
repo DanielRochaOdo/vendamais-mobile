@@ -17,8 +17,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -50,10 +48,14 @@ import br.com.vendamais.mobile.data.models.MobileProfile
 import br.com.vendamais.mobile.data.models.TeamMemberOption
 import br.com.vendamais.mobile.ui.CadastroWorkspaceState
 import br.com.vendamais.mobile.ui.components.WebCard
+import br.com.vendamais.mobile.ui.components.VendaButton
+import br.com.vendamais.mobile.ui.components.VendaButtonSize
+import br.com.vendamais.mobile.ui.components.VendaLoadingState
 import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 import br.com.vendamais.mobile.ui.theme.Emerald
 import br.com.vendamais.mobile.ui.theme.EmeraldDark
 import br.com.vendamais.mobile.ui.theme.EmeraldSoft
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -92,6 +94,7 @@ fun CadastroOperationsCard(
     )
 
     var cpfFieldValue by remember { mutableStateOf(TextFieldValue("")) }
+    var showSlowCpfLookup by remember { mutableStateOf(false) }
     val firstSearchResultBringIntoViewRequester = remember(workspace.empresaSearchResults) {
         BringIntoViewRequester()
     }
@@ -106,16 +109,24 @@ fun CadastroOperationsCard(
         }
     }
 
+    LaunchedEffect(workspace.operationLoading, workspace.selectedEmpresa?.id) {
+        showSlowCpfLookup = false
+        if (workspace.operationLoading && workspace.selectedEmpresa != null) {
+            delay(3500)
+            if (workspace.operationLoading) showSlowCpfLookup = true
+        }
+    }
+
     WebCard {
         Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = "Iniciar nova adesao",
+                    text = "Nova adesao",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = "Localize a empresa e confirme os responsaveis antes de consultar o CPF.",
+                    text = "Selecione a empresa e consulte o CPF para iniciar.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -172,31 +183,15 @@ fun CadastroOperationsCard(
                         shape = MaterialTheme.shapes.small,
                     )
 
-                    Button(
+                    VendaButton(
+                        label = "Buscar empresa",
                         onClick = onSearchEmpresa,
                         modifier = Modifier.fillMaxWidth(),
+                        size = VendaButtonSize.MEDIUM,
                         enabled = !workspace.operationLoading && workspace.empresaSearchValue.isNotBlank(),
-                        shape = MaterialTheme.shapes.small,
-                    ) {
-                        if (workspace.operationLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Rounded.Search,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Text(
-                                text = "Buscar empresa",
-                                modifier = Modifier.padding(start = 8.dp),
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        }
-                    }
+                        loading = workspace.operationLoading,
+                        leadingIcon = Icons.Rounded.Search,
+                    )
 
                     if (workspace.empresaSearchResults.isNotEmpty()) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -339,30 +334,26 @@ fun CadastroOperationsCard(
                     shape = MaterialTheme.shapes.small,
                 )
 
-                Button(
+                VendaButton(
+                    label = "Consultar CPF",
                     onClick = onConsultarCpf,
                     modifier = Modifier.fillMaxWidth(),
+                    size = VendaButtonSize.LARGE,
                     enabled = !workspace.operationLoading && workspace.cpfValue.isNotBlank(),
-                    shape = MaterialTheme.shapes.small,
-                ) {
-                    if (workspace.operationLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Rounded.Search,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Text(
-                            text = "Consultar CPF e iniciar",
-                            modifier = Modifier.padding(start = 8.dp),
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
+                    loading = workspace.operationLoading,
+                    leadingIcon = Icons.Rounded.Search,
+                )
+
+                if (workspace.operationLoading) {
+                    VendaLoadingState(
+                        title = "Buscando dados da pessoa",
+                        message = "Estamos verificando as informacoes para adiantar seu cadastro.",
+                        slowMessage = if (showSlowCpfLookup) {
+                            "Esta demorando um pouco mais que o normal. Voce pode aguardar sem repetir a consulta."
+                        } else {
+                            null
+                        },
+                    )
                 }
             }
         }

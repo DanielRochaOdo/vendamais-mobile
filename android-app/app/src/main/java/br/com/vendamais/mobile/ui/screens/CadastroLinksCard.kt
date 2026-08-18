@@ -38,12 +38,9 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -68,6 +65,9 @@ import br.com.vendamais.mobile.data.models.CadastroLinkItem
 import br.com.vendamais.mobile.data.models.EmpresaResumo
 import br.com.vendamais.mobile.data.models.EmpresaSearchType
 import br.com.vendamais.mobile.ui.LinkWorkspaceState
+import br.com.vendamais.mobile.ui.components.VendaButton
+import br.com.vendamais.mobile.ui.components.VendaButtonStyle
+import br.com.vendamais.mobile.ui.components.VendaEmptyState
 import br.com.vendamais.mobile.ui.components.WebCard
 import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 import br.com.vendamais.mobile.ui.theme.Emerald
@@ -161,23 +161,14 @@ fun CadastroLinksCard(
                     shape = MaterialTheme.shapes.small,
                 )
 
-                Button(
+                VendaButton(
+                    label = "Buscar empresa",
                     onClick = onSearchEmpresa,
-                    enabled = !workspace.operationLoading && workspace.empresaSearchValue.isNotBlank(),
+                    enabled = workspace.empresaSearchValue.isNotBlank(),
+                    loading = workspace.operationLoading,
+                    leadingIcon = Icons.Rounded.Search,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.small,
-                ) {
-                    if (workspace.operationLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                    } else {
-                        Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Text("Buscar empresa", modifier = Modifier.padding(start = 8.dp), fontWeight = FontWeight.SemiBold)
-                    }
-                }
+                )
 
                 if (workspace.empresaSearchResults.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -228,32 +219,21 @@ fun CadastroLinksCard(
                             )
                         }
 
-                        Button(
+                        VendaButton(
+                            label = "Gerar link publico",
                             onClick = onGenerateLink,
-                            enabled = !workspace.operationLoading,
+                            loading = workspace.operationLoading,
+                            leadingIcon = Icons.Rounded.Share,
                             modifier = Modifier.fillMaxWidth(),
-                            shape = MaterialTheme.shapes.small,
-                        ) {
-                            if (workspace.operationLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                )
-                            } else {
-                                Icon(Icons.Rounded.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Text("Gerar link publico", modifier = Modifier.padding(start = 8.dp), fontWeight = FontWeight.SemiBold)
-                            }
-                        }
+                        )
 
-                        OutlinedButton(
+                        VendaButton(
+                            label = "Alterar empresa",
                             onClick = onClearEmpresa,
+                            leadingIcon = Icons.Rounded.Edit,
+                            style = VendaButtonStyle.SECONDARY,
                             modifier = Modifier.fillMaxWidth(),
-                            shape = MaterialTheme.shapes.small,
-                        ) {
-                            Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(17.dp))
-                            Text("Alterar empresa", modifier = Modifier.padding(start = 7.dp))
-                        }
+                        )
                     }
                 }
             }
@@ -282,18 +262,10 @@ fun CadastroLinksCard(
             }
 
             if (workspace.links.isEmpty()) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                ) {
-                    Text(
-                        text = "Nenhum link ativo encontrado.",
-                        modifier = Modifier.padding(14.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
+                VendaEmptyState(
+                    title = "Nenhum link criado",
+                    message = "Selecione uma empresa e gere um link publico de adesao.",
+                )
             } else {
                 workspace.links.forEach { link ->
                     LinkListItem(

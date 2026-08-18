@@ -29,3 +29,42 @@ val Amber100 = Color(0xFFFEF3C7)
 val Red500 = Color(0xFFB42318)
 val Red100 = Color(0xFFFEE4E2)
 val White = Color(0xFFFFFFFF)
+
+// Semantic aliases mirrored from the final Figma collection. They keep UI code
+// expressive and make future token synchronization independent from primitives.
+val BackgroundDefault = Slate50
+val BackgroundSubtle = Slate100
+val BackgroundBrand = Emerald
+val BackgroundElevated = White
+val SurfaceDefault = White
+val SurfaceElevated = White
+val SurfaceBrandSubtle = EmeraldSoft
+
+val TextPrimary = Slate900
+val TextSecondary = Slate600
+val TextDisabled = Slate400
+val TextInverse = White
+val TextBrand = Emerald
+
+val ActionPrimary = Emerald
+val ActionPrimaryPressed = EmeraldDark
+val ActionPrimaryDisabled = Slate300
+val ActionSecondary = BrandGreen
+val ActionDanger = Red500
+val ActionDangerPressed = Color(0xFF8F1C13)
+
+val BorderDefault = Slate200
+val BorderStrong = Slate400
+val BorderBrand = Emerald
+val BorderError = Red500
+
+val StatusSuccess = BrandGreen
+val StatusSuccessSubtle = EmeraldSoft
+val StatusWarning = Amber500
+val StatusWarningSubtle = Amber100
+val StatusError = Red500
+val StatusErrorSubtle = Red100
+val StatusInfo = Blue500
+val StatusInfoSubtle = Blue100
+val StatusPending = Amber500
+val StatusPendingSubtle = Amber100

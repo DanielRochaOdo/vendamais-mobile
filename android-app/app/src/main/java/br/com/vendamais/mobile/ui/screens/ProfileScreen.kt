@@ -14,11 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.SystemUpdate
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -38,13 +34,15 @@ import br.com.vendamais.mobile.BuildConfig
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
 import br.com.vendamais.mobile.ui.components.InfoRow
+import br.com.vendamais.mobile.ui.components.VendaButton
+import br.com.vendamais.mobile.ui.components.VendaButtonStyle
+import br.com.vendamais.mobile.ui.components.VendaFeedbackTone
+import br.com.vendamais.mobile.ui.components.VendaInlineFeedback
 import br.com.vendamais.mobile.ui.components.ScreenHeading
 import br.com.vendamais.mobile.ui.components.WebCard
 import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 import br.com.vendamais.mobile.ui.theme.Emerald
 import br.com.vendamais.mobile.ui.theme.EmeraldSoft
-import br.com.vendamais.mobile.ui.theme.Red100
-import br.com.vendamais.mobile.ui.theme.Red500
 import kotlinx.coroutines.launch
 
 @Composable
@@ -137,25 +135,19 @@ fun ProfileScreen(
                     InfoRow("Membro desde", profile.createdAt?.let(::formatProfileDate) ?: "-")
 
                     error?.let { message ->
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            color = Red100,
-                        ) {
-                            Text(
-                                text = message,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                color = Red500,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
+                        VendaInlineFeedback(
+                            title = "Nao foi possivel salvar o perfil",
+                            message = message,
+                            tone = VendaFeedbackTone.ERROR,
+                        )
                     }
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        OutlinedButton(
+                        VendaButton(
+                            label = "Cancelar",
                             onClick = {
                                 editing = false
                                 error = null
@@ -164,11 +156,11 @@ fun ProfileScreen(
                                 externalId = profile.externalId.orEmpty()
                             },
                             enabled = !saving,
+                            style = VendaButtonStyle.SECONDARY,
                             modifier = Modifier.weight(1f),
-                        ) {
-                            Text("Cancelar")
-                        }
-                        Button(
+                        )
+                        VendaButton(
+                            label = "Salvar",
                             onClick = {
                                 val digits = telefone.filter(Char::isDigit)
                                 when {
@@ -189,7 +181,7 @@ fun ProfileScreen(
                                             }.onSuccess {
                                                 editing = false
                                             }.onFailure { throwable ->
-                                                error = throwable.message ?: "Erro ao atualizar perfil."
+                                                error = "Nao foi possivel atualizar o perfil agora. Tente novamente."
                                             }
                                             saving = false
                                         }
@@ -197,14 +189,9 @@ fun ProfileScreen(
                                 }
                             },
                             enabled = !saving,
+                            loading = saving,
                             modifier = Modifier.weight(1f),
-                        ) {
-                            if (saving) {
-                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                            } else {
-                                Text("Salvar")
-                            }
-                        }
+                        )
                     }
                 } else {
                     InfoRow("Nome", profile.name)
@@ -214,12 +201,11 @@ fun ProfileScreen(
                     InfoRow("Codigo do usuario (ID Externo)", profile.externalId ?: "-")
                     InfoRow("Equipe", state.team?.name ?: "-")
                     InfoRow("Membro desde", profile.createdAt?.let(::formatProfileDate) ?: "-")
-                    Button(
+                    VendaButton(
+                        label = "Editar perfil",
                         onClick = { editing = true },
                         modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("Editar perfil")
-                    }
+                    )
                 }
             }
         }
@@ -256,50 +242,30 @@ fun ProfileScreen(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 InfoRow("Versao instalada", BuildConfig.VERSION_NAME)
 
-                Button(
+                VendaButton(
+                    label = "Verificar atualizacao",
                     onClick = onCheckAndInstallUpdate,
+                    leadingIcon = Icons.Rounded.SystemUpdate,
                     modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.SystemUpdate,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Text(" Verificar atualizacao")
-                }
+                )
 
-                OutlinedButton(
+                VendaButton(
+                    label = "Atualizar dados",
                     onClick = onRefresh,
                     enabled = !state.loading,
+                    loading = state.loading,
+                    leadingIcon = Icons.Rounded.Refresh,
+                    style = VendaButtonStyle.SECONDARY,
                     modifier = Modifier.fillMaxWidth(),
-                ) {
-                    if (state.loading) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(
-                            imageVector = Icons.Rounded.Refresh,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                    Text(" Atualizar dados")
-                }
+                )
 
-                OutlinedButton(
+                VendaButton(
+                    label = "Sair da conta",
                     onClick = onLogout,
+                    leadingIcon = Icons.AutoMirrored.Rounded.Logout,
+                    style = VendaButtonStyle.DANGER,
                     modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.Logout,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Text(
-                        text = " Sair da conta",
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
+                )
             }
         }
     }

@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -28,6 +27,9 @@ import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
 import br.com.vendamais.mobile.ui.components.ScreenHeading
+import br.com.vendamais.mobile.ui.components.VendaButton
+import br.com.vendamais.mobile.ui.components.VendaEmptyState
+import br.com.vendamais.mobile.ui.components.VendaMetricCard
 import br.com.vendamais.mobile.ui.components.WebCard
 import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 import br.com.vendamais.mobile.ui.theme.Amber100
@@ -99,8 +101,8 @@ fun AuditoriaLemmitScreen(
                             singleLine = true,
                         )
                     }
-
-                    Button(
+                    VendaButton(
+                        label = "Atualizar periodo",
                         onClick = {
                             currentPage = 1
                             val startIso = "${startDate}T00:00:00Z"
@@ -114,9 +116,7 @@ fun AuditoriaLemmitScreen(
                         },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !state.adminFeatureLoading,
-                    ) {
-                        Text("Atualizar periodo")
-                    }
+                    )
                 }
             }
         }
@@ -239,12 +239,10 @@ fun AuditoriaLemmitScreen(
 
         if (audit.ultimasConsultas.isEmpty()) {
             item {
-                WebCard {
-                    Text(
-                        text = "Sem consultas registradas para este periodo.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                VendaEmptyState(
+                    title = "Nenhuma consulta no periodo",
+                    message = "Ajuste o intervalo de datas para consultar outros registros Lemmit.",
+                )
             }
         } else {
             items(audit.ultimasConsultas) { consulta ->
@@ -323,30 +321,13 @@ private fun AuditMetric(
     content: androidx.compose.ui.graphics.Color,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    VendaMetricCard(
+        label = label,
+        value = value,
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        color = container,
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = content,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = content,
-            )
-        }
-    }
+        containerColor = container,
+        contentColor = content,
+    )
 }
 
 @Composable
