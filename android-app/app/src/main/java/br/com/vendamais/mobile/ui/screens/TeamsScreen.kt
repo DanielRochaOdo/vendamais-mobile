@@ -39,6 +39,8 @@ import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
 import br.com.vendamais.mobile.ui.components.ScreenHeading
 import br.com.vendamais.mobile.ui.components.WebCard
+import br.com.vendamais.mobile.ui.components.VendaButton
+import br.com.vendamais.mobile.ui.components.VendaMetricCard
 import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 import br.com.vendamais.mobile.ui.theme.Emerald
 import br.com.vendamais.mobile.ui.theme.EmeraldSoft
@@ -102,12 +104,11 @@ fun TeamsScreen(
 
         if (state.profile?.role == "ADMINISTRADOR") {
             item {
-                Button(
+                VendaButton(
+                    label = "Criar nova equipe",
                     onClick = { creatingTeam = true },
                     modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Criar nova equipe")
-                }
+                )
             }
         }
 
@@ -253,32 +254,12 @@ private fun TeamMetric(
     label: String,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    VendaMetricCard(
+        value = value,
+        label = label,
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outline.copy(alpha = 0.65f),
-        ),
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
+        contentColor = MaterialTheme.colorScheme.primary,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

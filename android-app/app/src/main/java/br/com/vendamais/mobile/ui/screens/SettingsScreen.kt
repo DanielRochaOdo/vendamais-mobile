@@ -5,11 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -37,6 +36,14 @@ import br.com.vendamais.mobile.data.models.StatusAdesao
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
 import br.com.vendamais.mobile.ui.components.ScreenHeading
+import br.com.vendamais.mobile.ui.components.VendaButton
+import br.com.vendamais.mobile.ui.components.VendaButtonSize
+import br.com.vendamais.mobile.ui.components.VendaButtonStyle
+import br.com.vendamais.mobile.ui.components.VendaEmptyState
+import br.com.vendamais.mobile.ui.components.VendaLoadingState
+import br.com.vendamais.mobile.ui.components.VendaSectionTabs
+import br.com.vendamais.mobile.ui.components.VendaStatusChip
+import br.com.vendamais.mobile.ui.components.VendaStatusTone
 import br.com.vendamais.mobile.ui.components.WebCard
 import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 import kotlinx.coroutines.launch
@@ -60,17 +67,18 @@ fun SettingsScreen(state: AppUiState, viewModel: AppViewModel) {
     ) {
         item { ScreenHeading(title = "Configuracoes", subtitle = "Regras operacionais, tabelas do ERP e diagnostico do sistema.") }
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SectionButton("Geral", section == SettingsSection.GERAL, Modifier.weight(1f)) { section = SettingsSection.GERAL }
-                    SectionButton("Planos", section == SettingsSection.PLANOS, Modifier.weight(1f)) { section = SettingsSection.PLANOS }
-                    SectionButton("Parentesco", section == SettingsSection.PARENTESCO, Modifier.weight(1f)) { section = SettingsSection.PARENTESCO }
-                }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SectionButton("Status", section == SettingsSection.STATUS, Modifier.weight(1f)) { section = SettingsSection.STATUS }
-                    SectionButton("Logs API", section == SettingsSection.LOGS, Modifier.weight(1f)) { section = SettingsSection.LOGS }
-                }
-            }
+            val entries = listOf(
+                SettingsSection.GERAL to "Geral",
+                SettingsSection.PLANOS to "Planos",
+                SettingsSection.PARENTESCO to "Parentesco",
+                SettingsSection.STATUS to "Status",
+                SettingsSection.LOGS to "Logs API",
+            )
+            VendaSectionTabs(
+                items = entries.map { it.second },
+                selectedIndex = entries.indexOfFirst { it.first == section }.coerceAtLeast(0),
+                onSelected = { index -> section = entries[index].first },
+            )
         }
 
         when (section) {
@@ -96,29 +104,6 @@ fun SettingsScreen(state: AppUiState, viewModel: AppViewModel) {
 }
 
 @Composable
-private fun SectionButton(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-            else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
-        ),
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 11.dp),
-            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-        )
-    }
-}
-
-@Composable
 private fun PlanosEditor(state: AppUiState, viewModel: AppViewModel, canModify: Boolean, canDelete: Boolean) {
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf<PlanoMap?>(null) }
@@ -126,18 +111,22 @@ private fun PlanosEditor(state: AppUiState, viewModel: AppViewModel, canModify: 
     WebCard {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Planos", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            if (canModify) Button(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) { Text("Adicionar plano") }
+            if (canModify) VendaButton(label = "Adicionar plano", onClick = { creating = true }, modifier = Modifier.fillMaxWidth())
             state.planosMap.forEach { item ->
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("${item.planoId} - ${item.nomeExibicao}", fontWeight = FontWeight.Medium)
-                        Text("${item.regraValor} | ${if (item.ativo) "Ativo" else "Inativo"}", style = MaterialTheme.typography.bodySmall)
+                        Text(item.regraValor, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        VendaStatusChip(
+                            label = if (item.ativo) "Ativo" else "Inativo",
+                            tone = if (item.ativo) VendaStatusTone.SUCCESS else VendaStatusTone.NEUTRAL,
+                        )
                     }
                     if (canModify) TextButton(onClick = { editing = item }) { Text("Editar") }
                     if (canDelete) TextButton(onClick = { scope.launch { viewModel.deletePlanoMap(item.id) } }) { Text("Excluir") }
                 }
             }
-            if (state.planosMap.isEmpty()) Text("Nenhum plano cadastrado.")
+            if (state.planosMap.isEmpty()) VendaEmptyState(title = "Nenhum plano cadastrado", message = "Os planos configurados para o ERP aparecerao aqui.")
         }
     }
     if (creating || editing != null) {
@@ -176,13 +165,19 @@ private fun ParentescosEditor(state: AppUiState, viewModel: AppViewModel, canMod
     val scope = rememberCoroutineScope(); var editing by remember { mutableStateOf<ParentescoMap?>(null) }; var creating by remember { mutableStateOf(false) }
     WebCard { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Parentesco", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        if (canModify) Button(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) { Text("Adicionar parentesco") }
+        if (canModify) VendaButton(label = "Adicionar parentesco", onClick = { creating = true }, modifier = Modifier.fillMaxWidth())
         state.parentescosMap.forEach { item -> Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) { Text("${item.parentescoId} - ${item.label}"); Text(if (item.ativo) "Ativo" else "Inativo", style = MaterialTheme.typography.bodySmall) }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("${item.parentescoId} - ${item.label}")
+                VendaStatusChip(
+                    label = if (item.ativo) "Ativo" else "Inativo",
+                    tone = if (item.ativo) VendaStatusTone.SUCCESS else VendaStatusTone.NEUTRAL,
+                )
+            }
             if (canModify) TextButton(onClick = { editing = item }) { Text("Editar") }
             if (canDelete) TextButton(onClick = { scope.launch { viewModel.deleteParentescoMap(item.id) } }) { Text("Excluir") }
         } }
-        if (state.parentescosMap.isEmpty()) Text("Nenhum parentesco cadastrado.")
+        if (state.parentescosMap.isEmpty()) VendaEmptyState(title = "Nenhum parentesco cadastrado", message = "Os parentescos disponiveis para cadastro aparecerao aqui.")
     } }
     if (creating || editing != null) ParentescoDialog(editing, { creating = false; editing = null }) { id, label, ativo -> scope.launch {
         val payload = buildJsonObject { put("parentesco_id", id); put("label", label); put("ativo", ativo) }
@@ -206,13 +201,33 @@ private fun StatusEditor(state: AppUiState, viewModel: AppViewModel) {
     val scope = rememberCoroutineScope(); var editing by remember { mutableStateOf<StatusAdesao?>(null) }; var creating by remember { mutableStateOf(false) }
     WebCard { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Status de Adesoes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Button(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) { Text("Adicionar status") }
-        state.statusAdesoes.forEach { status -> Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) { Text(status.nome, color = settingsParseColor(status.cor)); Text("${status.cor} | ordem ${status.ordem}", style = MaterialTheme.typography.bodySmall) }
-            TextButton(onClick = { editing = status }) { Text("Editar") }
-            TextButton(onClick = { scope.launch { viewModel.deleteStatusAdesao(status.id) } }) { Text("Excluir") }
-        } }
-        if (state.statusAdesoes.isEmpty()) Text("Nenhum status cadastrado.")
+        VendaButton(label = "Adicionar status", onClick = { creating = true }, modifier = Modifier.fillMaxWidth())
+        state.statusAdesoes.forEach { status ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Surface(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        shape = CircleShape,
+                        color = settingsParseColor(status.cor),
+                    ) { androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(7.dp)) }
+                    Column {
+                        Text(status.nome, fontWeight = FontWeight.Medium)
+                        Text("${status.cor} | ordem ${status.ordem}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                TextButton(onClick = { editing = status }) { Text("Editar") }
+                TextButton(onClick = { scope.launch { viewModel.deleteStatusAdesao(status.id) } }) { Text("Excluir") }
+            }
+        }
+        if (state.statusAdesoes.isEmpty()) VendaEmptyState(title = "Nenhum status cadastrado", message = "Crie os estados operacionais usados nas adesoes.")
     } }
     if (creating || editing != null) StatusDialog(editing, { creating = false; editing = null }, state.statusAdesoes.maxOfOrNull { it.ordem } ?: 0) { nome, cor, ordem -> scope.launch {
         val payload = buildJsonObject { put("nome", nome); put("cor", cor); put("ordem", ordem) }
@@ -244,7 +259,30 @@ private fun ApiLogsEditor(state: AppUiState, viewModel: AppViewModel) {
         SettingsChoiceField("Status", filter, listOf("all" to "Todos", "success" to "Sucesso", "error" to "Erros"), onSelected = { filter = it; page = 1 })
         OutlinedTextField(start, { start = it; page = 1 }, label = { Text("Data Inicio (YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(end, { end = it; page = 1 }, label = { Text("Data Fim (YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth())
-        state.apiLogs.forEach { log -> TextButton(onClick = { selected = log }, modifier = Modifier.fillMaxWidth()) { Column(modifier = Modifier.fillMaxWidth()) { Text("${if (log.success) "OK" else "ERRO"} ${log.endpoint} (${log.statusCode ?: "-"})", fontWeight = FontWeight.Medium); Text("${log.userEmail ?: "Anonimo"} | ${formatLogDate(log.createdAt)} | ${log.durationMs ?: 0}ms", style = MaterialTheme.typography.bodySmall); log.errorMessage?.takeIf { it.isNotBlank() }?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) } } } }
+        if (state.apiLogs.isEmpty()) {
+            VendaEmptyState(title = "Nenhum log encontrado", message = "Nao ha chamadas correspondentes aos filtros selecionados.")
+        } else {
+            state.apiLogs.forEach { log ->
+                Surface(
+                    onClick = { selected = log },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                    shape = MaterialTheme.shapes.medium,
+                ) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text(log.endpoint, modifier = Modifier.weight(1f), fontWeight = FontWeight.Medium)
+                            VendaStatusChip(
+                                label = if (log.success) "Sucesso" else "Falha",
+                                tone = if (log.success) VendaStatusTone.SUCCESS else VendaStatusTone.ERROR,
+                            )
+                        }
+                        Text("${log.userEmail ?: "Anonimo"} | ${formatLogDate(log.createdAt)} | ${log.durationMs ?: 0}ms | HTTP ${log.statusCode ?: "-"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (!log.success) Text("Nao foi possivel concluir esta chamada. Toque para ver os detalhes tecnicos.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { TextButton(onClick = { if (page > 1) page-- }, enabled = page > 1) { Text("Anterior") }; Text("Pagina $page"); TextButton(onClick = { page++ }, enabled = state.apiLogs.size == size) { Text("Proxima") } }
     } }
     selected?.let { log -> AlertDialog(onDismissRequest = { selected = null }, title = { Text(log.endpoint) }, text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { Text("Metodo: ${log.method}"); Text("Status: ${log.statusCode ?: "-"}"); Text("Usuario: ${log.userEmail ?: "Anonimo"}"); Text("Duracao: ${log.durationMs ?: 0}ms"); Text("Custo: ${log.cost ?: 0.0}"); log.errorMessage?.let { Text("Erro: $it") }; Text("Request: ${log.requestBody ?: "-"}", style = MaterialTheme.typography.bodySmall); Text("Response: ${log.responseBody ?: "-"}", style = MaterialTheme.typography.bodySmall) } }, confirmButton = { TextButton(onClick = { selected = null }) { Text("Fechar") } }) }
@@ -254,16 +292,17 @@ private fun ApiLogsEditor(state: AppUiState, viewModel: AppViewModel) {
 private fun ConfigSwitchCard(title: String, description: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) { WebCard { Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Column(modifier = Modifier.weight(1f)) { Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold); Text(description, style = MaterialTheme.typography.bodySmall) }; Switch(checked, onCheckedChange) } } }
 
 @Composable
-private fun ConfigListEditorCard(title: String, description: String, value: String, onSave: (String) -> Unit) { var editing by remember { mutableStateOf(false) }; var text by remember(value) { mutableStateOf(value) }; WebCard { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold); Text(description, style = MaterialTheme.typography.bodySmall); if (editing) { OutlinedTextField(text, { text = it }, modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus()); Row { Button(onClick = { onSave(text); editing = false }) { Text("Salvar") }; TextButton(onClick = { editing = false }) { Text("Cancelar") } } } else { Text(value.ifBlank { "Nao configurado" }); TextButton(onClick = { editing = true }) { Text("Editar") } } } } }
+private fun ConfigListEditorCard(title: String, description: String, value: String, onSave: (String) -> Unit) { var editing by remember { mutableStateOf(false) }; var text by remember(value) { mutableStateOf(value) }; WebCard { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold); Text(description, style = MaterialTheme.typography.bodySmall); if (editing) { OutlinedTextField(text, { text = it }, modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus()); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { VendaButton(label = "Salvar", size = VendaButtonSize.SMALL, onClick = { onSave(text); editing = false }); VendaButton(label = "Cancelar", size = VendaButtonSize.SMALL, style = VendaButtonStyle.TERTIARY, onClick = { editing = false }) } } else { Text(value.ifBlank { "Nao configurado" }); TextButton(onClick = { editing = true }) { Text("Editar") } } } } }
 
 private fun formatLogDate(value: String): String = runCatching { java.time.OffsetDateTime.parse(value).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")) }.getOrDefault(value)
 
 
 @Composable
 private fun SettingsLoadingCard() {
-    WebCard {
-        Text("Carregando configuracoes...", color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
+    VendaLoadingState(
+        title = "Carregando configuracoes",
+        message = "Atualizando as regras operacionais do Venda+.",
+    )
 }
 
 @Composable

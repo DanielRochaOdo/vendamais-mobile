@@ -3,7 +3,6 @@ package br.com.vendamais.mobile.ui
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -12,7 +11,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -144,9 +142,9 @@ fun VendaMaisApp(
             title = { Text("Atualizacao disponivel") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Versao nova: ${update.versionName}")
+                    Text("Versao mais recente: ${update.versionName}")
                     update.notes?.takeIf { it.isNotBlank() }?.let { Text(it) }
-                    Text("A instalacao vai baixar o APK e abrir o instalador do Android.")
+                    Text("Recomendamos atualizar para obter melhorias de estabilidade e performance.")
                 }
             },
             dismissButton = {
@@ -183,7 +181,7 @@ fun VendaMaisApp(
     state.appUpdateError?.let { message ->
         AlertDialog(
             onDismissRequest = viewModel::dismissAppUpdate,
-            title = { Text("Atualizacao") },
+            title = { Text("Nao foi possivel atualizar") },
             text = { Text(message) },
             confirmButton = {
                 TextButton(onClick = viewModel::dismissAppUpdate) {
@@ -533,28 +531,31 @@ private fun AppHeaderBar(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding(),
-        shadowElevation = 2.dp,
+        shadowElevation = 0.dp,
         color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
+                modifier = Modifier.weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 VendaBrandIcon(
-                    modifier = Modifier.size(40.dp),
+                    modifier = Modifier.size(36.dp),
                     showPlusBubble = false,
                 )
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     Text(
                         text = "Venda+",
                         style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Bold,
                     )
                     val subtitle = listOf(profileName, profileRole)
@@ -563,7 +564,7 @@ private fun AppHeaderBar(
                     if (subtitle.isNotBlank()) {
                         Text(
                             text = subtitle,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -571,7 +572,6 @@ private fun AppHeaderBar(
                     }
                 }
             }
-
         }
     }
 }
@@ -588,71 +588,50 @@ private fun MagicBottomNavigationBar(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding(),
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-        shadowElevation = 10.dp,
+        shadowElevation = 0.dp,
         color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
+                .padding(horizontal = 6.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             groups.take(5).forEach { group ->
                 val selected = group.group == activeGroup
-                val indicatorSize by animateDpAsState(
-                    targetValue = if (selected) 46.dp else 28.dp,
-                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
-                    label = "nav_indicator_size",
-                )
-                val indicatorOffsetY by animateDpAsState(
-                    targetValue = if (selected) (-4).dp else 0.dp,
-                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
-                    label = "nav_indicator_offset",
-                )
-                val indicatorElevation by animateDpAsState(
-                    targetValue = if (selected) 8.dp else 0.dp,
-                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
-                    label = "nav_indicator_elevation",
-                )
                 val iconScale by animateFloatAsState(
-                    targetValue = if (selected) 1f else 0.92f,
-                    animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+                    targetValue = if (selected) 1f else 0.94f,
+                    animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
                     label = "nav_icon_scale",
                 )
                 val labelAlpha by animateFloatAsState(
-                    targetValue = if (selected) 1f else 0.78f,
-                    animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                    targetValue = if (selected) 1f else 0.72f,
+                    animationSpec = tween(durationMillis = 160),
                     label = "nav_label_alpha",
                 )
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .clickable { onGroupTap(group) }
-                        .padding(vertical = 4.dp),
+                        .padding(horizontal = 2.dp, vertical = 3.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
                     Surface(
-                        modifier = Modifier
-                            .offset(y = indicatorOffsetY)
-                            .size(indicatorSize),
-                        shape = CircleShape,
-                        color = if (selected) Emerald else MaterialTheme.colorScheme.surfaceVariant,
-                        shadowElevation = indicatorElevation,
+                        modifier = Modifier.size(width = 44.dp, height = 32.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (selected) EmeraldSoft else Color.Transparent,
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = group.icon,
                                 contentDescription = group.label,
-                                tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = if (selected) Emerald else MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier
-                                    .size(if (selected) 22.dp else 20.dp)
-                                    .graphicsLayer(
-                                        scaleX = iconScale,
-                                        scaleY = iconScale,
-                                    ),
+                                    .size(20.dp)
+                                    .graphicsLayer(scaleX = iconScale, scaleY = iconScale),
                             )
                         }
                     }

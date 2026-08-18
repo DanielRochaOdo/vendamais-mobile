@@ -68,6 +68,11 @@ import br.com.vendamais.mobile.ui.CadastroFiltro
 import br.com.vendamais.mobile.ui.MainTab
 import br.com.vendamais.mobile.ui.components.ScreenHeading
 import br.com.vendamais.mobile.ui.components.WebCard
+import br.com.vendamais.mobile.ui.components.VendaButton
+import br.com.vendamais.mobile.ui.components.VendaButtonSize
+import br.com.vendamais.mobile.ui.components.VendaEmptyState
+import br.com.vendamais.mobile.ui.components.VendaLoadingState
+import br.com.vendamais.mobile.ui.components.VendaSectionTabs
 import br.com.vendamais.mobile.ui.theme.Amber100
 import br.com.vendamais.mobile.ui.theme.Amber500
 import br.com.vendamais.mobile.ui.theme.Emerald
@@ -361,12 +366,12 @@ fun CadastrosScreen(
                                 color = Slate500,
                                 style = MaterialTheme.typography.bodyMedium,
                             )
-                            Button(
+                            VendaButton(
+                                label = "Iniciar inclusao de dependente",
                                 onClick = { showInclusaoDialog = true },
                                 modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Iniciar inclusao de dependente")
-                            }
+                                size = VendaButtonSize.LARGE,
+                            )
                         }
                     }
                 }
@@ -378,12 +383,10 @@ fun CadastrosScreen(
                 if (useSupervisorGroupedView) {
                     if (state.cadastrosLoading && !state.cadastrosLoaded) {
                         item {
-                            WebCard {
-                                Text(
-                                    text = "Carregando cadastros...",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                )
-                            }
+                            VendaLoadingState(
+                                title = "Carregando lista",
+                                message = "Buscando os cadastros mais recentes para voce.",
+                            )
                         }
                     } else {
                         item {
@@ -398,12 +401,10 @@ fun CadastrosScreen(
                 } else if (useGerenteGroupedView) {
                     if (state.cadastrosLoading && !state.cadastrosLoaded) {
                         item {
-                            WebCard {
-                                Text(
-                                    text = "Carregando cadastros...",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                )
-                            }
+                            VendaLoadingState(
+                                title = "Carregando lista",
+                                message = "Buscando os cadastros mais recentes para voce.",
+                            )
                         }
                     } else {
                         item {
@@ -454,25 +455,25 @@ fun CadastrosScreen(
 
                     if (state.cadastrosLoading && !state.cadastrosLoaded) {
                         item {
-                            WebCard {
-                                Text(
-                                    text = "Carregando cadastros...",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                )
-                            }
+                            VendaLoadingState(
+                                title = "Carregando lista",
+                                message = "Buscando os cadastros mais recentes para voce.",
+                            )
                         }
                     } else if (filteredCadastros.isEmpty()) {
                         item {
-                            WebCard {
-                                Text(
-                                    text = if (state.cadastroTab == CadastroAreaTab.INCOMPLETOS) {
-                                        "Nenhuma adesao pendente encontrada."
-                                    } else {
-                                        "Nenhuma adesao cadastrada encontrada."
-                                    },
-                                    style = MaterialTheme.typography.bodyLarge,
-                                )
-                            }
+                            VendaEmptyState(
+                                title = if (state.cadastroTab == CadastroAreaTab.INCOMPLETOS) {
+                                    "Nenhum cadastro pendente"
+                                } else {
+                                    "Nenhum cadastro enviado"
+                                },
+                                message = if (state.cadastroTab == CadastroAreaTab.INCOMPLETOS) {
+                                    "Quando houver adesoes aguardando conclusao, elas aparecerao aqui."
+                                } else {
+                                    "Os cadastros enviados para processamento aparecerao aqui."
+                                },
+                            )
                         }
                     } else {
                         items(filteredCadastros) { cadastro ->
@@ -1077,50 +1078,25 @@ private fun CadastroTabBar(
     completosCount: Int,
     onTabSelected: (CadastroAreaTab) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            CadastroTabButton(
-                label = "Nova",
-                selected = selectedTab == CadastroAreaTab.NOVO,
-                onClick = { onTabSelected(CadastroAreaTab.NOVO) },
-                modifier = Modifier.weight(1f),
-            )
-            CadastroTabButton(
-                label = "Link",
-                selected = selectedTab == CadastroAreaTab.LINK,
-                onClick = { onTabSelected(CadastroAreaTab.LINK) },
-                modifier = Modifier.weight(0.62f),
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            CadastroTabButton(
-                label = "Dependente",
-                selected = selectedTab == CadastroAreaTab.DEPENDENTE,
-                onClick = { onTabSelected(CadastroAreaTab.DEPENDENTE) },
-                modifier = Modifier.weight(0.88f),
-            )
-            CadastroTabButton(
-                label = "Pendentes",
-                selected = selectedTab == CadastroAreaTab.INCOMPLETOS,
-                badge = pendentesCount.takeIf { it > 0 }?.toString(),
-                onClick = { onTabSelected(CadastroAreaTab.INCOMPLETOS) },
-                modifier = Modifier.weight(1.12f),
-            )
-        }
-        CadastroTabButton(
-            label = "Cadastradas",
-            selected = selectedTab == CadastroAreaTab.COMPLETOS,
-            badge = completosCount.takeIf { it > 0 }?.toString(),
-            onClick = { onTabSelected(CadastroAreaTab.COMPLETOS) },
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
+    val tabs = listOf(
+        CadastroAreaTab.NOVO,
+        CadastroAreaTab.LINK,
+        CadastroAreaTab.DEPENDENTE,
+        CadastroAreaTab.INCOMPLETOS,
+        CadastroAreaTab.COMPLETOS,
+    )
+    val labels = listOf(
+        "Novo",
+        "Link",
+        "Depend.",
+        if (pendentesCount > 0) "Pend. $pendentesCount" else "Pend.",
+        if (completosCount > 0) "Env. $completosCount" else "Enviados",
+    )
+    VendaSectionTabs(
+        items = labels,
+        selectedIndex = tabs.indexOf(selectedTab).coerceAtLeast(0),
+        onSelected = { index -> tabs.getOrNull(index)?.let(onTabSelected) },
+    )
 }
 
 @Composable

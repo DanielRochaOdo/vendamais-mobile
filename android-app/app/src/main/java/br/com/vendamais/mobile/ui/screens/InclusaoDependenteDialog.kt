@@ -80,6 +80,7 @@ import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
 import br.com.vendamais.mobile.ui.components.rememberKeyboardAwareFooterState
 import br.com.vendamais.mobile.ui.components.WebCard
+import br.com.vendamais.mobile.ui.components.VendaWizardProgress
 import br.com.vendamais.mobile.ui.theme.Amber100
 import br.com.vendamais.mobile.ui.theme.Amber500
 import br.com.vendamais.mobile.ui.theme.BrandOrange
@@ -858,7 +859,7 @@ fun InclusaoDependenteDialog(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        InclusaoWizardProgress(inclusaoStep)
+                        VendaWizardProgress(currentStep = inclusaoStep, labels = listOf("Dependentes", "Documento"))
                     }
 
                 if (profile?.role != "VENDEDOR") {
@@ -2174,32 +2175,5 @@ private class DependenteDateVisualTransformation : VisualTransformation {
             override fun transformedToOriginal(offset: Int): Int = transformedToOriginal[offset.coerceIn(0, formatted.length)]
         }
         return TransformedText(AnnotatedString(formatted), offset)
-    }
-}
-
-
-
-@Composable
-private fun InclusaoWizardProgress(step: Int) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        listOf(1 to "Responsavel", 2 to "Dependentes").forEach { (number, label) ->
-            val active = step >= number
-            Surface(
-                modifier = Modifier.weight(1f),
-                shape = MaterialTheme.shapes.medium,
-                color = if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-            ) {
-                Text(
-                    text = "$number. $label",
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-                    color = if (active) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
     }
 }

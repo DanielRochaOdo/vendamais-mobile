@@ -22,6 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import br.com.vendamais.mobile.ui.theme.VendaRadius
+import br.com.vendamais.mobile.ui.theme.VendaSpacing
 
 @Composable
 fun ScreenBackground(content: @Composable () -> Unit) {
@@ -34,25 +36,29 @@ fun ScreenBackground(content: @Composable () -> Unit) {
     }
 }
 
+/**
+ * Card operacional equivalente ao padrão `card` do Figma. A borda baixa
+ * substitui sombras pesadas e mantém leitura boa durante uso prolongado.
+ */
 @Composable
 fun WebCard(
     modifier: Modifier = Modifier,
     title: String? = null,
-    contentPadding: PaddingValues = PaddingValues(16.dp),
+    contentPadding: PaddingValues = PaddingValues(VendaSpacing.x4),
     content: @Composable () -> Unit,
 ) {
     Card(
         modifier = modifier,
-        shape = MaterialTheme.shapes.medium,
+        shape = RoundedCornerShape(VendaRadius.lg),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         if (title != null) {
             Column {
                 Text(
                     text = title,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    modifier = Modifier.padding(horizontal = VendaSpacing.x4, vertical = VendaSpacing.x3),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold,
@@ -67,11 +73,24 @@ fun WebCard(
 }
 
 @Composable
-fun ScreenHeading(title: String, subtitle: String) {
+fun ScreenHeading(
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier,
+    eyebrow: String? = null,
+) {
     Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(VendaSpacing.x1),
     ) {
+        eyebrow?.takeIf { it.isNotBlank() }?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
         Text(
             text = title,
             style = MaterialTheme.typography.headlineSmall,
@@ -90,7 +109,7 @@ fun ScreenHeading(title: String, subtitle: String) {
 fun InfoRow(label: String, value: String, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(VendaSpacing.x1),
     ) {
         Text(
             text = label,
@@ -116,8 +135,8 @@ fun MetricBadge(
 ) {
     Row(
         modifier = modifier
-            .background(bgColor, RoundedCornerShape(999.dp))
-            .padding(horizontal = 12.dp, vertical = 7.dp),
+            .background(bgColor, RoundedCornerShape(VendaRadius.full))
+            .padding(horizontal = VendaSpacing.x3, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {

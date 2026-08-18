@@ -92,6 +92,7 @@ import br.com.vendamais.mobile.ui.AppViewModel
 import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 import br.com.vendamais.mobile.ui.components.rememberKeyboardAwareFooterState
 import br.com.vendamais.mobile.ui.components.WebCard
+import br.com.vendamais.mobile.ui.components.VendaWizardProgress
 import br.com.vendamais.mobile.ui.theme.Amber100
 import br.com.vendamais.mobile.ui.theme.Amber500
 import br.com.vendamais.mobile.ui.theme.BrandOrange
@@ -368,7 +369,7 @@ fun CadastroEditorDialog(
             .onFailure { throwable ->
                 cepLookupError = CadastroApiErrorMapper.mapUserMessage(
                     throwable.message,
-                    "Nao foi possivel consultar o CEP no S4E.",
+                    "Nao foi possivel consultar o endereco pelo CEP.",
                 )
             }
 
@@ -1275,12 +1276,12 @@ fun CadastroEditorDialog(
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
-                            text = if (currentStep == 1) "Dados da adesao" else "Documento e confirmacao",
+                            text = "Nova adesao",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                         )
                         Text(
-                            text = if (currentStep == 1) "Etapa 1 de 2 · Titular, contatos, endereco e dependentes" else "Etapa 2 de 2 · Revise e conclua o envio",
+                            text = if (currentStep == 1) "Etapa 1 de 2 · Dados do titular" else "Etapa 2 de 2 · Documento e conclusao",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall,
                         )
@@ -1309,7 +1310,7 @@ fun CadastroEditorDialog(
                 HorizontalDivider(
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
                 )
-                CadastroWizardProgress(currentStep)
+                VendaWizardProgress(currentStep = currentStep, labels = listOf("Dados", "Documento"))
 
                 Column(
                     modifier = Modifier
@@ -1436,7 +1437,7 @@ fun CadastroEditorDialog(
                             )
                             if (cepLookupLoading) {
                                 Text(
-                                    text = "Consultando CEP no S4E...",
+                                    text = "Buscando endereco pelo CEP...",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -3116,43 +3117,4 @@ private fun writePreviewFile(
 private fun resolvePreviewMimeType(fileName: String): String {
     val extension = fileName.substringAfterLast('.', "").lowercase(Locale.ROOT)
     return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "*/*"
-}
-
-
-
-
-
-@Composable
-private fun CadastroWizardProgress(step: Int) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        listOf(1 to "Dados", 2 to "Finalizar").forEach { (number, label) ->
-            val active = step >= number
-            Surface(
-                modifier = Modifier.weight(1f),
-                shape = MaterialTheme.shapes.medium,
-                color = if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = number.toString(),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (active) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-    }
 }

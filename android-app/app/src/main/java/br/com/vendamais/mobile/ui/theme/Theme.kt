@@ -7,7 +7,6 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 
 private val LightColors = lightColorScheme(
     primary = Emerald,
@@ -28,7 +27,7 @@ private val LightColors = lightColorScheme(
     onSurface = Slate900,
     onSurfaceVariant = Slate600,
     outline = Slate200,
-    outlineVariant = Slate100,
+    outlineVariant = Slate200,
     error = Red500,
     errorContainer = Red100,
     onErrorContainer = Red500,
@@ -61,11 +60,11 @@ private val DarkColors = darkColorScheme(
 )
 
 private val VendaMaisShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(20.dp),
-    extraLarge = RoundedCornerShape(28.dp),
+    extraSmall = RoundedCornerShape(VendaRadius.sm),
+    small = RoundedCornerShape(VendaRadius.md),
+    medium = RoundedCornerShape(VendaRadius.lg),
+    large = RoundedCornerShape(VendaRadius.xl),
+    extraLarge = RoundedCornerShape(VendaRadius.xxl),
 )
 
 @Composable

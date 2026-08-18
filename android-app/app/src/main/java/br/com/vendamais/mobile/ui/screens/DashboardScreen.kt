@@ -43,6 +43,9 @@ import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.DashboardMetricType
 import br.com.vendamais.mobile.ui.components.ScreenHeading
 import br.com.vendamais.mobile.ui.components.WebCard
+import br.com.vendamais.mobile.ui.components.VendaMetricCard
+import br.com.vendamais.mobile.ui.components.VendaStatusChip
+import br.com.vendamais.mobile.ui.components.VendaStatusTone
 import br.com.vendamais.mobile.ui.theme.Amber100
 import br.com.vendamais.mobile.ui.theme.Amber500
 import br.com.vendamais.mobile.ui.theme.Blue100
@@ -95,18 +98,10 @@ fun DashboardScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        Surface(
-                            shape = RoundedCornerShape(999.dp),
-                            color = EmeraldSoft,
-                        ) {
-                            Text(
-                                text = "Atual",
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = EmeraldDark,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        }
+                        VendaStatusChip(
+                            label = "Atual",
+                            tone = VendaStatusTone.SUCCESS,
+                        )
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -244,30 +239,13 @@ private fun SummaryMetric(
     content: Color,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    VendaMetricCard(
+        value = value.toString(),
+        label = label,
         modifier = modifier,
-        shape = MaterialTheme.shapes.small,
-        color = container,
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(
-                text = value.toString(),
-                style = MaterialTheme.typography.titleLarge,
-                color = content,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = content,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
+        containerColor = container,
+        contentColor = content,
+    )
 }
 
 @Composable

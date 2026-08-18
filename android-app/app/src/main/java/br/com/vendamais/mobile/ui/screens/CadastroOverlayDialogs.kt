@@ -17,6 +17,8 @@ import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.domain.cadastro.CadastroOverlayIntent
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
+import br.com.vendamais.mobile.ui.components.VendaFeedbackTone
+import br.com.vendamais.mobile.ui.components.VendaInlineFeedback
 import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 
 @Composable
@@ -48,7 +50,11 @@ fun CadastroOverlayDialogs(
                 onDismissRequest = viewModel::dismissCadastroOverlay,
                 title = { Text("Empresa bloqueada") },
                 text = {
-                    Text("A empresa ${overlay.empresaNome} esta com situacao bloqueada para cadastro.")
+                    VendaInlineFeedback(
+                        title = "Cadastro indisponivel para esta empresa",
+                        message = "A empresa ${overlay.empresaNome} esta com situacao bloqueada para novos cadastros.",
+                        tone = VendaFeedbackTone.WARNING,
+                    )
                 },
                 confirmButton = {
                     TextButton(onClick = viewModel::dismissCadastroOverlay) {
@@ -102,8 +108,14 @@ fun CadastroOverlayDialogs(
         is CadastroOverlayIntent.LemmitError -> {
             AlertDialog(
                 onDismissRequest = viewModel::dismissCadastroOverlay,
-                title = { Text("Falha na consulta Lemmit") },
-                text = { Text(overlay.message) },
+                title = { Text("Consulta indisponivel") },
+                text = {
+                    VendaInlineFeedback(
+                        title = "Nao foi possivel preencher os dados automaticamente",
+                        message = "Voce pode continuar o cadastro e preencher as informacoes manualmente.",
+                        tone = VendaFeedbackTone.WARNING,
+                    )
+                },
                 confirmButton = {
                     TextButton(onClick = viewModel::dismissCadastroOverlay) {
                         Text("Continuar")
@@ -264,8 +276,8 @@ fun CadastroOverlayDialogs(
         is CadastroOverlayIntent.VisualizarArquivo -> {
             AlertDialog(
                 onDismissRequest = viewModel::dismissCadastroOverlay,
-                title = { Text("Arquivo") },
-                text = { Text("Arquivo selecionado: ${overlay.arquivoPath}") },
+                title = { Text("Documento selecionado") },
+                text = { Text("O documento esta pronto para visualizacao no fluxo atual.") },
                 confirmButton = {
                     TextButton(onClick = viewModel::dismissCadastroOverlay) {
                         Text("Fechar")

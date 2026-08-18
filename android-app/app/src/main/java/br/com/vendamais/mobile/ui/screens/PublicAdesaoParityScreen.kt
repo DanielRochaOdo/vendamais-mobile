@@ -41,6 +41,14 @@ import br.com.vendamais.mobile.data.remote.CadastroPayloadBuilder
 import br.com.vendamais.mobile.domain.cadastro.CadastroApiErrorMapper
 import br.com.vendamais.mobile.ui.AppViewModel
 import br.com.vendamais.mobile.ui.components.ScreenHeading
+import br.com.vendamais.mobile.ui.components.OdontoartBrandMark
+import br.com.vendamais.mobile.ui.components.VendaButton
+import br.com.vendamais.mobile.ui.components.VendaButtonSize
+import br.com.vendamais.mobile.ui.components.VendaButtonStyle
+import br.com.vendamais.mobile.ui.components.VendaFeedbackTone
+import br.com.vendamais.mobile.ui.components.VendaInlineFeedback
+import br.com.vendamais.mobile.ui.components.VendaLoadingState
+import br.com.vendamais.mobile.ui.components.VendaWizardProgress
 import br.com.vendamais.mobile.ui.components.WebCard
 import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 import kotlinx.coroutines.launch
@@ -231,12 +239,40 @@ fun PublicAdesaoParityScreen(
     }
 
     if (loading) {
-        Surface(modifier = Modifier.fillMaxSize()) { Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.Center) { CircularProgressIndicator(); Text("Carregando link...", modifier = Modifier.padding(top = 12.dp)) } }
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.Center,
+            ) {
+                OdontoartBrandMark(modifier = Modifier.fillMaxWidth())
+                VendaLoadingState(
+                    title = "Preparando sua adesao",
+                    message = "Estamos carregando os dados necessarios para iniciar.",
+                )
+            }
+        }
         return
     }
     val currentLink = link
     if (currentLink == null) {
-        Surface(modifier = Modifier.fillMaxSize()) { Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { ScreenHeading("Link indisponivel", error ?: "Nao foi possivel carregar o link."); Button(onClick = onClose) { Text("Fechar") } } }
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                OdontoartBrandMark(modifier = Modifier.fillMaxWidth())
+                VendaInlineFeedback(
+                    title = "Link indisponivel",
+                    message = error ?: "Nao foi possivel carregar este link de adesao.",
+                    tone = VendaFeedbackTone.ERROR,
+                )
+                VendaButton(
+                    label = "Fechar",
+                    onClick = onClose,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
         return
     }
 
@@ -254,8 +290,12 @@ fun PublicAdesaoParityScreen(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
+                OdontoartBrandMark(modifier = Modifier.fillMaxWidth())
                 ScreenHeading("Nova Adesao", "Preencha em etapas para concluir seu cadastro com seguranca.")
-                PublicWizardProgress(currentStep)
+                VendaWizardProgress(
+                    currentStep = currentStep,
+                    labels = listOf("Titular", "Familia", "Endereco"),
+                )
 
                 WebCard {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -337,7 +377,7 @@ fun PublicAdesaoParityScreen(
                             Text("Endereco e confirmacao", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                             Text("Revise o endereco antes de concluir a adesao.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             OutlinedTextField(cep, { cep = it.filter(Char::isDigit).take(8) }, modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(), label = { Text("CEP") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                            if (checkingCep) Text("Consultando CEP no S4E...", style = MaterialTheme.typography.bodySmall)
+                            if (checkingCep) Text("Buscando endereco pelo CEP...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             OutlinedTextField(logradouro, { logradouro = it }, modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(), label = { Text("Logradouro") })
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 OutlinedTextField(numero, { numero = it }, modifier = Modifier.weight(1f).bringIntoViewOnFocus(), label = { Text("Numero") })
@@ -350,23 +390,50 @@ fun PublicAdesaoParityScreen(
                     }
                 }
 
-                error?.let { WebCard { Text(it, color = MaterialTheme.colorScheme.error) } }
-                notice?.let { WebCard { Text(it) } }
-                success?.let { WebCard { Text(it, color = MaterialTheme.colorScheme.primary) } }
+                error?.let {
+                    VendaInlineFeedback(
+                        title = "Revise esta etapa",
+                        message = it,
+                        tone = VendaFeedbackTone.ERROR,
+                    )
+                }
+                notice?.let {
+                    VendaInlineFeedback(
+                        title = "Tudo certo ate aqui",
+                        message = it,
+                        tone = VendaFeedbackTone.SUCCESS,
+                    )
+                }
+                success?.let {
+                    VendaInlineFeedback(
+                        title = "Cadastro concluido",
+                        message = it,
+                        tone = VendaFeedbackTone.SUCCESS,
+                    )
+                }
             }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                if (currentStep == 1) {
-                    TextButton(onClick = onClose, enabled = !submitting, modifier = Modifier.weight(0.8f)) { Text("Sair") }
-                } else {
-                    TextButton(onClick = { currentStep-- ; error = null }, enabled = !submitting, modifier = Modifier.weight(0.8f)) { Text("Voltar") }
-                }
+                VendaButton(
+                    label = if (currentStep == 1) "Sair" else "Voltar",
+                    onClick = {
+                        if (currentStep == 1) onClose() else {
+                            currentStep--
+                            error = null
+                        }
+                    },
+                    modifier = Modifier.weight(0.8f),
+                    style = VendaButtonStyle.TERTIARY,
+                    size = VendaButtonSize.MEDIUM,
+                    enabled = !submitting,
+                )
 
                 if (currentStep < 3) {
-                    Button(
+                    VendaButton(
+                        label = "Continuar",
                         onClick = {
                             val validation = if (currentStep == 1) {
                                 validatePublicIdentityStep(cpfLocked, cpf, nome, dataNascimento, sexo, nomeMae, titularPlano, currentLink.empresaExigeMatricula, numeroMatricula)
@@ -375,38 +442,44 @@ fun PublicAdesaoParityScreen(
                             }
                             if (validation != null) error = validation else { error = null; currentStep++ }
                         },
-                        enabled = !submitting && !checkingCpf,
                         modifier = Modifier.weight(1.2f),
-                    ) { Text("Continuar") }
+                        size = VendaButtonSize.MEDIUM,
+                        enabled = !submitting && !checkingCpf,
+                    )
                 } else {
-                    Button(onClick = {
-                        val validation = validatePublicParityForm(cpfLocked, cpf, nome, dataNascimento, sexo, nomeMae, titularPlano, currentLink.empresaExigeMatricula, numeroMatricula, contatos.toList(), dependentes.toList(), cep, logradouro, numero, bairro, cidade, uf)
-                        if (validation != null) { error = validation; return@Button }
-                        val cpfDigits = cpf.filter(Char::isDigit)
-                        val titularPlan = plans.first { it.codigo == titularPlano }
-                        val titular = PublicCadastroDependente(1, nome.trim(), dataNascimento.trim(), cpfDigits, sexo, if (sexo == 1) "Masculino" else "Feminino", titularPlano, titularPlan.titularValor(), nomeMae.trim(), 0, 0)
-                        val extras = dependentes.map { dep -> PublicCadastroDependente(dep.tipo, dep.nome.trim(), dep.dataNascimento.trim(), dep.cpf.filter(Char::isDigit), dep.sexo, if (dep.sexo == 1) "Masculino" else "Feminino", dep.plano, dep.planoValor, dep.nomeMae.trim(), 0, 0) }
-                        val normalizedContacts = contatos.mapIndexed { index, contact -> PublicCadastroContato(contact.tipo, if (contact.tipo == "email") contact.valor.trim() else contact.valor.filter(Char::isDigit), contact.principal || (index == 0 && contatos.none { it.principal })) }
-                        val payload = PublicCadastroPayload(cpfDigits, nome.trim(), dataNascimento.trim(), sexo, normalizedContacts, PublicCadastroEndereco(cep.filter(Char::isDigit), logradouro = logradouro.trim(), numero = numero.trim(), complemento = complemento.trim().takeIf { it.isNotBlank() }, bairro = bairro.trim(), cidade = cidade.trim(), uf = uf.uppercase()), nomeMae.trim(), numeroMatricula.trim().takeIf { it.isNotBlank() }, listOf(titular) + extras)
-                        if (submissionId.isBlank()) submissionId = UUID.randomUUID().toString()
-                        submitting = true; error = null; success = null
-                        scope.launch {
-                            runCatching { viewModel.submitPublicCadastro(token, payload, "public:${token.trim()}:$cpfDigits:$submissionId") }
-                                .onSuccess { response ->
-                                    if (!response.ok) error = response.error ?: "Falha ao concluir adesao."
-                                    else {
-                                        success = response.message ?: "Cadastro concluido com sucesso."
-                                        notice = response.warning
-                                        prefs.edit().remove(draftKey).apply()
-                                        submissionId = ""
+                    VendaButton(
+                        label = "Concluir adesao",
+                        onClick = finalClick@ {
+                            val validation = validatePublicParityForm(cpfLocked, cpf, nome, dataNascimento, sexo, nomeMae, titularPlano, currentLink.empresaExigeMatricula, numeroMatricula, contatos.toList(), dependentes.toList(), cep, logradouro, numero, bairro, cidade, uf)
+                            if (validation != null) { error = validation; return@finalClick }
+                            val cpfDigits = cpf.filter(Char::isDigit)
+                            val titularPlan = plans.first { it.codigo == titularPlano }
+                            val titular = PublicCadastroDependente(1, nome.trim(), dataNascimento.trim(), cpfDigits, sexo, if (sexo == 1) "Masculino" else "Feminino", titularPlano, titularPlan.titularValor(), nomeMae.trim(), 0, 0)
+                            val extras = dependentes.map { dep -> PublicCadastroDependente(dep.tipo, dep.nome.trim(), dep.dataNascimento.trim(), dep.cpf.filter(Char::isDigit), dep.sexo, if (dep.sexo == 1) "Masculino" else "Feminino", dep.plano, dep.planoValor, dep.nomeMae.trim(), 0, 0) }
+                            val normalizedContacts = contatos.mapIndexed { index, contact -> PublicCadastroContato(contact.tipo, if (contact.tipo == "email") contact.valor.trim() else contact.valor.filter(Char::isDigit), contact.principal || (index == 0 && contatos.none { it.principal })) }
+                            val payload = PublicCadastroPayload(cpfDigits, nome.trim(), dataNascimento.trim(), sexo, normalizedContacts, PublicCadastroEndereco(cep.filter(Char::isDigit), logradouro = logradouro.trim(), numero = numero.trim(), complemento = complemento.trim().takeIf { it.isNotBlank() }, bairro = bairro.trim(), cidade = cidade.trim(), uf = uf.uppercase()), nomeMae.trim(), numeroMatricula.trim().takeIf { it.isNotBlank() }, listOf(titular) + extras)
+                            if (submissionId.isBlank()) submissionId = UUID.randomUUID().toString()
+                            submitting = true; error = null; success = null
+                            scope.launch {
+                                runCatching { viewModel.submitPublicCadastro(token, payload, "public:${token.trim()}:$cpfDigits:$submissionId") }
+                                    .onSuccess { response ->
+                                        if (!response.ok) error = response.error ?: "Falha ao concluir adesao."
+                                        else {
+                                            success = response.message ?: "Cadastro concluido com sucesso."
+                                            notice = response.warning
+                                            prefs.edit().remove(draftKey).apply()
+                                            submissionId = ""
+                                        }
                                     }
-                                }
-                                .onFailure { error = CadastroApiErrorMapper.mapUserMessage(it.message, "Falha ao concluir adesao.") }
-                            submitting = false
-                        }
-                    }, enabled = !submitting && !checkingCpf, modifier = Modifier.weight(1.2f)) {
-                        if (submitting) CircularProgressIndicator(strokeWidth = 2.dp) else Text("Concluir adesao")
-                    }
+                                    .onFailure { error = CadastroApiErrorMapper.mapUserMessage(it.message, "Falha ao concluir adesao.") }
+                                submitting = false
+                            }
+                        },
+                        modifier = Modifier.weight(1.2f),
+                        size = VendaButtonSize.MEDIUM,
+                        enabled = !submitting && !checkingCpf,
+                        loading = submitting,
+                    )
                 }
             }
         }
@@ -451,28 +524,6 @@ private fun <T> PublicChoiceField(label: String, value: String, options: List<Pa
     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) { Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); Text(value, fontWeight = FontWeight.Medium); options.chunked(3).forEach { row -> Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) { row.forEach { (key, display) -> TextButton(onClick = { onSelected(key) }, modifier = Modifier.weight(1f)) { Text(display, maxLines = 1) } }; repeat(3 - row.size) { androidx.compose.foundation.layout.Spacer(Modifier.weight(1f)) } } } }
 }
 
-
-@Composable
-private fun PublicWizardProgress(step: Int) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        listOf(1 to "Titular", 2 to "Familia", 3 to "Endereco").forEach { (number, label) ->
-            val active = step >= number
-            Surface(
-                modifier = Modifier.weight(1f),
-                shape = MaterialTheme.shapes.medium,
-                color = if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-            ) {
-                Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 9.dp)) {
-                    Text(number.toString(), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(label, style = MaterialTheme.typography.labelSmall, color = if (active) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
-    }
-}
 
 private fun validatePublicIdentityStep(cpfLocked: Boolean, cpf: String, nome: String, data: String, sexo: Int, nomeMae: String, titularPlano: Int, exigeMatricula: Int?, matricula: String): String? {
     val cpfDigits = cpf.filter(Char::isDigit)
