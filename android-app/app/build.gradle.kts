@@ -85,7 +85,7 @@ val baseVersionCode = versionProperties.getProperty("VERSION_CODE")?.toIntOrNull
 val baseVersionName = parseVersionNameOrDefault(versionProperties.getProperty("VERSION_NAME"))
 val releaseBuildRequested = gradle.startParameter.taskNames
     .map { it.substringAfterLast(':') }
-    .any { it == "assembleRelease" || it == "bundleRelease" }
+    .any { it in setOf("assembleRelease", "bundleRelease", "renameReleaseApk", "renameReleaseBundle") }
 
 val appVersion = if (releaseBuildRequested) {
     val bumped = AppVersion(
@@ -200,14 +200,6 @@ android {
     }
 }
 
-tasks.register<Delete>("cleanReleaseApkOutputs") {
-    delete(layout.buildDirectory.dir("outputs/apk/release"))
-}
-
-tasks.matching { it.name == "bundleRelease" }.configureEach {
-    dependsOn("cleanReleaseApkOutputs")
-}
-
 tasks.register<Copy>("renameReleaseBundle") {
     dependsOn("bundleRelease")
     from(layout.buildDirectory.file("outputs/bundle/release/app-release.aab"))
@@ -226,7 +218,6 @@ tasks.register<Copy>("renameReleaseApk") {
 }
 
 tasks.register("generateReleaseUpdateJson") {
-    dependsOn("bundleRelease")
     doLast {
         val outputDir = layout.buildDirectory.dir("outputs/release-artifacts").get().asFile
         outputDir.mkdirs()
