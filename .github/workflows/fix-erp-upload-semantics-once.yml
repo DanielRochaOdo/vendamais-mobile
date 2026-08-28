@@ -1,0 +1,62 @@
+name: Fix ERP Upload Semantics Once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/fix-erp-upload-semantics-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix-erp-upload-semantics:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Apply semantic validation patch
+        run: python3 .github/scripts/fix_erp_upload_semantics.py
+
+      - name: Validate diff
+        run: git diff --check
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Check Edge Functions
+        run: |
+          deno check --node-modules-dir=auto supabase/functions/erp-process-upload-queue/index.ts
+          deno check --node-modules-dir=auto supabase/functions/erp-upload-documento/index.ts
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: 'android-app/**/*.gradle*'
+
+      - name: Compile Android Kotlin
+        working-directory: android-app
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:compileDebugKotlin --stacktrace --no-daemon
+
+      - name: Commit fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add supabase/functions/erp-process-upload-queue/index.ts
+          git add supabase/functions/erp-upload-documento/index.ts
+          git add android-app/app/src/main/java/br/com/vendamais/mobile/data/remote/CadastroWorkflowRepository.kt
+          git add supabase/migrations/20260828115500_reclassify_erp_upload_false_success.sql
+          git commit -m "Reject ERP semantic upload failures and oversized attachments"
+          git push origin HEAD:main
