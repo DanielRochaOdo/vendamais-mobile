@@ -17,7 +17,7 @@ interface EnqueueRequest {
   bucket?: string;
 }
 
-const RETRYABLE_QUEUE_STATUSES = ["queued", "retry_wait", "processing", "failed"];
+const KNOWN_QUEUE_STATUSES = ["queued", "retry_wait", "processing", "failed", "success"];
 
 function triggerQueueProcessor(supabaseUrl: string, serviceRoleKey: string) {
   const promise = fetch(`${supabaseUrl}/functions/v1/erp-process-upload-queue`, {
@@ -129,16 +129,39 @@ Deno.serve(async (req: Request) => {
       .eq("id_dependente", body.idDependente)
       .eq("arquivo_path", arquivoPath)
       .eq("bucket", bucket)
-      .in("status", RETRYABLE_QUEUE_STATUSES)
+      .in("status", KNOWN_QUEUE_STATUSES)
       .order("created_at", { ascending: false })
       .limit(1);
 
     if (existingError) {
-      console.warn("Não foi possível consultar retry existente; será tentado um novo enqueue:", existingError);
+      console.warn("Não foi possível consultar upload existente; será tentado um novo enqueue:", existingError);
     }
 
     const existingItem = existingItems?.[0];
     if (existingItem) {
+      if (existingItem.status === "success") {
+        if (body.cadastroId && !existingItem.cadastro_id) {
+          await supabaseClient
+            .from("erp_upload_queue")
+            .update({ cadastro_id: body.cadastroId, created_by: createdBy })
+            .eq("id", existingItem.id);
+        }
+
+        return new Response(
+          JSON.stringify({
+            queued: true,
+            reused: true,
+            delivered: true,
+            queue_id: existingItem.id,
+            message: "Este contrato já foi entregue ao ERP. Nenhum novo envio foi criado.",
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
       if (existingItem.status !== "processing") {
         const isManualRestartAfterFinalFailure = existingItem.status === "failed";
         const { data: reusedItem, error: reuseError } = await supabaseClient
