@@ -72,7 +72,6 @@ import br.com.vendamais.mobile.ui.components.VendaButton
 import br.com.vendamais.mobile.ui.components.VendaButtonSize
 import br.com.vendamais.mobile.ui.components.VendaEmptyState
 import br.com.vendamais.mobile.ui.components.VendaLoadingState
-import br.com.vendamais.mobile.ui.components.VendaSectionTabs
 import br.com.vendamais.mobile.ui.theme.Amber100
 import br.com.vendamais.mobile.ui.theme.Amber500
 import br.com.vendamais.mobile.ui.theme.Emerald
@@ -1092,25 +1091,55 @@ private fun CadastroTabBar(
     completosCount: Int,
     onTabSelected: (CadastroAreaTab) -> Unit,
 ) {
-    val tabs = listOf(
-        CadastroAreaTab.NOVO,
-        CadastroAreaTab.LINK,
-        CadastroAreaTab.DEPENDENTE,
-        CadastroAreaTab.INCOMPLETOS,
-        CadastroAreaTab.COMPLETOS,
-    )
-    val labels = listOf(
-        "Novo",
-        "Link",
-        "Depend.",
-        if (pendentesCount > 0) "Pend. $pendentesCount" else "Pend.",
-        if (completosCount > 0) "Env. $completosCount" else "Enviados",
-    )
-    VendaSectionTabs(
-        items = labels,
-        selectedIndex = tabs.indexOf(selectedTab).coerceAtLeast(0),
-        onSelected = { index -> tabs.getOrNull(index)?.let(onTabSelected) },
-    )
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        CadastroTabButton(
+            label = "Novo",
+            selected = selectedTab == CadastroAreaTab.NOVO,
+            onClick = { onTabSelected(CadastroAreaTab.NOVO) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            CadastroTabButton(
+                label = "Dependente",
+                selected = selectedTab == CadastroAreaTab.DEPENDENTE,
+                onClick = { onTabSelected(CadastroAreaTab.DEPENDENTE) },
+                modifier = Modifier.weight(1f),
+            )
+            CadastroTabButton(
+                label = "Link",
+                selected = selectedTab == CadastroAreaTab.LINK,
+                onClick = { onTabSelected(CadastroAreaTab.LINK) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            CadastroTabButton(
+                label = "Enviadas",
+                selected = selectedTab == CadastroAreaTab.COMPLETOS,
+                onClick = { onTabSelected(CadastroAreaTab.COMPLETOS) },
+                modifier = Modifier.weight(1f),
+                badge = completosCount.takeIf { it > 0 }?.toString(),
+            )
+            CadastroTabButton(
+                label = "Pendente",
+                selected = selectedTab == CadastroAreaTab.INCOMPLETOS,
+                onClick = { onTabSelected(CadastroAreaTab.INCOMPLETOS) },
+                modifier = Modifier.weight(1f),
+                badge = pendentesCount.takeIf { it > 0 }?.toString(),
+            )
+        }
+    }
 }
 
 @Composable
