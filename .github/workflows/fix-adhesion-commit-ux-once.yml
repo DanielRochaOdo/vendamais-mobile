@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 0
 
       - name: Apply adhesion hardening
-        run: python3 .github/scripts/fix_adhesion_commit_ux.py
+        run: python3 .github/scripts/fix_adhesion_commit_ux_v2.py
 
       - name: Validate diff
         run: git diff --check
