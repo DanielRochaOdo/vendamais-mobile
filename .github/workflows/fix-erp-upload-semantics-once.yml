@@ -22,6 +22,23 @@ jobs:
       - name: Apply semantic validation patch
         run: python3 .github/scripts/fix_erp_upload_semantics.py
 
+      - name: Fix generated semantic typing
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('supabase/functions/erp-upload-documento/index.ts')
+          text = path.read_text()
+          old = '''      if (semanticError.retryable) {
+                const queued = await enqueueForRetry(supabase, requestBody, userId, arquivoNome, errorMessage);
+          '''
+          new = '''      if (semanticError.retryable) {
+                const queued = await enqueueForRetry(supabase, requestBody, userId, arquivoNome, semanticError.message);
+          '''
+          if old not in text:
+              raise SystemExit('semantic retry block not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+
       - name: Validate diff
         run: git diff --check
 
