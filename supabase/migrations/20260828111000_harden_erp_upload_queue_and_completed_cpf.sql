@@ -49,7 +49,12 @@ CREATE POLICY "Administradores podem visualizar log de cron"
 CREATE INDEX IF NOT EXISTS idx_erp_upload_queue_cron_log_executed_at
   ON public.erp_upload_queue_cron_log(executed_at DESC);
 
-CREATE OR REPLACE FUNCTION public.reset_stuck_queue_items(stuck_threshold_minutes integer DEFAULT 10)
+-- Pode existir uma versao anterior desta RPC com outro tipo de retorno.
+-- PostgreSQL nao permite trocar RETURNS via CREATE OR REPLACE, portanto
+-- removemos apenas a assinatura exata antes de recria-la.
+DROP FUNCTION IF EXISTS public.reset_stuck_queue_items(integer);
+
+CREATE FUNCTION public.reset_stuck_queue_items(stuck_threshold_minutes integer DEFAULT 10)
 RETURNS TABLE(reset_count integer)
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -94,7 +99,10 @@ $$;
 REVOKE ALL ON FUNCTION public.reset_stuck_queue_items(integer) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.reset_stuck_queue_items(integer) TO authenticated, service_role;
 
-CREATE OR REPLACE FUNCTION public.process_erp_upload_queue()
+-- Mesma protecao para ambientes que ja tenham versoes antigas das RPCs abaixo.
+DROP FUNCTION IF EXISTS public.process_erp_upload_queue();
+
+CREATE FUNCTION public.process_erp_upload_queue()
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -150,7 +158,9 @@ SELECT cron.schedule(
   $$SELECT public.process_erp_upload_queue();$$
 );
 
-CREATE OR REPLACE FUNCTION public.get_erp_upload_queue_health()
+DROP FUNCTION IF EXISTS public.get_erp_upload_queue_health();
+
+CREATE FUNCTION public.get_erp_upload_queue_health()
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
