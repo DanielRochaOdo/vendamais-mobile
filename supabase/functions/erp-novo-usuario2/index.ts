@@ -8,6 +8,8 @@ const corsHeaders = {
 };
 
 const ENDPOINT_NAME = "erp-novo-usuario2";
+const UPLOAD_BUCKET = "cadastros-temp-files";
+const UPLOAD_QUEUE_STATUSES = ["queued", "retry_wait", "processing", "failed", "success"];
 
 type IdempotencyRow = {
   endpoint: string;
@@ -17,6 +19,19 @@ type IdempotencyRow = {
   response_body: unknown;
   status_code: number | null;
   error_message: string | null;
+};
+
+type AttachmentQueueResult = {
+  required: boolean;
+  queued: boolean;
+  reused?: boolean;
+  delivered?: boolean;
+  processing?: boolean;
+  queueId?: string;
+  idFuncionario?: number;
+  idDependente?: number;
+  arquivoPath?: string;
+  error?: string;
 };
 
 async function saveLog(
@@ -67,6 +82,291 @@ const extractErpMessage = (payload: any): string | null => {
   }
 
   return null;
+};
+
+const toPositiveInt = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) return value;
+  if (typeof value !== "string") return null;
+  const parsed = Number(value.trim());
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const extractFuncionarioCadastro = (body: any): number | null => {
+  const dependentes = Array.isArray(body?.dados?.dependente) ? body.dados.dependente : [];
+  for (const dependente of dependentes) {
+    const codigo = toPositiveInt(dependente?.funcionarioCadastro);
+    if (codigo) return codigo;
+  }
+  return null;
+};
+
+const extractDependenteCodigo = (payload: any): number | null => {
+  const candidateArrays = [
+    payload?.dados?.dependentes,
+    payload?.data?.dados?.dependentes,
+    payload?.data?.data?.dados?.dependentes,
+  ];
+
+  for (const candidate of candidateArrays) {
+    if (!Array.isArray(candidate)) continue;
+    for (const item of candidate) {
+      const codigo = toPositiveInt(item?.codigo);
+      if (codigo) return codigo;
+    }
+  }
+
+  return null;
+};
+
+const extractDocumentRequest = (body: any): { arquivoPath: string; arquivoNome: string } | null => {
+  const documento = body?.dados?.documento;
+  const arquivoPath = typeof documento?.caminho === "string" ? documento.caminho.trim() : "";
+  if (!arquivoPath) return null;
+
+  const arquivoNome =
+    typeof documento?.nome === "string" && documento.nome.trim()
+      ? documento.nome.trim()
+      : arquivoPath.split("/").filter(Boolean).pop() || "contrato.pdf";
+
+  return { arquivoPath, arquivoNome };
+};
+
+function triggerUploadQueueProcessor(supabaseUrl: string, serviceRoleKey: string) {
+  const promise = fetch(`${supabaseUrl}/functions/v1/erp-process-upload-queue`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${serviceRoleKey}`,
+    },
+    body: "{}",
+  }).catch((error) => {
+    console.warn("Falha ao disparar processamento imediato da fila de anexos:", error);
+  });
+
+  const edgeRuntime = (globalThis as any).EdgeRuntime;
+  if (edgeRuntime?.waitUntil) {
+    edgeRuntime.waitUntil(promise);
+  }
+}
+
+async function ensureAttachmentQueued(
+  supabase: any,
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  cadastroId: string,
+  userId: string | undefined,
+  requestBody: any,
+  erpPayload: any,
+): Promise<AttachmentQueueResult> {
+  const documento = extractDocumentRequest(requestBody);
+  if (!documento) {
+    return { required: false, queued: false };
+  }
+
+  const idFuncionario = extractFuncionarioCadastro(requestBody);
+  const idDependente = extractDependenteCodigo(erpPayload);
+
+  if (!idFuncionario || !idDependente) {
+    const error = !idFuncionario
+      ? "ERP criou o cadastro, mas nao foi possivel identificar o funcionario responsavel pelo upload do anexo."
+      : "ERP criou o cadastro, mas nao retornou o codigo do dependente necessario para enviar o anexo.";
+    console.error(error, {
+      cadastroId,
+      hasFuncionario: Boolean(idFuncionario),
+      hasDependente: Boolean(idDependente),
+      arquivoPath: documento.arquivoPath,
+    });
+    return {
+      required: true,
+      queued: false,
+      idFuncionario: idFuncionario ?? undefined,
+      idDependente: idDependente ?? undefined,
+      arquivoPath: documento.arquivoPath,
+      error,
+    };
+  }
+
+  let createdBy = userId ?? null;
+  if (cadastroId && isUuid(cadastroId)) {
+    const { data: cadastro } = await supabase
+      .from("cadastros")
+      .select("created_by")
+      .eq("id", cadastroId)
+      .maybeSingle();
+    createdBy = cadastro?.created_by || createdBy;
+  }
+
+  const { data: existingItems, error: existingError } = await supabase
+    .from("erp_upload_queue")
+    .select("*")
+    .eq("id_funcionario", idFuncionario)
+    .eq("id_dependente", idDependente)
+    .eq("arquivo_path", documento.arquivoPath)
+    .eq("bucket", UPLOAD_BUCKET)
+    .in("status", UPLOAD_QUEUE_STATUSES)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (existingError) {
+    console.warn("Falha ao consultar fila existente antes do enqueue automatico:", existingError.message);
+  }
+
+  const existingItem = existingItems?.[0];
+  if (existingItem) {
+    if (existingItem.status === "success") {
+      return {
+        required: true,
+        queued: true,
+        reused: true,
+        delivered: true,
+        queueId: existingItem.id,
+        idFuncionario,
+        idDependente,
+        arquivoPath: documento.arquivoPath,
+      };
+    }
+
+    if (existingItem.status === "processing") {
+      if (cadastroId && !existingItem.cadastro_id) {
+        await supabase
+          .from("erp_upload_queue")
+          .update({ cadastro_id: cadastroId, created_by: createdBy })
+          .eq("id", existingItem.id);
+      }
+
+      return {
+        required: true,
+        queued: true,
+        reused: true,
+        processing: true,
+        queueId: existingItem.id,
+        idFuncionario,
+        idDependente,
+        arquivoPath: documento.arquivoPath,
+      };
+    }
+
+    const isFinalFailure = existingItem.status === "failed";
+    const { data: reusedItem, error: reuseError } = await supabase
+      .from("erp_upload_queue")
+      .update({
+        cadastro_id: cadastroId || existingItem.cadastro_id,
+        created_by: createdBy,
+        status: "queued",
+        attempts: isFinalFailure ? 0 : existingItem.attempts,
+        next_attempt_at: new Date().toISOString(),
+        last_error: null,
+        last_status_code: null,
+        arquivo_nome: documento.arquivoNome,
+        tipo: "titular",
+      })
+      .eq("id", existingItem.id)
+      .select()
+      .single();
+
+    if (reuseError || !reusedItem) {
+      const error = `Cadastro criado no ERP, mas falhou ao reativar a fila do anexo: ${reuseError?.message || "erro desconhecido"}`;
+      console.error(error);
+      return {
+        required: true,
+        queued: false,
+        idFuncionario,
+        idDependente,
+        arquivoPath: documento.arquivoPath,
+        error,
+      };
+    }
+
+    triggerUploadQueueProcessor(supabaseUrl, serviceRoleKey);
+    return {
+      required: true,
+      queued: true,
+      reused: true,
+      queueId: reusedItem.id,
+      idFuncionario,
+      idDependente,
+      arquivoPath: documento.arquivoPath,
+    };
+  }
+
+  const { data: queueItem, error: queueError } = await supabase
+    .from("erp_upload_queue")
+    .insert({
+      cadastro_id: cadastroId && isUuid(cadastroId) ? cadastroId : null,
+      created_by: createdBy,
+      id_funcionario: idFuncionario,
+      id_dependente: idDependente,
+      arquivo_path: documento.arquivoPath,
+      arquivo_nome: documento.arquivoNome,
+      bucket: UPLOAD_BUCKET,
+      tipo: "titular",
+      status: "queued",
+      attempts: 0,
+      next_attempt_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (queueError || !queueItem) {
+    const error = `Cadastro criado no ERP, mas falhou ao enfileirar o anexo: ${queueError?.message || "erro desconhecido"}`;
+    console.error(error);
+    return {
+      required: true,
+      queued: false,
+      idFuncionario,
+      idDependente,
+      arquivoPath: documento.arquivoPath,
+      error,
+    };
+  }
+
+  triggerUploadQueueProcessor(supabaseUrl, serviceRoleKey);
+  return {
+    required: true,
+    queued: true,
+    reused: false,
+    queueId: queueItem.id,
+    idFuncionario,
+    idDependente,
+    arquivoPath: documento.arquivoPath,
+  };
+}
+
+const unwrapStoredErpPayload = (value: any): any => {
+  if (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    (value.success !== undefined || value.erpCreated !== undefined) &&
+    value.data !== undefined
+  ) {
+    return value.data;
+  }
+  return value;
+};
+
+const buildResponseWithAttachment = (
+  erpPayload: any,
+  attachment: AttachmentQueueResult,
+  extra: Record<string, unknown> = {},
+) => {
+  if (attachment.required && !attachment.queued) {
+    return {
+      success: false,
+      erpCreated: true,
+      data: erpPayload,
+      attachmentQueue: attachment,
+      error: attachment.error || "Cadastro criado no ERP, mas o anexo ainda nao foi enfileirado.",
+      ...extra,
+    };
+  }
+
+  return {
+    success: true,
+    data: erpPayload,
+    attachmentQueue: attachment,
+    ...extra,
+  };
 };
 
 Deno.serve(async (req: Request) => {
@@ -218,12 +518,23 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
 
       if (!existingCadastroError && existingCadastro?.status === "enviado" && existingCadastro?.erp_response) {
-        const existingResponse = existingCadastro.erp_response;
-
-        responseBody =
-          typeof existingResponse === "object" && existingResponse !== null
-            ? { ...existingResponse, idempotent: true, reused: true, reuseSource: "cadastros" }
-            : { success: true, data: existingResponse, idempotent: true, reused: true, reuseSource: "cadastros" };
+        const erpPayload = unwrapStoredErpPayload(existingCadastro.erp_response);
+        const attachment = await ensureAttachmentQueued(
+          supabase,
+          supabaseUrl,
+          supabaseServiceKey,
+          cadastroIdHeader,
+          userId,
+          requestBody,
+          erpPayload,
+        );
+        responseBody = buildResponseWithAttachment(erpPayload, attachment, {
+          idempotent: true,
+          reused: true,
+          reuseSource: "cadastros",
+        });
+        statusCode = attachment.required && !attachment.queued ? 503 : 200;
+        errorMessage = statusCode === 200 ? undefined : responseBody.error;
 
         await saveLog(supabase, {
           user_id: userId,
@@ -232,13 +543,14 @@ Deno.serve(async (req: Request) => {
           method: "POST",
           request_body: enrichRequestBodyForLog(requestBody),
           response_body: responseBody,
-          status_code: 200,
-          success: true,
+          status_code: statusCode,
+          success: statusCode === 200,
+          error_message: errorMessage,
           duration_ms: Date.now() - startTime,
         });
 
         return new Response(JSON.stringify(responseBody), {
-          status: 200,
+          status: statusCode,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -279,10 +591,23 @@ Deno.serve(async (req: Request) => {
         if (idempotencyRow.lock_token === lockToken && idempotencyRow.status === "processing") {
           ownsIdempotencyLock = true;
         } else if (idempotencyRow.status === "completed" && idempotencyRow.response_body) {
-          responseBody =
-            typeof idempotencyRow.response_body === "object" && idempotencyRow.response_body !== null
-              ? { ...(idempotencyRow.response_body as Record<string, unknown>), idempotent: true, reused: true, reuseSource: "idempotency_keys" }
-              : { success: true, data: idempotencyRow.response_body, idempotent: true, reused: true, reuseSource: "idempotency_keys" };
+          const erpPayload = unwrapStoredErpPayload(idempotencyRow.response_body);
+          const attachment = await ensureAttachmentQueued(
+            supabase,
+            supabaseUrl,
+            supabaseServiceKey,
+            cadastroIdHeader,
+            userId,
+            requestBody,
+            erpPayload,
+          );
+          responseBody = buildResponseWithAttachment(erpPayload, attachment, {
+            idempotent: true,
+            reused: true,
+            reuseSource: "idempotency_keys",
+          });
+          statusCode = attachment.required && !attachment.queued ? 503 : 200;
+          errorMessage = statusCode === 200 ? undefined : responseBody.error;
 
           await saveLog(supabase, {
             user_id: userId,
@@ -291,13 +616,14 @@ Deno.serve(async (req: Request) => {
             method: "POST",
             request_body: enrichRequestBodyForLog(requestBody),
             response_body: responseBody,
-            status_code: 200,
-            success: true,
+            status_code: statusCode,
+            success: statusCode === 200,
+            error_message: errorMessage,
             duration_ms: Date.now() - startTime,
           });
 
           return new Response(JSON.stringify(responseBody), {
-            status: 200,
+            status: statusCode,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         } else if (idempotencyRow.status === "failed") {
@@ -398,12 +724,26 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    responseBody = {
-      success: true,
-      data: responseData,
-    };
+    const attachment = await ensureAttachmentQueued(
+      supabase,
+      supabaseUrl,
+      supabaseServiceKey,
+      cadastroIdHeader,
+      userId,
+      requestBody,
+      responseData,
+    );
 
-    await finalizeIdempotency("completed", responseBody, 200, null);
+    responseBody = buildResponseWithAttachment(responseData, attachment);
+    statusCode = attachment.required && !attachment.queued ? 503 : 200;
+    errorMessage = statusCode === 200 ? undefined : responseBody.error;
+
+    await finalizeIdempotency(
+      "completed",
+      responseBody,
+      statusCode,
+      errorMessage ?? null,
+    );
 
     await saveLog(supabase, {
       user_id: userId,
@@ -412,13 +752,14 @@ Deno.serve(async (req: Request) => {
       method: "POST",
       request_body: enrichRequestBodyForLog(requestBody),
       response_body: responseBody,
-      status_code: 200,
-      success: true,
+      status_code: statusCode,
+      success: statusCode === 200,
+      error_message: errorMessage,
       duration_ms: Date.now() - startTime,
     });
 
     return new Response(JSON.stringify(responseBody), {
-      status: 200,
+      status: statusCode,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
