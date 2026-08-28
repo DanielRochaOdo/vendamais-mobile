@@ -32,9 +32,9 @@ jobs:
 
       - name: Check Edge Functions
         run: |
-          deno check supabase/functions/erp-process-upload-queue/index.ts
-          deno check supabase/functions/erp-enqueue-upload/index.ts
-          deno check supabase/functions/erp-novo-usuario2/index.ts
+          deno check --node-modules-dir=auto supabase/functions/erp-process-upload-queue/index.ts
+          deno check --node-modules-dir=auto supabase/functions/erp-enqueue-upload/index.ts
+          deno check --node-modules-dir=auto supabase/functions/erp-novo-usuario2/index.ts
 
       - name: Set up Node
         uses: actions/setup-node@v4
