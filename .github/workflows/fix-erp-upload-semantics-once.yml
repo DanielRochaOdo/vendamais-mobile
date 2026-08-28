@@ -28,15 +28,17 @@ jobs:
           from pathlib import Path
           path = Path('supabase/functions/erp-upload-documento/index.ts')
           text = path.read_text()
-          old = '''      if (semanticError.retryable) {
-                const queued = await enqueueForRetry(supabase, requestBody, userId, arquivoNome, errorMessage);
-          '''
-          new = '''      if (semanticError.retryable) {
-                const queued = await enqueueForRetry(supabase, requestBody, userId, arquivoNome, semanticError.message);
-          '''
-          if old not in text:
+          marker = 'if (semanticError.retryable) {'
+          start = text.find(marker)
+          if start < 0:
               raise SystemExit('semantic retry block not found')
-          path.write_text(text.replace(old, new, 1))
+          old_call = 'const queued = await enqueueForRetry(supabase, requestBody, userId, arquivoNome, errorMessage);'
+          call_index = text.find(old_call, start)
+          if call_index < 0:
+              raise SystemExit('semantic retry enqueue call not found')
+          new_call = 'const queued = await enqueueForRetry(supabase, requestBody, userId, arquivoNome, semanticError.message);'
+          text = text[:call_index] + new_call + text[call_index + len(old_call):]
+          path.write_text(text)
           PY
 
       - name: Validate diff
@@ -69,7 +71,7 @@ jobs:
       - name: Commit fix
         shell: bash
         run: |
-          git config user.name "github-actions[bot]"
+          git config user.name "github-actions[bot]]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add supabase/functions/erp-process-upload-queue/index.ts
           git add supabase/functions/erp-upload-documento/index.ts
