@@ -249,22 +249,18 @@ async function uploadToErp(supabase: any, item: QueueItem): Promise<UploadResult
   };
 }
 
-async function markCadastroWaiting(supabase: any, cadastroId: string | null, message: string) {
+async function markCadastroWaiting(_supabase: any, cadastroId: string | null, message: string) {
   if (!cadastroId) return;
-  const { error } = await supabase
-    .from("cadastros")
-    .update({ status: "incompleto", motivo_bloqueio: message })
-    .eq("id", cadastroId);
-  if (error) console.warn(`Falha ao manter cadastro ${cadastroId} pendente:`, error.message);
+  // The ERP adhesion was already committed. Keep retry state exclusively in
+  // erp_upload_queue so the user is never invited to submit the adhesion again.
+  console.warn(`Anexo do cadastro ${cadastroId} aguardando retry sem reabrir adesao: ${message}`);
 }
 
-async function markCadastroFailed(supabase: any, cadastroId: string | null, message: string) {
+async function markCadastroFailed(_supabase: any, cadastroId: string | null, message: string) {
   if (!cadastroId) return;
-  const { error } = await supabase
-    .from("cadastros")
-    .update({ status: "erro_envio", motivo_bloqueio: message })
-    .eq("id", cadastroId);
-  if (error) console.warn(`Falha ao marcar cadastro ${cadastroId} com erro:`, error.message);
+  // A terminal attachment failure is an operational queue issue, not a failed
+  // adhesion. Admins can retry it from the ERP upload queue.
+  console.error(`Anexo do cadastro ${cadastroId} falhou sem reabrir adesao: ${message}`);
 }
 
 async function reconcileCadastroIfComplete(supabase: any, cadastroId: string | null) {

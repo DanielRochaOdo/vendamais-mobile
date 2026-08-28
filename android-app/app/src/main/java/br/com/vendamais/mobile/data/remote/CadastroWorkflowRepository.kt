@@ -591,17 +591,51 @@ class CadastroWorkflowRepository(
                 "Cadastro ERP payload check: cadastroId=$targetCadastroId flow=$flowLabel tipo=${cadastro.tipoCadastro} status=${cadastro.status} hasMatricula=${!matriculaFinalNormalizada.isNullOrBlank()} matriculaLength=${matriculaFinalNormalizada?.length ?: 0} hasDataApresentacao=${!payloadDataApresentacao.isNullOrBlank()} hasResponsavelFinanceiroMatricula=${!payloadMatricula.isNullOrBlank()} matriculaPayloadLength=${payloadMatricula?.length ?: 0} matriculaSource=$matriculaSource",
             )
             val response = enviarParaErp(session, targetCadastroId, payload)
+            val attachmentQueuedByEdge = runCatching {
+                response.jsonObject["attachmentQueue"]
+                    ?.jsonObject
+                    ?.get("queued")
+                    ?.jsonPrimitive
+                    ?.booleanOrNull == true
+            }.getOrDefault(false)
             val firstDependenteId = CadastroPayloadBuilder.firstDependenteCodigo(response)
-            if (cadastro.arquivoPath != null && firstDependenteId != null && funcionarioCadastroId != null) {
-                processDocumentoUpload(
-                    session = session,
-                    cadastro = cadastro,
-                    funcionarioCadastroId = funcionarioCadastroId,
-                    dependenteId = firstDependenteId,
+
+            if (
+                !cadastro.arquivoPath.isNullOrBlank() &&
+                !attachmentQueuedByEdge &&
+                firstDependenteId != null &&
+                funcionarioCadastroId != null
+            ) {
+                runCatching {
+                    processDocumentoUpload(
+                        session = session,
+                        cadastro = cadastro,
+                        funcionarioCadastroId = funcionarioCadastroId,
+                        dependenteId = firstDependenteId,
+                    )
+                }.onFailure { throwable ->
+                    Log.e(
+                        logTag,
+                        "ERP confirmou cadastro $targetCadastroId; fallback de enqueue do anexo falhou sem reabrir a adesao.",
+                        throwable,
+                    )
+                }
+            } else if (!cadastro.arquivoPath.isNullOrBlank() && !attachmentQueuedByEdge) {
+                Log.w(
+                    logTag,
+                    "ERP confirmou cadastro $targetCadastroId, mas nao foi possivel montar fallback local do anexo. A adesao permanece enviada.",
                 )
             }
 
-            fetchCadastroDetalhe(session, targetCadastroId)
+            runCatching { fetchCadastroDetalhe(session, targetCadastroId) }
+                .onFailure { throwable ->
+                    Log.w(
+                        logTag,
+                        "ERP confirmou cadastro $targetCadastroId; refresh local falhou e foi ignorado para impedir reenvio duplicado.",
+                        throwable,
+                    )
+                }
+                .getOrDefault(cadastro)
         }.getOrThrow()
     }
 
@@ -1444,9 +1478,10 @@ class CadastroWorkflowRepository(
         response: JsonElement,
         success: Boolean,
     ) {
-        val attachmentPending = success && isAttachmentDeliveryPending(response)
         val statusPersistido = if (success) {
-            if (attachmentPending) "incompleto" else "enviado"
+            // NovoUsuario2 confirmed the remote transaction. Attachment delivery
+            // is independent and must not reopen this adhesion.
+            "enviado"
         } else {
             val statusAtual = runCatching {
                 getList<CadastroStatusRow>(
@@ -1477,9 +1512,7 @@ class CadastroWorkflowRepository(
             put("payload_erp", payload)
             put("erp_response", response)
             put("tipo_cadastro", "cadastro")
-            if (attachmentPending) {
-                put("motivo_bloqueio", "Aguardando envio do anexo ao ERP.")
-            } else if (success) {
+            if (success) {
                 put("motivo_bloqueio", JsonNull)
             }
             cpfForSync?.let { put("cpf", it) }
@@ -1517,36 +1550,28 @@ class CadastroWorkflowRepository(
 
         val throwable = result.exceptionOrNull() ?: return
         if (success) {
-            val attachmentPending = isAttachmentDeliveryPending(response)
             val fallback = runCatching {
-                if (attachmentPending) {
-                    markCadastroWaitingForAttachment(
-                        session = session,
-                        cadastroId = cadastroId,
-                        payload = payload,
-                        response = response,
-                    )
-                } else {
-                    markCadastroAsEnviado(
-                        session = session,
-                        cadastroId = cadastroId,
-                        payload = payload,
-                        response = response,
-                    )
-                }
+                markCadastroAsEnviado(
+                    session = session,
+                    cadastroId = cadastroId,
+                    payload = payload,
+                    response = response,
+                )
             }
             if (fallback.isSuccess) {
                 Log.w(
                     logTag,
-                    if (attachmentPending) {
-                        "syncCadastroAfterSend usou fallback para manter cadastro pendente ate o anexo id=$cadastroId"
-                    } else {
-                        "syncCadastroAfterSend usou fallback minimo para marcar cadastro como enviado id=$cadastroId"
-                    },
+                    "syncCadastroAfterSend usou fallback minimo para manter ERP confirmado como enviado id=$cadastroId",
                     throwable,
                 )
-                return
+            } else {
+                Log.e(
+                    logTag,
+                    "ERP confirmou cadastro $cadastroId, mas a reconciliacao local falhou. O erro nao sera propagado para evitar reenvio duplicado.",
+                    fallback.exceptionOrNull(),
+                )
             }
+            return
         }
 
         if (!isDuplicateDraftConstraintError(throwable)) throw throwable

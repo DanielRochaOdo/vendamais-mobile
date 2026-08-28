@@ -141,6 +141,24 @@ class CadastroPayloadBuilderTest {
         assertThat(responsavel?.get("dataApresentacao")?.jsonPrimitive?.contentOrNull).isNotEmpty()
     }
 
+    @Test
+    fun `firstDependenteCodigo should read scalar codigo returned by NovoUsuario2`() {
+        val response = JSON.parseToJsonElement(
+            """{"success":true,"data":{"dados":{"codigo":12345}}}""",
+        )
+
+        assertThat(CadastroPayloadBuilder.firstDependenteCodigo(response)).isEqualTo(12345)
+    }
+
+    @Test
+    fun `firstDependenteCodigo should keep legacy dependentes array compatibility`() {
+        val response = JSON.parseToJsonElement(
+            """{"success":true,"data":{"dados":{"dependentes":[{"codigo":54321}]}}}""",
+        )
+
+        assertThat(CadastroPayloadBuilder.firstDependenteCodigo(response)).isEqualTo(54321)
+    }
+
     private fun cadastroDetalheBase(
         contatos: kotlinx.serialization.json.JsonElement? = null,
         endereco: kotlinx.serialization.json.JsonElement? = null,

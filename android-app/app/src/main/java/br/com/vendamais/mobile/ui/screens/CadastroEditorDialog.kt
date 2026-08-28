@@ -126,7 +126,7 @@ import java.time.Period
 import java.text.Normalizer
 import java.util.Locale
 
-private const val MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+private const val MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 private const val LEMMIT_DEPENDENTE_MAX_ATTEMPTS = 1
 private const val LEMMIT_DEPENDENTE_TIMEOUT_MS = 9000L
 private const val LEMMIT_DEPENDENTE_RETRY_DELAY_MS = 0L
@@ -381,19 +381,12 @@ fun CadastroEditorDialog(
         mimeType: String,
         bytes: ByteArray,
     ) {
-        if (arquivoPath.isNotBlank()) {
-            val existingFile = File(arquivoPath)
-            if (existingFile.exists()) {
-                withContext(Dispatchers.IO) { runCatching { existingFile.delete() } }
-            } else {
-                runCatching { viewModel.deleteTempFile(arquivoPath) }
-            }
-        }
         validateUpload(
             fileName = fileName,
             mimeType = mimeType,
             size = bytes.size.toLong(),
         )
+        val previousPath = arquivoPath
         val draftAttachment = withContext(Dispatchers.IO) {
             DraftAttachmentStorage.copyBytesToDraftStorage(
                 context = context,
@@ -402,6 +395,14 @@ fun CadastroEditorDialog(
                 mimeType = mimeType,
                 bytes = bytes,
             )
+        }
+        if (previousPath.isNotBlank()) {
+            val existingFile = File(previousPath)
+            if (existingFile.exists()) {
+                withContext(Dispatchers.IO) { runCatching { existingFile.delete() } }
+            } else {
+                runCatching { viewModel.deleteTempFile(previousPath) }
+            }
         }
         arquivoPath = draftAttachment.path
         arquivoNome = draftAttachment.name
@@ -1840,6 +1841,11 @@ fun CadastroEditorDialog(
                         WebCard {
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text("Documento", fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    text = "PDF, JPG ou PNG · maximo 5 MB",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                                 if (arquivoNome.isNotBlank()) {
                                     TextButton(
                                         onClick = { scope.launch { openArquivoPreview() } },
@@ -3072,7 +3078,7 @@ private fun validateUpload(fileName: String, mimeType: String, size: Long) {
     val acceptedName = lower.endsWith(".pdf") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png")
     val acceptedMime = mimeType in setOf("application/pdf", "image/jpeg", "image/png")
     if (!acceptedName && !acceptedMime) throw IllegalStateException("Arquivo invalido. Use PDF, JPG ou PNG.")
-    if (size > MAX_UPLOAD_BYTES) throw IllegalStateException("Arquivo excede 10MB.")
+    if (size > MAX_UPLOAD_BYTES) throw IllegalStateException("O anexo excede o limite de 5 MB aceito pelo ERP. Escolha um arquivo menor.")
 }
 
 private fun createCameraCaptureUri(context: Context): Pair<Uri, String> {

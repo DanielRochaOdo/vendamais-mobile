@@ -101,16 +101,33 @@ const extractFuncionarioCadastro = (body: any): number | null => {
 };
 
 const extractDependenteCodigo = (payload: any): number | null => {
-  const candidateArrays = [
+  // NovoUsuario2 is not perfectly shape-stable. In production we have seen the
+  // created dependent code returned directly as dados.codigo as well as inside
+  // dependentes arrays. Accept every known successful shape before deciding
+  // that the code is absent.
+  const scalarCandidates = [
+    payload?.dados?.codigo,
+    payload?.data?.dados?.codigo,
+    payload?.data?.data?.dados?.codigo,
+  ];
+  for (const candidate of scalarCandidates) {
+    const codigo = toPositiveInt(candidate);
+    if (codigo) return codigo;
+  }
+
+  const candidateCollections = [
     payload?.dados?.dependentes,
+    payload?.dados?.dependente,
     payload?.data?.dados?.dependentes,
+    payload?.data?.dados?.dependente,
     payload?.data?.data?.dados?.dependentes,
+    payload?.data?.data?.dados?.dependente,
   ];
 
-  for (const candidate of candidateArrays) {
-    if (!Array.isArray(candidate)) continue;
-    for (const item of candidate) {
-      const codigo = toPositiveInt(item?.codigo);
+  for (const candidate of candidateCollections) {
+    const items = Array.isArray(candidate) ? candidate : candidate ? [candidate] : [];
+    for (const item of items) {
+      const codigo = toPositiveInt(item?.codigo ?? item?.codigoDependente ?? item?.idDependente);
       if (codigo) return codigo;
     }
   }
@@ -149,16 +166,44 @@ function triggerUploadQueueProcessor(supabaseUrl: string, serviceRoleKey: string
   }
 }
 
-async function keepCadastroPendingForAttachment(supabase: any, cadastroId: string) {
+async function keepCadastroPendingForAttachment(_supabase: any, cadastroId: string) {
   if (!cadastroId || !isUuid(cadastroId)) return;
-  const { error } = await supabase
+  // IMPORTANT: once NovoUsuario2 confirms creation, the adhesion is committed.
+  // Attachment state lives in erp_upload_queue and must never reopen the
+  // adhesion, otherwise the UI invites a duplicate ERP submission.
+  console.info(`Cadastro ${cadastroId} permanece enviado enquanto o anexo e processado em segundo plano.`);
+}
+
+async function markCadastroErpCreated(supabase: any, cadastroId: string, erpPayload: any) {
+  if (!cadastroId || !isUuid(cadastroId)) return;
+
+  const sentAt = new Date().toISOString();
+  let { error } = await supabase
     .from("cadastros")
     .update({
-      status: "incompleto",
-      motivo_bloqueio: "Aguardando envio do anexo ao ERP.",
+      status: "enviado",
+      data_envio: sentAt,
+      motivo_bloqueio: null,
+      erp_response: { success: true, data: erpPayload },
     })
     .eq("id", cadastroId);
-  if (error) console.warn(`Falha ao manter cadastro ${cadastroId} pendente pelo anexo:`, error.message);
+
+  // Keep compatibility with older schemas where data_envio may not be writable.
+  if (error?.message?.includes("data_envio")) {
+    const retry = await supabase
+      .from("cadastros")
+      .update({
+        status: "enviado",
+        motivo_bloqueio: null,
+        erp_response: { success: true, data: erpPayload },
+      })
+      .eq("id", cadastroId);
+    error = retry.error;
+  }
+
+  if (error) {
+    console.warn(`ERP confirmou cadastro ${cadastroId}, mas a reconciliacao local falhou:`, error.message);
+  }
 }
 
 async function ensureAttachmentQueued(
@@ -365,21 +410,20 @@ const buildResponseWithAttachment = (
   attachment: AttachmentQueueResult,
   extra: Record<string, unknown> = {},
 ) => {
-  if (attachment.required && !attachment.queued) {
-    return {
-      success: false,
-      erpCreated: true,
-      data: erpPayload,
-      attachmentQueue: attachment,
-      error: attachment.error || "Cadastro criado no ERP, mas o anexo ainda nao foi enfileirado.",
-      ...extra,
-    };
-  }
-
+  const attachmentPending = attachment.required && !attachment.queued;
   return {
     success: true,
+    erpCreated: true,
     data: erpPayload,
     attachmentQueue: attachment,
+    ...(attachmentPending
+      ? {
+          attachmentPending: true,
+          warning:
+            attachment.error ||
+            "Cadastro criado no ERP. O documento seguira pela fila de sincronizacao sem exigir novo cadastro.",
+        }
+      : {}),
     ...extra,
   };
 };
@@ -534,6 +578,7 @@ Deno.serve(async (req: Request) => {
 
       if (!existingCadastroError && existingCadastro?.status === "enviado" && existingCadastro?.erp_response) {
         const erpPayload = unwrapStoredErpPayload(existingCadastro.erp_response);
+        await markCadastroErpCreated(supabase, cadastroIdHeader, erpPayload);
         const attachment = await ensureAttachmentQueued(
           supabase,
           supabaseUrl,
@@ -548,8 +593,8 @@ Deno.serve(async (req: Request) => {
           reused: true,
           reuseSource: "cadastros",
         });
-        statusCode = attachment.required && !attachment.queued ? 503 : 200;
-        errorMessage = statusCode === 200 ? undefined : responseBody.error;
+        statusCode = 200;
+        errorMessage = undefined;
 
         await saveLog(supabase, {
           user_id: userId,
@@ -607,6 +652,7 @@ Deno.serve(async (req: Request) => {
           ownsIdempotencyLock = true;
         } else if (idempotencyRow.status === "completed" && idempotencyRow.response_body) {
           const erpPayload = unwrapStoredErpPayload(idempotencyRow.response_body);
+          await markCadastroErpCreated(supabase, cadastroIdHeader, erpPayload);
           const attachment = await ensureAttachmentQueued(
             supabase,
             supabaseUrl,
@@ -621,8 +667,8 @@ Deno.serve(async (req: Request) => {
             reused: true,
             reuseSource: "idempotency_keys",
           });
-          statusCode = attachment.required && !attachment.queued ? 503 : 200;
-          errorMessage = statusCode === 200 ? undefined : responseBody.error;
+          statusCode = 200;
+          errorMessage = undefined;
 
           await saveLog(supabase, {
             user_id: userId,
@@ -704,7 +750,7 @@ Deno.serve(async (req: Request) => {
     const responseData = await erpResponse.json();
     statusCode = erpResponse.status;
 
-    const hasDadosCodigo = responseData?.dados?.codigo || responseData?.data?.dados?.codigo;
+    const hasDadosCodigo = extractDependenteCodigo(responseData);
 
     if (!hasDadosCodigo) {
       if (!erpResponse.ok) {
@@ -739,6 +785,8 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    await markCadastroErpCreated(supabase, cadastroIdHeader, responseData);
+
     const attachment = await ensureAttachmentQueued(
       supabase,
       supabaseUrl,
@@ -750,8 +798,8 @@ Deno.serve(async (req: Request) => {
     );
 
     responseBody = buildResponseWithAttachment(responseData, attachment);
-    statusCode = attachment.required && !attachment.queued ? 503 : 200;
-    errorMessage = statusCode === 200 ? undefined : responseBody.error;
+    statusCode = 200;
+    errorMessage = undefined;
 
     await finalizeIdempotency(
       "completed",

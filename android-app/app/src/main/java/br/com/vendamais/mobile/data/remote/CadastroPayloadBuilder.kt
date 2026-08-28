@@ -398,17 +398,41 @@ internal object CadastroPayloadBuilder {
     }
 
     fun firstDependenteCodigo(response: JsonElement?): Int? {
-        val dados = response?.jsonObject
-            ?.get("data")?.jsonObject
-            ?.get("dados")?.jsonObject
-            ?.get("dependentes")?.jsonArray
-            ?: return null
-        return dados.firstOrNull()
-            ?.jsonObject
-            ?.get("codigo")
-            ?.jsonPrimitive
-            ?.contentOrNull
-            ?.toIntOrNull()
+        val root = runCatching { response?.jsonObject }.getOrNull() ?: return null
+        val payloads = listOfNotNull(
+            root,
+            runCatching { root["data"]?.jsonObject }.getOrNull(),
+            runCatching { root["data"]?.jsonObject?.get("data")?.jsonObject }.getOrNull(),
+        )
+
+        payloads.forEach { payload ->
+            val dados = runCatching { payload["dados"]?.jsonObject }.getOrNull() ?: return@forEach
+            dados["codigo"]
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?.toIntOrNull()
+                ?.takeIf { it > 0 }
+                ?.let { return it }
+
+            listOf("dependentes", "dependente").forEach { key ->
+                val value = dados[key] ?: return@forEach
+                val items = runCatching { value.jsonArray.toList() }
+                    .getOrElse { listOf(value) }
+                items.forEach { item ->
+                    val obj = runCatching { item.jsonObject }.getOrNull() ?: return@forEach
+                    listOf("codigo", "codigoDependente", "idDependente").forEach { codeKey ->
+                        obj[codeKey]
+                            ?.jsonPrimitive
+                            ?.contentOrNull
+                            ?.toIntOrNull()
+                            ?.takeIf { it > 0 }
+                            ?.let { return it }
+                    }
+                }
+            }
+        }
+
+        return null
     }
 
     private fun contatoTipoCodigo(tipo: String): Int {

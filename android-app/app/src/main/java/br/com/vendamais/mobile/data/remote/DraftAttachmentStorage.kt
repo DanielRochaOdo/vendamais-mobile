@@ -14,6 +14,7 @@ data class DraftAttachmentCopyResult(
 )
 
 object DraftAttachmentStorage {
+    private const val MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
     fun getDraftAttachmentDir(context: Context, draftId: String): File {
         return File(File(context.filesDir, "cadastros"), "$draftId/anexos")
     }
@@ -50,6 +51,9 @@ object DraftAttachmentStorage {
         mimeType: String,
         bytes: ByteArray,
     ): DraftAttachmentCopyResult {
+        require(bytes.size <= MAX_ATTACHMENT_BYTES) {
+            "O anexo excede o limite de 5 MB aceito pelo ERP. Escolha um arquivo menor."
+        }
         val safeName = resolveAttachmentDisplayName(originalName)
         val dir = getDraftAttachmentDir(context, draftId)
         dir.mkdirs()
