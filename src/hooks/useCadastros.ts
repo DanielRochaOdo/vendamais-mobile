@@ -9,6 +9,8 @@ const ERP_SITUACOES_ATIVAS = [1, 4, 6];
 const inFlightCadastroEnvios = new Map<string, Promise<any>>();
 
 const normalizeCpf = (value?: string | null) => (value || '').replace(/\D/g, '');
+const isAttachmentDeliveryPending = (result: any) =>
+  Boolean(result?.attachmentQueue?.required && result?.attachmentQueue?.delivered !== true);
 
 const isAbortLikeError = (error: unknown): boolean => {
   if (!error) return false;
@@ -553,20 +555,24 @@ export function useCadastros() {
   const syncCadastroEnviado = async (id: string, payload: Record<string, unknown>, result: any) => {
     const dependentesFormatados = formatDependentesForSync(extractDependentesPayload(payload));
 
+    const attachmentPending = isAttachmentDeliveryPending(result);
     const syncPayloadBase = {
-      status: 'enviado',
+      status: attachmentPending ? 'incompleto' : 'enviado',
       payload_erp: payload,
       erp_response: result,
       dependentes: dependentesFormatados,
+      motivo_bloqueio: attachmentPending ? 'Aguardando envio do anexo ao ERP.' : null,
     };
 
-    let { data: syncedCadastro, error: syncError } = await supabase
+    let syncQuery = supabase
       .from('cadastros')
-      .update({
-        ...syncPayloadBase,
-        data_envio: new Date().toISOString(),
-      })
+      .update(
+        attachmentPending
+          ? syncPayloadBase
+          : { ...syncPayloadBase, data_envio: new Date().toISOString() }
+      )
       .eq('id', id);
+    let { data: syncedCadastro, error: syncError } = await syncQuery;
 
     // Compatibilidade com ambientes onde a coluna ainda nao existe
     if (syncError?.message?.includes('data_envio')) {
@@ -621,6 +627,12 @@ export function useCadastros() {
       const cpfTitular = normalizeCpf(titularPayload?.cpf);
 
       if (!cpfTitular || cpfTitular.length !== 11) {
+        return null;
+      }
+
+      const documento = (payload as any)?.dados?.documento;
+      if (documento?.caminho) {
+        // Nao conclui localmente apenas porque o CPF apareceu no ERP. O anexo precisa ser confirmado pela fila.
         return null;
       }
 

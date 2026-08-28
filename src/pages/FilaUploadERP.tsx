@@ -7,6 +7,19 @@ import { formatCPF, formatDate } from '../lib/cpf';
 import { Button } from '../components/Button';
 import { Select } from '../components/Select';
 
+interface QueueHealth {
+  total: number;
+  queued: number;
+  processing: number;
+  retry_wait: number;
+  success: number;
+  failed: number;
+  due_now: number;
+  stuck_processing: number;
+  oldest_pending_at: string | null;
+  checked_at: string;
+}
+
 interface QueueItem {
   id: string;
   created_at: string;
@@ -43,6 +56,8 @@ export function FilaUploadERP() {
   const [processingQueue, setProcessingQueue] = useState(false);
   const [resettingStuck, setResettingStuck] = useState(false);
   const [processingCount, setProcessingCount] = useState(0);
+  const [processingProgress, setProcessingProgress] = useState<string | null>(null);
+  const [queueHealth, setQueueHealth] = useState<QueueHealth | null>(null);
 
   useEffect(() => {
     if (profile?.role === 'ADMINISTRADOR') {
@@ -87,6 +102,11 @@ export function FilaUploadERP() {
 
       setItems(mappedData);
       setTotalCount(count || 0);
+
+      const { data: healthData, error: healthError } = await supabase.rpc('get_erp_upload_queue_health');
+      if (!healthError && healthData) {
+        setQueueHealth(healthData as QueueHealth);
+      }
 
       const processingItems = mappedData.filter(item => item.status === 'processing').length;
       setProcessingCount(processingItems);
@@ -138,13 +158,10 @@ export function FilaUploadERP() {
 
   const handleProcessQueue = async () => {
     setProcessingQueue(true);
+    setProcessingProgress('Iniciando worker da fila...');
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        alert('Sessão não encontrada');
-        setProcessingQueue(false);
-        return;
-      }
+      if (!session) throw new Error('Sessao nao encontrada');
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/erp-process-upload-queue`,
@@ -154,32 +171,60 @@ export function FilaUploadERP() {
             'Authorization': `Bearer ${session.access_token}`,
             'Content-Type': 'application/json',
           },
+          body: '{}',
         }
       );
-
       const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || result.details || 'Erro desconhecido ao processar a fila');
+      }
 
-      if (response.ok || response.status === 202) {
-        if (result.queued_count === 0) {
-          alert('Nenhum item na fila para processar no momento.');
-        } else {
-          const estimatedMinutes = Math.ceil(result.estimated_time_seconds / 60);
-          alert(
-            `Processamento iniciado em background!\n\n` +
-            `${result.queued_count} item(ns) sendo processado(s)\n` +
-            `Tempo estimado: ~${estimatedMinutes} minuto(s)\n\n` +
-            `A tela será atualizada automaticamente conforme os uploads são concluídos.`
+      const firstSummary = result.results || {};
+      setProcessingProgress(
+        `Primeiro lote: ${firstSummary.success || 0} sucesso(s), ${firstSummary.retry || 0} retry(s), ${result.remaining_due || 0} ainda devido(s).`
+      );
+      await fetchQueueItems();
+
+      let finalHealth: QueueHealth | null = null;
+      for (let attempt = 0; attempt < 90; attempt += 1) {
+        const { data: healthData, error: healthError } = await supabase.rpc('get_erp_upload_queue_health');
+        if (!healthError && healthData) {
+          finalHealth = healthData as QueueHealth;
+          setQueueHealth(finalHealth);
+          setProcessingProgress(
+            `Fila ativa: ${finalHealth.processing} processando, ${finalHealth.due_now} devido(s), ${finalHealth.retry_wait} aguardando retry, ${finalHealth.failed} falha(s) definitiva(s).`
           );
+          if (finalHealth.due_now === 0 && finalHealth.processing === 0) break;
+        } else {
+          break;
         }
-        fetchQueueItems();
+
+        if (attempt % 4 === 0) await fetchQueueItems();
+        await new Promise(resolve => window.setTimeout(resolve, 1000));
+      }
+
+      await fetchQueueItems();
+      if (finalHealth) {
+        alert(
+          `Processamento imediato concluido.
+
+` +
+          `Aguardando retry: ${finalHealth.retry_wait}
+` +
+          `Falhas definitivas: ${finalHealth.failed}
+
+` +
+          `Itens em retry serao retomados automaticamente pelo cron a cada minuto.`
+        );
       } else {
-        alert(`Erro ao iniciar processamento: ${result.error || result.details || 'Erro desconhecido'}`);
+        alert(`Lote processado. Sucessos: ${firstSummary.success || 0}; retries: ${firstSummary.retry || 0}.`);
       }
     } catch (error) {
       console.error('Erro ao processar fila:', error);
-      alert('Erro ao conectar com o servidor. Verifique sua conexão e tente novamente.');
+      alert(error instanceof Error ? error.message : 'Erro ao conectar com o servidor.');
     } finally {
       setProcessingQueue(false);
+      setProcessingProgress(null);
     }
   };
 
@@ -358,16 +403,24 @@ export function FilaUploadERP() {
           </div>
         </div>
 
-        {processingCount > 0 && (
+        {queueHealth && (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="bg-white border border-slate-200 rounded-lg p-3"><div className="text-xs text-slate-500">Devidos agora</div><div className="text-xl font-semibold">{queueHealth.due_now}</div></div>
+            <div className="bg-white border border-slate-200 rounded-lg p-3"><div className="text-xs text-slate-500">Processando</div><div className="text-xl font-semibold">{queueHealth.processing}</div></div>
+            <div className="bg-white border border-slate-200 rounded-lg p-3"><div className="text-xs text-slate-500">Aguardando retry</div><div className="text-xl font-semibold">{queueHealth.retry_wait}</div></div>
+            <div className="bg-white border border-slate-200 rounded-lg p-3"><div className="text-xs text-slate-500">Falhas definitivas</div><div className="text-xl font-semibold">{queueHealth.failed}</div></div>
+            <div className="bg-white border border-slate-200 rounded-lg p-3"><div className="text-xs text-slate-500">Travados &gt;10 min</div><div className="text-xl font-semibold">{queueHealth.stuck_processing}</div></div>
+          </div>
+        )}
+
+        {(processingCount > 0 || processingProgress) && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-center gap-3">
               <Loader2 className="w-5 h-5 text-blue-600 animate-spin flex-shrink-0" />
               <div className="flex-1">
-                <p className="text-blue-900 font-medium">
-                  Processamento em andamento
-                </p>
+                <p className="text-blue-900 font-medium">Processamento em andamento</p>
                 <p className="text-blue-700 text-sm mt-1">
-                  {processingCount} item(ns) sendo enviado(s) para o ERP. A tela será atualizada automaticamente.
+                  {processingProgress || `${processingCount} item(ns) sendo enviado(s) para o ERP.`}
                 </p>
               </div>
             </div>

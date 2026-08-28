@@ -168,6 +168,7 @@ fun InclusaoDependenteDialog(
     onDismiss: () -> Unit,
     onSuccess: () -> Unit,
     onCompleted: () -> Unit = {},
+    onQueued: () -> Unit = {},
     cadastro: CadastroDetalhe? = null,
 ) {
     val context = LocalContext.current
@@ -183,6 +184,7 @@ fun InclusaoDependenteDialog(
     var localError by rememberSaveable { mutableStateOf<String?>(null) }
     var localNotice by rememberSaveable { mutableStateOf<String?>(null) }
     var successDialogMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var completionHasPendingAttachments by rememberSaveable { mutableStateOf(false) }
     var previewingArquivoIndex by rememberSaveable { mutableStateOf<Int?>(null) }
     val keyboardAwareFooter = rememberKeyboardAwareFooterState()
 
@@ -715,6 +717,7 @@ fun InclusaoDependenteDialog(
             cadastroId = cadastroId,
         )
 
+        val hasAttachments = base.any { it.arquivo != null }
         val finalPayloadBase = buildCadastroPayload(
             profileId = profile?.id.orEmpty(),
             teamId = profile?.teamId,
@@ -723,7 +726,7 @@ fun InclusaoDependenteDialog(
             empresaNome = resolveEmpresaNome(responsavel),
             empresaRaw = empresaRaw,
             planosRaw = empresaPlanosRaw ?: extractPlanosRawFromEmpresa(empresaRaw),
-            status = "enviado",
+            status = if (hasAttachments) "incompleto" else "enviado",
             statusAdesaoId = selectedStatusId.takeIf { it.isNotBlank() },
             vendedor = vendedor ?: TeamMemberOption("", "", "", null),
             adesionista = adesionista,
@@ -732,6 +735,11 @@ fun InclusaoDependenteDialog(
         val finalPayload = buildJsonObject {
             finalPayloadBase.forEach { (key, value) -> put(key, value) }
             put("erp_response", response)
+            if (hasAttachments) {
+                put("motivo_bloqueio", "Aguardando envio do(s) anexo(s) ao ERP.")
+            } else {
+                put("motivo_bloqueio", JsonNull)
+            }
         }
 
         cadastroId = if (cadastroId == null) {
@@ -743,23 +751,31 @@ fun InclusaoDependenteDialog(
 
         val codes = extractDependenteCodes(response)
         val funcionario = profile?.externalId?.toIntOrNull() ?: 0
-        if (funcionario > 0 && cadastroId != null) {
+        if (hasAttachments) {
+            if (funcionario <= 0 || cadastroId == null) {
+                throw IllegalStateException(
+                    "Dependentes criados no ERP, mas o anexo nao pode ser enfileirado. O cadastro foi mantido pendente para nova tentativa.",
+                )
+            }
+
             base.forEachIndexed { idx, dep ->
                 val file = dep.arquivo ?: return@forEachIndexed
-                val code = codes.getOrNull(idx) ?: return@forEachIndexed
-                val uploaded = runCatching {
-                    viewModel.uploadDependenteDocumento(funcionario, code, file.path, file.nome)
-                }.getOrDefault(false)
-                if (!uploaded) {
-                    runCatching {
-                        viewModel.enqueueDependenteUpload(cadastroId, funcionario, code, file.path, file.nome)
-                    }
-                } else {
-                    runCatching { viewModel.deleteTempFile(file.path) }
+                val code = codes.getOrNull(idx)
+                    ?: throw IllegalStateException(
+                        "Dependente ${idx + 1} criado no ERP, mas sem codigo para envio do anexo. O cadastro foi mantido pendente.",
+                    )
+                runCatching {
+                    viewModel.enqueueDependenteUpload(cadastroId, funcionario, code, file.path, file.nome)
+                }.getOrElse { throwable ->
+                    throw IllegalStateException(
+                        "Dependente ${idx + 1} criado no ERP, mas falhou ao enfileirar o anexo: ${throwable.message ?: "erro desconhecido"}. O arquivo foi preservado.",
+                        throwable,
+                    )
                 }
             }
         }
 
+        completionHasPendingAttachments = hasAttachments
         cadastroId?.let { id ->
             runCatching {
                 viewModel.closeDuplicateInclusaoPendentes(
@@ -769,7 +785,11 @@ fun InclusaoDependenteDialog(
                 )
             }
         }
-        successDialogMessage = "Dependentes incluidos com sucesso."
+        successDialogMessage = if (completionHasPendingAttachments) {
+            "Dependentes incluidos. Os anexos estao sendo enviados ao ERP e o cadastro permanecera pendente ate a confirmacao."
+        } else {
+            "Dependentes incluidos com sucesso."
+        }
     }
 
     val planoOptions = remember(
@@ -833,7 +853,7 @@ fun InclusaoDependenteDialog(
         if (!successDialogMessage.isNullOrBlank()) {
             successDialogMessage = null
             onDismiss()
-            onCompleted()
+            if (completionHasPendingAttachments) onQueued() else onCompleted()
         }
     }
 

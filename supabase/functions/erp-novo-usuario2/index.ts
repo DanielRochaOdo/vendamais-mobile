@@ -149,6 +149,18 @@ function triggerUploadQueueProcessor(supabaseUrl: string, serviceRoleKey: string
   }
 }
 
+async function keepCadastroPendingForAttachment(supabase: any, cadastroId: string) {
+  if (!cadastroId || !isUuid(cadastroId)) return;
+  const { error } = await supabase
+    .from("cadastros")
+    .update({
+      status: "incompleto",
+      motivo_bloqueio: "Aguardando envio do anexo ao ERP.",
+    })
+    .eq("id", cadastroId);
+  if (error) console.warn(`Falha ao manter cadastro ${cadastroId} pendente pelo anexo:`, error.message);
+}
+
 async function ensureAttachmentQueued(
   supabase: any,
   supabaseUrl: string,
@@ -234,6 +246,7 @@ async function ensureAttachmentQueued(
           .eq("id", existingItem.id);
       }
 
+      await keepCadastroPendingForAttachment(supabase, cadastroId);
       return {
         required: true,
         queued: true,
@@ -277,6 +290,7 @@ async function ensureAttachmentQueued(
       };
     }
 
+    await keepCadastroPendingForAttachment(supabase, cadastroId);
     triggerUploadQueueProcessor(supabaseUrl, serviceRoleKey);
     return {
       required: true,
@@ -320,6 +334,7 @@ async function ensureAttachmentQueued(
     };
   }
 
+  await keepCadastroPendingForAttachment(supabase, cadastroId);
   triggerUploadQueueProcessor(supabaseUrl, serviceRoleKey);
   return {
     required: true,

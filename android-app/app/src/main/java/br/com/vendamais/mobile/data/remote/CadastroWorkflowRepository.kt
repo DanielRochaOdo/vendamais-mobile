@@ -82,6 +82,14 @@ class CadastroWorkflowRepository(
         return digits.takeIf { it.length == 11 }
     }
 
+    private fun isAttachmentDeliveryPending(response: JsonElement): Boolean {
+        val root = response as? JsonObject ?: return false
+        val attachmentQueue = root["attachmentQueue"] as? JsonObject ?: return false
+        val required = attachmentQueue["required"]?.jsonPrimitive?.booleanOrNull == true
+        val delivered = attachmentQueue["delivered"]?.jsonPrimitive?.booleanOrNull == true
+        return required && !delivered
+    }
+
     @kotlinx.serialization.Serializable
     private data class CadastroStatusRow(
         val status: String? = null,
@@ -300,6 +308,14 @@ class CadastroWorkflowRepository(
                 .orEmpty()
             val statusPermiteContinuar = isPendingCadastroStatus(statusNormalizado)
             if (!statusPermiteContinuar) {
+                if (statusNormalizado == "enviado") {
+                    throw CadastroExistenteException(
+                        cadastroId = null,
+                        empresaNome = existing.empresaNome,
+                        canContinue = false,
+                        "Este CPF ja possui uma adesao concluida e enviada. Abra o cadastro existente; uma nova adesao para o mesmo CPF nao e permitida.",
+                    )
+                }
                 Log.i(
                     logTag,
                     "createDraftFromCpf ignorando cadastro historico id=${existing.cadastroId ?: "-"} status=${existing.status ?: "-"} cpf=$cpf",
@@ -1422,8 +1438,9 @@ class CadastroWorkflowRepository(
         response: JsonElement,
         success: Boolean,
     ) {
+        val attachmentPending = success && isAttachmentDeliveryPending(response)
         val statusPersistido = if (success) {
-            "enviado"
+            if (attachmentPending) "incompleto" else "enviado"
         } else {
             val statusAtual = runCatching {
                 getList<CadastroStatusRow>(
@@ -1454,6 +1471,11 @@ class CadastroWorkflowRepository(
             put("payload_erp", payload)
             put("erp_response", response)
             put("tipo_cadastro", "cadastro")
+            if (attachmentPending) {
+                put("motivo_bloqueio", "Aguardando envio do anexo ao ERP.")
+            } else if (success) {
+                put("motivo_bloqueio", JsonNull)
+            }
             cpfForSync?.let { put("cpf", it) }
             put("created_by", session.userId)
         }
@@ -1489,18 +1511,32 @@ class CadastroWorkflowRepository(
 
         val throwable = result.exceptionOrNull() ?: return
         if (success) {
+            val attachmentPending = isAttachmentDeliveryPending(response)
             val fallback = runCatching {
-                markCadastroAsEnviado(
-                    session = session,
-                    cadastroId = cadastroId,
-                    payload = payload,
-                    response = response,
-                )
+                if (attachmentPending) {
+                    markCadastroWaitingForAttachment(
+                        session = session,
+                        cadastroId = cadastroId,
+                        payload = payload,
+                        response = response,
+                    )
+                } else {
+                    markCadastroAsEnviado(
+                        session = session,
+                        cadastroId = cadastroId,
+                        payload = payload,
+                        response = response,
+                    )
+                }
             }
             if (fallback.isSuccess) {
                 Log.w(
                     logTag,
-                    "syncCadastroAfterSend usou fallback minimo para marcar cadastro como enviado id=$cadastroId",
+                    if (attachmentPending) {
+                        "syncCadastroAfterSend usou fallback para manter cadastro pendente ate o anexo id=$cadastroId"
+                    } else {
+                        "syncCadastroAfterSend usou fallback minimo para marcar cadastro como enviado id=$cadastroId"
+                    },
                     throwable,
                 )
                 return
@@ -1526,6 +1562,24 @@ class CadastroWorkflowRepository(
             throwable,
         )
         if (success) throw throwable
+    }
+
+    private suspend fun markCadastroWaitingForAttachment(
+        session: SavedSession,
+        cadastroId: String,
+        payload: JsonElement,
+        response: JsonElement,
+    ) {
+        patchCadastroById(
+            session = session,
+            id = cadastroId,
+            payload = buildJsonObject {
+                put("status", "incompleto")
+                put("payload_erp", payload)
+                put("erp_response", response)
+                put("motivo_bloqueio", "Aguardando envio do anexo ao ERP.")
+            },
+        )
     }
 
     private suspend fun markCadastroAsEnviado(

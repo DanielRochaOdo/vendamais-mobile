@@ -167,10 +167,20 @@ fun CadastrosScreen(
     var dataInicioFiltroAplicado by rememberSaveable { mutableStateOf(defaultDataInicio) }
     var dataFimFiltroAplicado by rememberSaveable { mutableStateOf("") }
 
-    val baseCadastros = state.cadastros.filter {
+    val cpfsComCadastroConcluido = state.cadastros
+        .asSequence()
+        .filter { it.status == "enviado" && it.tipoCadastro == "cadastro" }
+        .map { it.cpf.filter(Char::isDigit) }
+        .filter { it.length == 11 }
+        .toSet()
+    val baseCadastros = state.cadastros.filter { cadastro ->
         when (state.cadastroFiltro) {
-            CadastroFiltro.PENDENTES -> isPendingCadastroStatus(it.status)
-            CadastroFiltro.ENVIADOS -> it.status == "enviado"
+            CadastroFiltro.PENDENTES -> {
+                val cpf = cadastro.cpf.filter(Char::isDigit)
+                isPendingCadastroStatus(cadastro.status) &&
+                    !(cadastro.tipoCadastro == "cadastro" && cpf.length == 11 && cpf in cpfsComCadastroConcluido)
+            }
+            CadastroFiltro.ENVIADOS -> cadastro.status == "enviado"
         }
     }
     val buscaNomeAplicadaTrim = buscaNomeAplicada.trim()
@@ -500,6 +510,10 @@ fun CadastrosScreen(
             onCompleted = {
                 viewModel.selectTab(MainTab.CADASTROS)
                 viewModel.selectCadastroAreaTab(CadastroAreaTab.COMPLETOS)
+            },
+            onQueued = {
+                viewModel.selectTab(MainTab.CADASTROS)
+                viewModel.selectCadastroAreaTab(CadastroAreaTab.INCOMPLETOS)
             },
         )
     }
