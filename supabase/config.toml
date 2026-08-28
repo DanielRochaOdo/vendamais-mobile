@@ -1,0 +1,4 @@
+project_id = "plonbokgcxwsdqfyjkwl"
+
+[functions.erp-process-upload-queue]
+verify_jwt = false
