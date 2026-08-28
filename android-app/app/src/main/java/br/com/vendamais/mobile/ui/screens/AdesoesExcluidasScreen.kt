@@ -275,20 +275,26 @@ fun AdesoesExcluidasScreen(
                             )
                         }
 
-                        Row(
+                        Column(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             Text(
                                 text = "Vendedor: $vendedor",
+                                modifier = Modifier.fillMaxWidth(),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                text = item.excluidoPorNome,
-                                style = MaterialTheme.typography.labelLarge,
+                                text = "Excluido por: ${item.excluidoPorNome}",
+                                modifier = Modifier.fillMaxWidth(),
+                                style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }

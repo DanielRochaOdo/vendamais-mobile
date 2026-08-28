@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.ui.theme.VendaRadius
 import br.com.vendamais.mobile.ui.theme.VendaSpacing
@@ -62,6 +63,8 @@ fun WebCard(
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
@@ -121,6 +124,8 @@ fun InfoRow(label: String, value: String, modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Medium,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

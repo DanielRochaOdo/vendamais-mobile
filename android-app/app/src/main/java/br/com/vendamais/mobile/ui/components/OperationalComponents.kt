@@ -7,6 +7,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -352,7 +355,10 @@ fun VendaLoadingState(
                 strokeWidth = 3.dp,
                 color = Emerald,
             )
-            Column(verticalArrangement = Arrangement.spacedBy(VendaSpacing.x1)) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(VendaSpacing.x1),
+            ) {
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 slowMessage?.takeIf { it.isNotBlank() }?.let {
@@ -468,14 +474,17 @@ fun VendaSectionTabs(
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Row(
-            modifier = Modifier.padding(VendaSpacing.x1),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(VendaSpacing.x1),
             horizontalArrangement = Arrangement.spacedBy(VendaSpacing.x1),
         ) {
             items.forEachIndexed { index, label ->
                 val selected = index == selectedIndex
                 Surface(
                     modifier = Modifier
-                        .weight(1f)
+                        .widthIn(min = 88.dp)
                         .heightIn(min = 40.dp),
                     onClick = { onSelected(index) },
                     shape = RoundedCornerShape(VendaRadius.md),
@@ -485,12 +494,12 @@ fun VendaSectionTabs(
                     Box(contentAlignment = Alignment.Center) {
                         Text(
                             text = label,
-                            modifier = Modifier.padding(horizontal = VendaSpacing.x2, vertical = VendaSpacing.x2),
+                            modifier = Modifier.padding(horizontal = VendaSpacing.x3, vertical = VendaSpacing.x2),
                             style = MaterialTheme.typography.labelMedium,
                             color = if (selected) Emerald else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            overflow = TextOverflow.Clip,
                         )
                     }
                 }

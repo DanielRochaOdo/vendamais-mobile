@@ -932,10 +932,9 @@ private fun CadastrosFilterPanel(
 ) {
     WebCard {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Column {
                     Text(
@@ -947,14 +946,29 @@ private fun CadastrosFilterPanel(
                         text = "Mostrando $filteredCount de $totalCount adesoes",
                         style = MaterialTheme.typography.bodySmall,
                         color = Slate500,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedButton(onClick = onClearFilters) {
-                        Text("Limpar")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = onClearFilters,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text("Limpar", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    Button(onClick = onToggleExpanded) {
-                        Text(if (expanded) "Ocultar" else "Filtrar")
+                    Button(
+                        onClick = onToggleExpanded,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            if (expanded) "Ocultar" else "Filtrar",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
             }
