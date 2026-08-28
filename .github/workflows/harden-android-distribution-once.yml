@@ -1,0 +1,61 @@
+name: Harden Android Distribution Once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/harden-android-distribution-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  harden-android-distribution:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Apply distribution hardening
+        run: python3 .github/scripts/harden_android_distribution.py
+
+      - name: Validate diff
+        run: git diff --check
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: 'android-app/**/*.gradle*'
+
+      - name: Compile both distribution flavors
+        working-directory: android-app
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:compileStandardDebugKotlin :app:compileDirectDebugKotlin --stacktrace --no-daemon
+
+      - name: Verify source manifests
+        run: |
+          if grep -q 'REQUEST_INSTALL_PACKAGES' android-app/app/src/main/AndroidManifest.xml; then
+            echo 'standard/main manifest still contains REQUEST_INSTALL_PACKAGES'
+            exit 1
+          fi
+          grep -q 'REQUEST_INSTALL_PACKAGES' android-app/app/src/direct/AndroidManifest.xml
+
+      - name: Commit hardening
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-app/app/build.gradle.kts
+          git add android-app/app/src/main/AndroidManifest.xml
+          git add android-app/app/src/direct/AndroidManifest.xml
+          git add android-app/local.properties.example
+          git add android-app/PLAY_STORE_CHECKLIST.md
+          git commit -m "Harden Android release distribution for Play Protect"
+          git push origin HEAD:main
