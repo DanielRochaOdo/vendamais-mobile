@@ -28,7 +28,26 @@ jobs:
           cache-dependency-path: 'android-app/**/*.gradle*'
 
       - name: Apply responsive layout fixes
-        run: python3 .github/scripts/fix_mobile_overflow.py
+        run: |
+          python3 .github/scripts/fix_mobile_overflow.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('android-app/app/src/main/java/br/com/vendamais/mobile/ui/components/OperationalComponents.kt')
+          text = path.read_text()
+          if 'import androidx.compose.foundation.horizontalScroll' not in text:
+              text = text.replace(
+                  'import androidx.compose.foundation.clickable\n',
+                  'import androidx.compose.foundation.clickable\nimport androidx.compose.foundation.horizontalScroll\nimport androidx.compose.foundation.rememberScrollState\n',
+                  1,
+              )
+          if 'import androidx.compose.foundation.layout.widthIn' not in text:
+              text = text.replace(
+                  'import androidx.compose.foundation.layout.size\n',
+                  'import androidx.compose.foundation.layout.size\nimport androidx.compose.foundation.layout.widthIn\n',
+                  1,
+              )
+          path.write_text(text)
+          PY
 
       - name: Validate patch formatting
         run: git diff --check
