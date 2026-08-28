@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { corsHeaders, resolveRequestUser, saveLog } from "../_shared/api-utils.ts";
 
 const DEFAULT_ERP_UPLOAD_TIMEOUT_MS = 12_000;
+const MAX_ERP_FILE_BYTES = 5 * 1024 * 1024;
 const MIN_ERP_UPLOAD_TIMEOUT_MS = 3_000;
 const MAX_ERP_UPLOAD_TIMEOUT_MS = 45_000;
 const RETRYABLE_QUEUE_STATUSES = ["queued", "retry_wait", "processing", "failed"];
@@ -31,6 +32,29 @@ async function readResponsePayload(response: Response): Promise<any> {
   } catch {
     return { raw: text };
   }
+}
+
+function normalizeErpMessage(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function extractErpSemanticError(payload: any): { message: string; retryable: boolean } | null {
+  if (!payload || typeof payload !== "object") return null;
+  const message = normalizeErpMessage(payload.mensagem || payload.message || payload.error);
+  const normalized = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const codigo = Number(payload.codigo);
+  const erros = payload.erros ?? payload.errors;
+  const hasErrors = Array.isArray(erros)
+    ? erros.length > 0
+    : Boolean(erros && (typeof erros !== "object" || Object.keys(erros).length > 0));
+  const messageLooksLikeError = /(erro|falha|excede|limite|maxim|inval|nao|obrigat|indisponivel)/.test(normalized);
+  const codeLooksLikeError = Number.isFinite(codigo) && codigo >= 2;
+  if (!hasErrors && !messageLooksLikeError && !codeLooksLikeError) return null;
+  const tooLarge = /5\s*mb/.test(normalized) && /(excede|limite|maxim)/.test(normalized);
+  return {
+    message: message || `ERP recusou o anexo${Number.isFinite(codigo) ? ` (codigo ${codigo})` : ""}.`,
+    retryable: !tooLarge,
+  };
 }
 
 async function fetchWithTimeout(
@@ -261,6 +285,26 @@ Deno.serve(async (req: Request) => {
       }
 
       const bytes = new Uint8Array(await fileData.arrayBuffer());
+      if (bytes.byteLength > MAX_ERP_FILE_BYTES) {
+        errorMessage = `Arquivo excede o limite maximo de 5 MB aceito pelo ERP (${(bytes.byteLength / 1024 / 1024).toFixed(2)} MB).`;
+        responseBody = { error: errorMessage, attached: false, retryable: false };
+        await saveLog(supabase, {
+          user_id: userId,
+          user_email: userEmail,
+          endpoint: "erp-upload-documento",
+          method: "POST",
+          request_body: requestBody,
+          response_body: responseBody,
+          status_code: 413,
+          success: false,
+          error_message: errorMessage,
+          duration_ms: Date.now() - startTime,
+        });
+        return new Response(JSON.stringify(responseBody), {
+          status: 413,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       arquivoBase64 = bytesToBase64(bytes);
       arquivoNome = requestBody.arquivoNome || requestBody.arquivoPath.split("/").pop() || "documento.pdf";
     } else if (requestBody.arquivo) {
@@ -340,7 +384,7 @@ Deno.serve(async (req: Request) => {
       errorMessage = timedOut
         ? `Upload do documento no ERP excedeu ${timeoutMs}ms.`
         : `Falha de rede ao enviar documento para o ERP: ${error instanceof Error ? error.message : "erro desconhecido"}`;
-      const queued = await enqueueForRetry(supabase, requestBody, userId, arquivoNome, errorMessage);
+      const queued = await enqueueForRetry(supabase, requestBody, userId, arquivoNome, errorMessage || "Falha no envio do anexo ao ERP");
 
       if (queued.queued) {
         triggerQueueProcessor(supabaseUrl, supabaseServiceKey);
@@ -386,7 +430,7 @@ Deno.serve(async (req: Request) => {
 
     if (!erpResponse.ok) {
       errorMessage = responseData.message || responseData?.mensagem || responseData?.error || "Erro ao enviar documento para o ERP";
-      const queued = await enqueueForRetry(supabase, requestBody, userId, arquivoNome, errorMessage);
+      const queued = await enqueueForRetry(supabase, requestBody, userId, arquivoNome, errorMessage || "Falha no envio do anexo ao ERP");
 
       if (queued.queued) {
         triggerQueueProcessor(supabaseUrl, supabaseServiceKey);
@@ -406,6 +450,50 @@ Deno.serve(async (req: Request) => {
           status: statusCode,
           retryable: true,
         };
+      }
+
+      await saveLog(supabase, {
+        user_id: userId,
+        user_email: userEmail,
+        endpoint: "erp-upload-documento",
+        method: "POST",
+        request_body: requestBody,
+        response_body: responseBody,
+        status_code: statusCode,
+        success: false,
+        error_message: errorMessage,
+        duration_ms: Date.now() - startTime,
+      });
+
+      return new Response(JSON.stringify(responseBody), {
+        status: statusCode,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const semanticError = extractErpSemanticError(responseData);
+    if (semanticError) {
+      errorMessage = semanticError.message;
+      if (semanticError.retryable) {
+        const queued = await enqueueForRetry(supabase, requestBody, userId, arquivoNome, errorMessage || "Falha no envio do anexo ao ERP");
+        if (queued.queued) {
+          triggerQueueProcessor(supabaseUrl, supabaseServiceKey);
+          statusCode = 202;
+          responseBody = {
+            success: true,
+            attached: false,
+            queued: true,
+            queue_id: queued.queueId,
+            details: responseData,
+            message: "O ERP respondeu HTTP 200, mas nao confirmou o anexo. O contrato ficou salvo para retry automatico.",
+          };
+        } else {
+          statusCode = 422;
+          responseBody = { error: errorMessage, attached: false, retryable: true, details: responseData };
+        }
+      } else {
+        statusCode = 422;
+        responseBody = { error: errorMessage, attached: false, retryable: false, details: responseData };
       }
 
       await saveLog(supabase, {

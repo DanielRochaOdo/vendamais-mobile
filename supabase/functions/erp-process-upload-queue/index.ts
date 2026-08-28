@@ -9,6 +9,7 @@ const corsHeaders = {
 
 const MAX_ATTEMPTS = 5;
 const ERP_UPLOAD_TIMEOUT_MS = 30_000;
+const MAX_ERP_FILE_BYTES = 5 * 1024 * 1024;
 const BATCH_LIMIT = 12;
 const CONCURRENCY = 4;
 const STUCK_THRESHOLD_MINUTES = 10;
@@ -32,6 +33,7 @@ type UploadResult = {
   error?: string;
   statusCode?: number;
   response?: unknown;
+  retryable?: boolean;
 };
 
 type ItemOutcome = {
@@ -66,6 +68,35 @@ async function readResponsePayload(response: Response): Promise<any> {
   } catch {
     return { raw: text };
   }
+}
+
+function normalizeErpMessage(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function extractErpSemanticError(payload: any): { message: string; retryable: boolean } | null {
+  if (!payload || typeof payload !== "object") return null;
+
+  const message = normalizeErpMessage(payload.mensagem || payload.message || payload.error);
+  const normalized = message
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const codigo = Number(payload.codigo);
+  const erros = payload.erros ?? payload.errors;
+  const hasErrors = Array.isArray(erros)
+    ? erros.length > 0
+    : Boolean(erros && (typeof erros !== "object" || Object.keys(erros).length > 0));
+  const messageLooksLikeError = /(erro|falha|excede|limite|maxim|inval|nao|obrigat|indisponivel)/.test(normalized);
+  const codeLooksLikeError = Number.isFinite(codigo) && codigo >= 2;
+
+  if (!hasErrors && !messageLooksLikeError && !codeLooksLikeError) return null;
+
+  const tooLarge = /5\s*mb/.test(normalized) && /(excede|limite|maxim)/.test(normalized);
+  return {
+    message: message || `ERP recusou o anexo${Number.isFinite(codigo) ? ` (codigo ${codigo})` : ""}.`,
+    retryable: !tooLarge,
+  };
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
@@ -153,6 +184,14 @@ async function uploadToErp(supabase: any, item: QueueItem): Promise<UploadResult
   }
 
   const bytes = new Uint8Array(await fileData.arrayBuffer());
+  if (bytes.byteLength > MAX_ERP_FILE_BYTES) {
+    return {
+      success: false,
+      retryable: false,
+      error: `Arquivo excede o limite maximo de 5 MB aceito pelo ERP (${(bytes.byteLength / 1024 / 1024).toFixed(2)} MB).`,
+      statusCode: 413,
+    };
+  }
   const ERP_URL = `${ERP_ENDPOINT}/api/dependente/UploadDocDependente?token=${ERP_TOKEN}`;
 
   let erpResponse: Response;
@@ -187,6 +226,17 @@ async function uploadToErp(supabase: any, item: QueueItem): Promise<UploadResult
     return {
       success: false,
       error: responseData?.message || responseData?.mensagem || responseData?.error || "Erro ao enviar documento para o ERP",
+      statusCode: erpResponse.status,
+      response: responseData,
+    };
+  }
+
+  const semanticError = extractErpSemanticError(responseData);
+  if (semanticError) {
+    return {
+      success: false,
+      retryable: semanticError.retryable,
+      error: semanticError.message,
       statusCode: erpResponse.status,
       response: responseData,
     };
@@ -313,7 +363,7 @@ async function processOne(supabase: any, item: QueueItem): Promise<ItemOutcome> 
     return { id: item.id, state: "success", attempts: newAttempts };
   }
 
-  const isFinalFailure = newAttempts >= MAX_ATTEMPTS;
+  const isFinalFailure = result.retryable === false || newAttempts >= MAX_ATTEMPTS;
   const nextAttempt = new Date();
   if (!isFinalFailure) nextAttempt.setMinutes(nextAttempt.getMinutes() + retryDelayMinutes(newAttempts));
 

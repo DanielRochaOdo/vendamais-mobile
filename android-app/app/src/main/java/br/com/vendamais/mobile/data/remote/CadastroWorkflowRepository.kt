@@ -1293,6 +1293,12 @@ class CadastroWorkflowRepository(
         bytes: ByteArray,
         prefix: String = "",
     ): UploadedTempFile {
+        val maxErpAttachmentBytes = 5 * 1024 * 1024
+        if (bytes.size > maxErpAttachmentBytes) {
+            throw IllegalArgumentException(
+                "O anexo excede o limite de 5 MB aceito pelo ERP. Reduza o arquivo antes de continuar.",
+            )
+        }
         val sanitizedName = fileName
             .replace(Regex("[^a-zA-Z0-9._-]"), "_")
             .lowercase()
