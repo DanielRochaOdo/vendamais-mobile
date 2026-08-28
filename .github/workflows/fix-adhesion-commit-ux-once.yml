@@ -1,0 +1,74 @@
+name: Fix Adhesion Commit UX Once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/fix-adhesion-commit-ux-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix-adhesion-commit-ux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Apply adhesion hardening
+        run: python3 .github/scripts/fix_adhesion_commit_ux.py
+
+      - name: Validate diff
+        run: git diff --check
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Check ERP Edge Functions
+        run: |
+          deno check --node-modules-dir=auto \
+            supabase/functions/erp-novo-usuario2/index.ts \
+            supabase/functions/erp-process-upload-queue/index.ts
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: 'android-app/**/*.gradle*'
+
+      - name: Test Android ERP response and compile flows
+        working-directory: android-app
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:testStandardDebugUnitTest :app:compileStandardDebugKotlin :app:compileDirectDebugKotlin --stacktrace --no-daemon
+
+      - name: Assert transaction boundary and attachment UX
+        run: |
+          grep -q 'const hasDadosCodigo = extractDependenteCodigo(responseData)' supabase/functions/erp-novo-usuario2/index.ts
+          grep -q 'statusCode = 200;' supabase/functions/erp-novo-usuario2/index.ts
+          ! grep -q 'status: "incompleto", motivo_bloqueio: message' supabase/functions/erp-process-upload-queue/index.ts
+          grep -q 'MAX_UPLOAD_BYTES = 5 \* 1024 \* 1024' android-app/app/src/main/java/br/com/vendamais/mobile/ui/screens/CadastroEditorDialog.kt
+          grep -q 'maximo 5 MB' android-app/app/src/main/java/br/com/vendamais/mobile/ui/screens/CadastroEditorDialog.kt
+
+      - name: Commit urgent adhesion fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add supabase/functions/erp-novo-usuario2/index.ts
+          git add supabase/functions/erp-process-upload-queue/index.ts
+          git add android-app/app/src/main/java/br/com/vendamais/mobile/data/remote/CadastroWorkflowRepository.kt
+          git add android-app/app/src/main/java/br/com/vendamais/mobile/data/remote/CadastroPayloadBuilder.kt
+          git add android-app/app/src/main/java/br/com/vendamais/mobile/data/remote/DraftAttachmentStorage.kt
+          git add android-app/app/src/main/java/br/com/vendamais/mobile/ui/screens/CadastroEditorDialog.kt
+          git add android-app/app/src/test/java/br/com/vendamais/mobile/data/remote/CadastroPayloadBuilderTest.kt
+          git commit -m "Make ERP adhesion commit terminal and validate attachments early"
+          git push origin HEAD:main
