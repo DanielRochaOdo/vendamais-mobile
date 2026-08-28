@@ -85,7 +85,26 @@ val baseVersionCode = versionProperties.getProperty("VERSION_CODE")?.toIntOrNull
 val baseVersionName = parseVersionNameOrDefault(versionProperties.getProperty("VERSION_NAME"))
 val releaseBuildRequested = gradle.startParameter.taskNames
     .map { it.substringAfterLast(':') }
-    .any { it in setOf("assembleRelease", "bundleRelease", "renameReleaseApk", "renameReleaseBundle") }
+    .any {
+        it in setOf(
+            "assembleStandardRelease",
+            "bundleStandardRelease",
+            "renameReleaseApk",
+            "renameReleaseBundle",
+            "assembleDirectRelease",
+            "bundleDirectRelease",
+            "renameDirectReleaseApk",
+            "renameDirectReleaseBundle",
+        )
+    }
+
+if (releaseBuildRequested && !hasReleaseSigningConfig) {
+    throw GradleException(
+        "Release build bloqueado: configure releaseStoreFile, releaseStorePassword, " +
+            "releaseKeyAlias e releaseKeyPassword em android-app/local.properties. " +
+            "As versoes de producao devem usar sempre a mesma chave de assinatura.",
+    )
+}
 
 val appVersion = if (releaseBuildRequested) {
     val bumped = AppVersion(
@@ -126,7 +145,7 @@ val resolvedUpdateMetadataUrl = localProperties.getProperty("updateMetadataUrl")
     ?.takeIf { it.isNotBlank() }
     ?: ""
 val releaseArtifactBaseUrl = resolveReleaseArtifactBaseUrl()
-val resolvedUpdateApkUrl = "$releaseArtifactBaseUrl/vendamais-mobile-v${appVersion.name}.apk"
+val resolvedDirectUpdateApkUrl = "$releaseArtifactBaseUrl/vendamais-mobile-direct-v${appVersion.name}.apk"
 
 android {
     namespace = "br.com.vendamais.mobile"
@@ -142,8 +161,10 @@ android {
         buildConfigField("String", "SUPABASE_URL", quoted(localProperties.getProperty("supabaseUrl", "")))
         buildConfigField("String", "SUPABASE_ANON_KEY", quoted(localProperties.getProperty("supabaseAnonKey", "")))
         buildConfigField("String", "PUBLIC_APP_URL", quoted(resolvedPublicAppUrl))
-        buildConfigField("String", "UPDATE_METADATA_URL", quoted(resolvedUpdateMetadataUrl))
-        buildConfigField("String", "UPDATE_APK_URL", quoted(resolvedUpdateApkUrl))
+        // The standard build intentionally has no APK self-installer. This removes the
+        // high-risk REQUEST_INSTALL_PACKAGES surface from the default production APK.
+        buildConfigField("String", "UPDATE_METADATA_URL", quoted(""))
+        buildConfigField("String", "UPDATE_APK_URL", quoted(""))
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -151,6 +172,20 @@ android {
         }
 
         manifestPlaceholders["publicAppHost"] = resolvedPublicAppHost
+    }
+
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("standard") {
+            dimension = "distribution"
+        }
+        create("direct") {
+            dimension = "distribution"
+            // Private/direct channel only. This variant keeps the explicit, user-driven
+            // APK updater and therefore receives REQUEST_INSTALL_PACKAGES via src/direct.
+            buildConfigField("String", "UPDATE_METADATA_URL", quoted(resolvedUpdateMetadataUrl))
+            buildConfigField("String", "UPDATE_APK_URL", quoted(resolvedDirectUpdateApkUrl))
+        }
     }
 
     signingConfigs {
@@ -201,15 +236,15 @@ android {
 }
 
 tasks.register<Copy>("renameReleaseBundle") {
-    dependsOn("bundleRelease")
-    from(layout.buildDirectory.file("outputs/bundle/release/app-release.aab"))
+    dependsOn("bundleStandardRelease")
+    from(layout.buildDirectory.file("outputs/bundle/standardRelease/app-standard-release.aab"))
     into(layout.buildDirectory.dir("outputs/release-artifacts"))
     rename { "vendamais-mobile-v${android.defaultConfig.versionName}.aab" }
 }
 
 tasks.register<Copy>("renameReleaseApk") {
-    dependsOn("assembleRelease")
-    from(layout.buildDirectory.dir("outputs/apk/release")) {
+    dependsOn("assembleStandardRelease")
+    from(layout.buildDirectory.dir("outputs/apk/standard/release")) {
         include("*.apk")
         exclude("*.idsig")
     }
@@ -217,6 +252,25 @@ tasks.register<Copy>("renameReleaseApk") {
     rename { "vendamais-mobile-v${android.defaultConfig.versionName}.apk" }
 }
 
+tasks.register<Copy>("renameDirectReleaseBundle") {
+    dependsOn("bundleDirectRelease")
+    from(layout.buildDirectory.file("outputs/bundle/directRelease/app-direct-release.aab"))
+    into(layout.buildDirectory.dir("outputs/release-artifacts"))
+    rename { "vendamais-mobile-direct-v${android.defaultConfig.versionName}.aab" }
+}
+
+tasks.register<Copy>("renameDirectReleaseApk") {
+    dependsOn("assembleDirectRelease")
+    from(layout.buildDirectory.dir("outputs/apk/direct/release")) {
+        include("*.apk")
+        exclude("*.idsig")
+    }
+    into(layout.buildDirectory.dir("outputs/release-artifacts"))
+    rename { "vendamais-mobile-direct-v${android.defaultConfig.versionName}.apk" }
+}
+
+// Kept under the historical task name because deployment scripts may already call it.
+// The generated metadata is only for the private/direct self-update channel.
 tasks.register("generateReleaseUpdateJson") {
     doLast {
         val outputDir = layout.buildDirectory.dir("outputs/release-artifacts").get().asFile
@@ -227,7 +281,7 @@ tasks.register("generateReleaseUpdateJson") {
             {
               "versionCode": $versionCode,
               "versionName": "$versionName",
-              "apkUrl": "$resolvedUpdateApkUrl",
+              "apkUrl": "$resolvedDirectUpdateApkUrl",
               "notes": "Atualizacao da versao $versionName"
             }
         """.trimIndent() + System.lineSeparator()
@@ -236,11 +290,11 @@ tasks.register("generateReleaseUpdateJson") {
     }
 }
 
-tasks.named("renameReleaseBundle") {
+tasks.named("renameDirectReleaseBundle") {
     dependsOn("generateReleaseUpdateJson")
 }
 
-tasks.named("renameReleaseApk") {
+tasks.named("renameDirectReleaseApk") {
     dependsOn("generateReleaseUpdateJson")
 }
 

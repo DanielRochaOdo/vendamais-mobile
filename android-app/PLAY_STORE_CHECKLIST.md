@@ -2,9 +2,11 @@
 
 ## Build
 
-- Gerar `bundleRelease`, nao `assembleRelease`.
-- Confirmar que o arquivo final e `app-release.aab`.
-- Validar a assinatura com a keystore de producao.
+- Gerar o canal padrao com `renameReleaseBundle` (internamente `bundleStandardRelease`).
+- Confirmar que o arquivo final e `vendamais-mobile-v<versao>.aab`.
+- Validar a assinatura com a mesma keystore de producao usada em todas as versoes.
+- Confirmar que o manifesto do canal `standard` NAO contem `REQUEST_INSTALL_PACKAGES`.
+- O canal `direct` e exclusivo para distribuicao privada com autoatualizacao por APK e nao deve ser enviado ao Google Play.
 
 ## Versao
 
@@ -23,3 +25,11 @@
 - `supabaseUrl` e `supabaseAnonKey` devem apontar para producao.
 - `publicAppUrl` deve apontar para a URL publica real.
 - Validar deep links e login em dispositivo real.
+
+
+## Play Protect
+
+- O APK padrao de producao e o `standard`; ele nao solicita instalacao de outros APKs.
+- Para distribuicao privada que realmente precise do atualizador interno, gerar `renameDirectReleaseApk`.
+- Nao alternar a chave de assinatura entre versoes; a reputacao e a continuidade de update dependem do mesmo certificado.
+- Antes de distribuir uma nova versao por sideload, validar a assinatura e testar o APK em um dispositivo com Play Protect ativo.
