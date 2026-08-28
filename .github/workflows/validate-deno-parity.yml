@@ -6,6 +6,9 @@ on:
       - 'supabase/functions/update-user/**'
       - 'supabase/functions/cadastro-link-resolve/**'
       - 'supabase/functions/cadastro-link-check-cpf/**'
+      - 'supabase/functions/erp-novo-usuario2/**'
+      - 'supabase/functions/erp-enqueue-upload/**'
+      - 'supabase/functions/erp-process-upload-queue/**'
       - '.github/workflows/validate-deno-parity.yml'
   push:
     branches:
@@ -14,6 +17,9 @@ on:
       - 'supabase/functions/update-user/**'
       - 'supabase/functions/cadastro-link-resolve/**'
       - 'supabase/functions/cadastro-link-check-cpf/**'
+      - 'supabase/functions/erp-novo-usuario2/**'
+      - 'supabase/functions/erp-enqueue-upload/**'
+      - 'supabase/functions/erp-process-upload-queue/**'
       - '.github/workflows/validate-deno-parity.yml'
   workflow_dispatch:
 
@@ -34,4 +40,7 @@ jobs:
           deno check --node-modules-dir=auto \
             supabase/functions/update-user/index.ts \
             supabase/functions/cadastro-link-resolve/index.ts \
-            supabase/functions/cadastro-link-check-cpf/index.ts
+            supabase/functions/cadastro-link-check-cpf/index.ts \
+            supabase/functions/erp-novo-usuario2/index.ts \
+            supabase/functions/erp-enqueue-upload/index.ts \
+            supabase/functions/erp-process-upload-queue/index.ts
