@@ -20,7 +20,11 @@ jobs:
           fetch-depth: 0
 
       - name: Apply distribution hardening
-        run: python3 .github/scripts/harden_android_distribution.py
+        run: |
+          python3 .github/scripts/harden_android_distribution.py
+          # AGP 8.7 generates modern APK signatures automatically. Its Kotlin DSL no
+          # longer exposes the old v3/v4 toggles, so keep only the supported settings.
+          sed -i '/isV3SigningEnabled = true/d;/isV4SigningEnabled = true/d' android-app/app/build.gradle.kts
 
       - name: Validate diff
         run: git diff --check
