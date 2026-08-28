@@ -1,0 +1,77 @@
+name: Harden ERP Delivery Once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/harden-erp-delivery-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  harden-erp-delivery:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Apply delivery patch
+        run: python3 .github/scripts/harden_erp_delivery.py
+
+      - name: Validate diff
+        run: git diff --check
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Check Edge Functions
+        run: |
+          deno check supabase/functions/erp-process-upload-queue/index.ts
+          deno check supabase/functions/erp-enqueue-upload/index.ts
+          deno check supabase/functions/erp-novo-usuario2/index.ts
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Validate web
+        run: |
+          npm ci
+          npm run typecheck
+          npm run build
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: 'android-app/**/*.gradle*'
+
+      - name: Compile Android Kotlin
+        working-directory: android-app
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:compileDebugKotlin --stacktrace --no-daemon
+
+      - name: Commit hardened delivery flow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-app/app/src/main/java/br/com/vendamais/mobile/data/remote/CadastroWorkflowRepository.kt
+          git add android-app/app/src/main/java/br/com/vendamais/mobile/ui/screens/CadastrosScreen.kt
+          git add android-app/app/src/main/java/br/com/vendamais/mobile/ui/screens/InclusaoDependenteDialog.kt
+          git add src/hooks/useCadastros.ts
+          git add src/pages/FilaUploadERP.tsx
+          git add supabase/functions/erp-novo-usuario2/index.ts
+          git commit -m "Guarantee ERP attachment delivery before completion"
+          git push origin HEAD:main
