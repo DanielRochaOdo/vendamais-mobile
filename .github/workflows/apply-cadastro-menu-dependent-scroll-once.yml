@@ -1,0 +1,343 @@
+name: Apply Cadastro Menu And Dependent Scroll Once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/apply-cadastro-menu-dependent-scroll-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-ui-fixes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: 'android-app/**/*.gradle*'
+
+      - name: Apply UI changes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          cadastros = Path('android-app/app/src/main/java/br/com/vendamais/mobile/ui/screens/CadastrosScreen.kt')
+          text = cadastros.read_text()
+          old = '''@Composable
+private fun CadastroTabBar(
+    selectedTab: CadastroAreaTab,
+    pendentesCount: Int,
+    completosCount: Int,
+    onTabSelected: (CadastroAreaTab) -> Unit,
+) {
+    val tabs = listOf(
+        CadastroAreaTab.NOVO,
+        CadastroAreaTab.LINK,
+        CadastroAreaTab.DEPENDENTE,
+        CadastroAreaTab.INCOMPLETOS,
+        CadastroAreaTab.COMPLETOS,
+    )
+    val labels = listOf(
+        "Novo",
+        "Link",
+        "Depend.",
+        if (pendentesCount > 0) "Pend. $pendentesCount" else "Pend.",
+        if (completosCount > 0) "Env. $completosCount" else "Enviados",
+    )
+    VendaSectionTabs(
+        items = labels,
+        selectedIndex = tabs.indexOf(selectedTab).coerceAtLeast(0),
+        onSelected = { index -> tabs.getOrNull(index)?.let(onTabSelected) },
+    )
+}
+'''
+          new = '''@Composable
+private fun CadastroTabBar(
+    selectedTab: CadastroAreaTab,
+    pendentesCount: Int,
+    completosCount: Int,
+    onTabSelected: (CadastroAreaTab) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        CadastroTabButton(
+            label = "Novo",
+            selected = selectedTab == CadastroAreaTab.NOVO,
+            onClick = { onTabSelected(CadastroAreaTab.NOVO) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            CadastroTabButton(
+                label = "Dependente",
+                selected = selectedTab == CadastroAreaTab.DEPENDENTE,
+                onClick = { onTabSelected(CadastroAreaTab.DEPENDENTE) },
+                modifier = Modifier.weight(1f),
+            )
+            CadastroTabButton(
+                label = "Link",
+                selected = selectedTab == CadastroAreaTab.LINK,
+                onClick = { onTabSelected(CadastroAreaTab.LINK) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            CadastroTabButton(
+                label = "Enviadas",
+                selected = selectedTab == CadastroAreaTab.COMPLETOS,
+                onClick = { onTabSelected(CadastroAreaTab.COMPLETOS) },
+                modifier = Modifier.weight(1f),
+                badge = completosCount.takeIf { it > 0 }?.toString(),
+            )
+            CadastroTabButton(
+                label = "Pendente",
+                selected = selectedTab == CadastroAreaTab.INCOMPLETOS,
+                onClick = { onTabSelected(CadastroAreaTab.INCOMPLETOS) },
+                modifier = Modifier.weight(1f),
+                badge = pendentesCount.takeIf { it > 0 }?.toString(),
+            )
+        }
+    }
+}
+'''
+          if text.count(old) != 1:
+              raise SystemExit(f'CadastroTabBar block expected once, found {text.count(old)}')
+          text = text.replace(old, new, 1)
+          text = text.replace('import br.com.vendamais.mobile.ui.components.VendaSectionTabs\n', '', 1)
+          cadastros.write_text(text)
+
+          inclusion = Path('android-app/app/src/main/java/br/com/vendamais/mobile/ui/screens/InclusaoDependenteDialog.kt')
+          text = inclusion.read_text()
+          text = text.replace(
+              'import androidx.compose.foundation.layout.Arrangement\n',
+              'import androidx.compose.foundation.ExperimentalFoundationApi\nimport androidx.compose.foundation.layout.Arrangement\n',
+              1,
+          )
+          text = text.replace(
+              'import androidx.compose.foundation.rememberScrollState\n',
+              'import androidx.compose.foundation.rememberScrollState\nimport androidx.compose.foundation.relocation.BringIntoViewRequester\nimport androidx.compose.foundation.relocation.bringIntoViewRequester\n',
+              1,
+          )
+          text = text.replace(
+              '@Composable\nfun InclusaoDependenteDialog(\n',
+              '@OptIn(ExperimentalFoundationApi::class)\n@Composable\nfun InclusaoDependenteDialog(\n',
+              1,
+          )
+          old_results_state = '''    val resultados = remember { mutableStateListOf<ResponsavelFinanceiroResumo>() }
+    val dependentes = remember {
+'''
+          new_results_state = '''    val resultados = remember { mutableStateListOf<ResponsavelFinanceiroResumo>() }
+    val firstResponsavelResultBringIntoViewRequester = remember { BringIntoViewRequester() }
+    val dependentes = remember {
+'''
+          if text.count(old_results_state) != 1:
+              raise SystemExit('resultados state block not found exactly once')
+          text = text.replace(old_results_state, new_results_state, 1)
+
+          old_results_ui = '''                resultados.forEach { item ->
+                    Surface(
+                        onClick = {
+                            responsavelSelecionado = item
+                            empresaCodigo = item.codigoEmpresa
+                            empresaNome = item.empresa
+                            empresaPlanosRaw = null
+                            localError = null
+                            cpfValidationErrors.clear()
+                            consultedCpfByIndex.clear()
+                            if (!isContinuacao) {
+                                dependentes.clear()
+                            }
+                            scope.launch {
+                                runCatching {
+                                    viewModel.searchEmpresaDirect(item.codigoEmpresa.toString(), br.com.vendamais.mobile.data.models.EmpresaSearchType.CODIGO).firstOrNull()
+                                }.onSuccess { empresa ->
+                                    if (empresa != null) {
+                                        val invalidCodes = state.cadastroWorkspace.config?.codigosEmpresaInvalidos.orEmpty()
+                                        val situacaoCode = empresa.codigoSituacao?.toString()
+                                        if (!situacaoCode.isNullOrBlank() && invalidCodes.contains(situacaoCode)) {
+                                            empresaRaw = null
+                                            empresaPlanosRaw = null
+                                            viewModel.resolveCadastroOverlay(
+                                                CadastroModalSignal(
+                                                    empresaCanceladaNome = empresa.nomeFantasia.ifBlank {
+                                                        empresa.razaoSocial.ifBlank { item.empresa }
+                                                    },
+                                                ),
+                                            )
+                                            localError = "A empresa selecionada esta bloqueada para cadastro."
+                                            return@onSuccess
+                                        }
+
+                                        empresaRaw = empresa.raw
+                                        empresaPlanosRaw = empresa.precoPlano ?: extractPlanosRawFromEmpresa(empresa.raw)
+                                        empresaNome = empresa.nomeFantasia.ifBlank { empresa.razaoSocial.ifBlank { item.empresa } }
+                                        empresaCodigo = empresa.codigo ?: empresa.id
+                                        empresa.observacoesResolvidas
+                                            ?.takeIf { it.isNotBlank() }
+                                            ?.let { observacoes ->
+                                                viewModel.resolveCadastroOverlay(
+                                                    CadastroModalSignal(
+                                                        empresaObservacaoNome = empresa.nomeFantasia.ifBlank {
+                                                            empresa.razaoSocial.ifBlank { item.empresa }
+                                                        },
+                                                        empresaObservacaoTexto = observacoes,
+                                                    ),
+                                                )
+                                            }
+                                    } else {
+                                        empresaPlanosRaw = null
+                                        viewModel.resolveCadastroOverlay(
+                                            CadastroModalSignal(
+                                                empresaNaoIdentificada = true,
+                                                empresaNaoIdentificadaRequired = true,
+                                            ),
+                                        )
+                                    }
+                                }.onFailure {
+                                    empresaPlanosRaw = null
+                                    viewModel.resolveCadastroOverlay(
+                                        CadastroModalSignal(
+                                            empresaNaoIdentificada = true,
+                                            empresaNaoIdentificadaRequired = true,
+                                        ),
+                                    )
+                                }
+                            }
+                        },
+                    ) {
+                        Text("${item.nome} - Codigo ${item.codigo} - ${item.empresa}", modifier = Modifier.fillMaxWidth().padding(10.dp))
+                    }
+                }
+'''
+          new_results_ui = '''                if (resultados.isNotEmpty()) {
+                    resultados.forEachIndexed { index, item ->
+                        Surface(
+                            onClick = {
+                                responsavelSelecionado = item
+                                empresaCodigo = item.codigoEmpresa
+                                empresaNome = item.empresa
+                                empresaPlanosRaw = null
+                                localError = null
+                                cpfValidationErrors.clear()
+                                consultedCpfByIndex.clear()
+                                if (!isContinuacao) {
+                                    dependentes.clear()
+                                }
+                                scope.launch {
+                                    runCatching {
+                                        viewModel.searchEmpresaDirect(item.codigoEmpresa.toString(), br.com.vendamais.mobile.data.models.EmpresaSearchType.CODIGO).firstOrNull()
+                                    }.onSuccess { empresa ->
+                                        if (empresa != null) {
+                                            val invalidCodes = state.cadastroWorkspace.config?.codigosEmpresaInvalidos.orEmpty()
+                                            val situacaoCode = empresa.codigoSituacao?.toString()
+                                            if (!situacaoCode.isNullOrBlank() && invalidCodes.contains(situacaoCode)) {
+                                                empresaRaw = null
+                                                empresaPlanosRaw = null
+                                                viewModel.resolveCadastroOverlay(
+                                                    CadastroModalSignal(
+                                                        empresaCanceladaNome = empresa.nomeFantasia.ifBlank {
+                                                            empresa.razaoSocial.ifBlank { item.empresa }
+                                                        },
+                                                    ),
+                                                )
+                                                localError = "A empresa selecionada esta bloqueada para cadastro."
+                                                return@onSuccess
+                                            }
+
+                                            empresaRaw = empresa.raw
+                                            empresaPlanosRaw = empresa.precoPlano ?: extractPlanosRawFromEmpresa(empresa.raw)
+                                            empresaNome = empresa.nomeFantasia.ifBlank { empresa.razaoSocial.ifBlank { item.empresa } }
+                                            empresaCodigo = empresa.codigo ?: empresa.id
+                                            empresa.observacoesResolvidas
+                                                ?.takeIf { it.isNotBlank() }
+                                                ?.let { observacoes ->
+                                                    viewModel.resolveCadastroOverlay(
+                                                        CadastroModalSignal(
+                                                            empresaObservacaoNome = empresa.nomeFantasia.ifBlank {
+                                                                empresa.razaoSocial.ifBlank { item.empresa }
+                                                            },
+                                                            empresaObservacaoTexto = observacoes,
+                                                        ),
+                                                    )
+                                                }
+                                        } else {
+                                            empresaPlanosRaw = null
+                                            viewModel.resolveCadastroOverlay(
+                                                CadastroModalSignal(
+                                                    empresaNaoIdentificada = true,
+                                                    empresaNaoIdentificadaRequired = true,
+                                                ),
+                                            )
+                                        }
+                                    }.onFailure {
+                                        empresaPlanosRaw = null
+                                        viewModel.resolveCadastroOverlay(
+                                            CadastroModalSignal(
+                                                empresaNaoIdentificada = true,
+                                                empresaNaoIdentificadaRequired = true,
+                                            ),
+                                        )
+                                    }
+                                }
+                            },
+                            modifier = if (index == 0) {
+                                Modifier
+                                    .fillMaxWidth()
+                                    .bringIntoViewRequester(firstResponsavelResultBringIntoViewRequester)
+                            } else {
+                                Modifier.fillMaxWidth()
+                            },
+                        ) {
+                            Text("${item.nome} - Codigo ${item.codigo} - ${item.empresa}", modifier = Modifier.fillMaxWidth().padding(10.dp))
+                        }
+                    }
+                    LaunchedEffect(resultados.firstOrNull()?.codigo) {
+                        firstResponsavelResultBringIntoViewRequester.bringIntoView()
+                    }
+                }
+'''
+          if text.count(old_results_ui) != 1:
+              raise SystemExit(f'result UI block expected once, found {text.count(old_results_ui)}')
+          text = text.replace(old_results_ui, new_results_ui, 1)
+          inclusion.write_text(text)
+          PY
+
+      - name: Validate patch
+        run: git diff --check
+
+      - name: Compile Android Kotlin
+        working-directory: android-app
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:compileDebugKotlin --stacktrace --no-daemon
+
+      - name: Commit UI fixes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-app/app/src/main/java/br/com/vendamais/mobile/ui/screens/CadastrosScreen.kt
+          git add android-app/app/src/main/java/br/com/vendamais/mobile/ui/screens/InclusaoDependenteDialog.kt
+          git commit -m "Refine cadastro menu and dependent search scroll"
+          git push origin HEAD:main
