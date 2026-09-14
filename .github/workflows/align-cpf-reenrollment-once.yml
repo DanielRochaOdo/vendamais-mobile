@@ -1,0 +1,57 @@
+name: Align CPF Reenrollment Once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/align-cpf-reenrollment-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  align-cpf-reenrollment:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Apply Android CPF flow patch
+        run: python3 .github/scripts/align_cpf_reenrollment.py
+
+      - name: Validate diff
+        run: git diff --check
+
+      - name: Assert ERP-authoritative CPF flow
+        run: |
+          grep -q 'Historico concluido nunca decide elegibilidade de recadastro' android-app/app/src/main/java/br/com/vendamais/mobile/data/remote/CadastroWorkflowRepository.kt
+          grep -q 'val erpCheck = withTimeoutOrNull(20000) { checkErpAssociado(session, cpf) }' android-app/app/src/main/java/br/com/vendamais/mobile/data/remote/CadastroWorkflowRepository.kt
+          ! grep -q 'Este CPF ja possui uma adesao concluida e enviada' android-app/app/src/main/java/br/com/vendamais/mobile/data/remote/CadastroWorkflowRepository.kt
+          grep -q 'DROP TRIGGER IF EXISTS trg_block_new_cadastro_when_sent_exists' supabase/migrations/20260914090000_align_cpf_reenrollment_with_erp.sql
+          grep -q "status, ''))) IN ('incompleto', 'erro_envio', 'adesoes_pendentes')" supabase/migrations/20260914090000_align_cpf_reenrollment_with_erp.sql
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: 'android-app/**/*.gradle*'
+
+      - name: Test Android CPF flow
+        working-directory: android-app
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:testStandardDebugUnitTest :app:compileStandardDebugKotlin :app:compileDirectDebugKotlin --stacktrace --no-daemon
+
+      - name: Commit CPF flow alignment
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-app/app/src/main/java/br/com/vendamais/mobile/data/remote/CadastroWorkflowRepository.kt
+          git commit -m "Use ERP as authority for CPF reenrollment"
+          git push origin HEAD:main
