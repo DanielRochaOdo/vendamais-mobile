@@ -312,6 +312,25 @@ data class PublicCadastroSubmitResponse(
 )
 
 @Serializable
+data class PublicCadastroContractPayload(
+    val cpf: String,
+    val nome: String,
+    @SerialName("dataNascimento")
+    val dataNascimento: String,
+    @SerialName("sexoCodigo")
+    val sexoCodigo: Int,
+    @SerialName("nomeMae")
+    val nomeMae: String,
+    @SerialName("numeroMatricula")
+    val numeroMatricula: String? = null,
+    val contatos: List<PublicCadastroContato>,
+    val endereco: PublicCadastroEndereco,
+    @SerialName("titularPlano")
+    val titularPlano: Int,
+    val dependentes: List<PublicCadastroDependente>,
+)
+
+@Serializable
 data class PublicCadastroPayload(
     val cpf: String,
     val nome: String,
