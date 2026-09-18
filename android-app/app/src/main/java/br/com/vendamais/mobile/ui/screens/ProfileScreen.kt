@@ -27,9 +27,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import br.com.vendamais.mobile.AppConfig
 import br.com.vendamais.mobile.BuildConfig
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
@@ -56,6 +58,7 @@ fun ProfileScreen(
 ) {
     val profile = state.profile ?: return
     val scope = rememberCoroutineScope()
+    val uriHandler = LocalUriHandler.current
     var editing by remember(profile.id) { mutableStateOf(false) }
     var saving by remember(profile.id) { mutableStateOf(false) }
     var error by remember(profile.id) { mutableStateOf<String?>(null) }
@@ -238,16 +241,44 @@ fun ProfileScreen(
             }
         }
 
+        WebCard(title = "Privacidade e dados") {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "Consulte como a Odontoart trata dados pessoais e como solicitar exclusao de conta ou dados.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                VendaButton(
+                    label = "Politica de privacidade",
+                    onClick = { uriHandler.openUri(AppConfig.privacyPolicyUrl) },
+                    style = VendaButtonStyle.SECONDARY,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                VendaButton(
+                    label = "Solicitar exclusao de conta e dados",
+                    onClick = {
+                        uriHandler.openUri(
+                            "mailto:odontoart@odontoart.com?subject=Venda%2B%20-%20Solicitacao%20de%20exclusao%20de%20conta%20e%20dados"
+                        )
+                    },
+                    style = VendaButtonStyle.SECONDARY,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+
         WebCard(title = "Aplicativo") {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 InfoRow("Versao instalada", BuildConfig.VERSION_NAME)
 
-                VendaButton(
-                    label = "Verificar atualizacao",
-                    onClick = onCheckAndInstallUpdate,
-                    leadingIcon = Icons.Rounded.SystemUpdate,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                if (AppConfig.directUpdateEnabled) {
+                    VendaButton(
+                        label = "Verificar atualizacao",
+                        onClick = onCheckAndInstallUpdate,
+                        leadingIcon = Icons.Rounded.SystemUpdate,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
 
                 VendaButton(
                     label = "Atualizar dados",

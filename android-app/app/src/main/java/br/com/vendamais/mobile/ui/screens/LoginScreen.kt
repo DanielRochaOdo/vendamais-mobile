@@ -26,14 +26,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import br.com.vendamais.mobile.AppConfig
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.components.VendaBrandWordmark
 import br.com.vendamais.mobile.ui.components.VendaButton
@@ -55,6 +58,8 @@ fun LoginScreen(
     onRememberConnectedChange: (Boolean) -> Unit,
     onLogin: () -> Unit,
 ) {
+    val uriHandler = LocalUriHandler.current
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -176,7 +181,14 @@ fun LoginScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(VendaSpacing.x5))
+            Spacer(modifier = Modifier.height(VendaSpacing.x3))
+            TextButton(onClick = { uriHandler.openUri(AppConfig.privacyPolicyUrl) }) {
+                Text(
+                    text = "Politica de Privacidade",
+                    color = White,
+                )
+            }
+            Spacer(modifier = Modifier.height(VendaSpacing.x2))
             Text(
                 text = "Acesso restrito a usuarios autorizados",
                 style = MaterialTheme.typography.labelSmall,

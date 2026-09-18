@@ -21,6 +21,8 @@ val localProperties = Properties().apply {
 fun quoted(value: String): String = "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 val defaultPublicAppUrl = "https://vendamais.odontoart.com"
+val defaultPrivacyPolicyUrl = "https://odontoart.com/privacy-policy/"
+val defaultDirectUpdateMetadataUrl = "https://odontoart.com/vendaMais/updates/android-update.json"
 
 fun isLocalHost(host: String?): Boolean {
     val normalized = host?.trim()?.lowercase().orEmpty()
@@ -91,6 +93,7 @@ val releaseBuildRequested = gradle.startParameter.taskNames
             "bundleStandardRelease",
             "renameReleaseApk",
             "renameReleaseBundle",
+            "playStoreReleaseBundle",
             "assembleDirectRelease",
             "bundleDirectRelease",
             "renameDirectReleaseApk",
@@ -143,24 +146,26 @@ fun resolveReleaseArtifactBaseUrl(): String {
 val resolvedUpdateMetadataUrl = localProperties.getProperty("updateMetadataUrl")
     ?.trim()
     ?.takeIf { it.isNotBlank() }
-    ?: ""
+    ?: defaultDirectUpdateMetadataUrl
 val releaseArtifactBaseUrl = resolveReleaseArtifactBaseUrl()
 val resolvedDirectUpdateApkUrl = "$releaseArtifactBaseUrl/vendamais-mobile-direct-v${appVersion.name}.apk"
 
 android {
     namespace = "br.com.vendamais.mobile"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "br.com.vendamais.mobile"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = appVersion.code
         versionName = appVersion.name
 
         buildConfigField("String", "SUPABASE_URL", quoted(localProperties.getProperty("supabaseUrl", "")))
         buildConfigField("String", "SUPABASE_ANON_KEY", quoted(localProperties.getProperty("supabaseAnonKey", "")))
         buildConfigField("String", "PUBLIC_APP_URL", quoted(resolvedPublicAppUrl))
+        buildConfigField("String", "PRIVACY_POLICY_URL", quoted(localProperties.getProperty("privacyPolicyUrl", defaultPrivacyPolicyUrl)))
+        buildConfigField("boolean", "DIRECT_UPDATE_ENABLED", "false")
         // The standard build intentionally has no APK self-installer. This removes the
         // high-risk REQUEST_INSTALL_PACKAGES surface from the default production APK.
         buildConfigField("String", "UPDATE_METADATA_URL", quoted(""))
@@ -183,6 +188,7 @@ android {
             dimension = "distribution"
             // Private/direct channel only. This variant keeps the explicit, user-driven
             // APK updater and therefore receives REQUEST_INSTALL_PACKAGES via src/direct.
+            buildConfigField("boolean", "DIRECT_UPDATE_ENABLED", "true")
             buildConfigField("String", "UPDATE_METADATA_URL", quoted(resolvedUpdateMetadataUrl))
             buildConfigField("String", "UPDATE_APK_URL", quoted(resolvedDirectUpdateApkUrl))
         }
@@ -240,6 +246,12 @@ tasks.register<Copy>("renameReleaseBundle") {
     from(layout.buildDirectory.file("outputs/bundle/standardRelease/app-standard-release.aab"))
     into(layout.buildDirectory.dir("outputs/release-artifacts"))
     rename { "vendamais-mobile-v${android.defaultConfig.versionName}.aab" }
+}
+
+tasks.register("playStoreReleaseBundle") {
+    group = "distribution"
+    description = "Gera o Android App Bundle standard assinado para envio ao Google Play."
+    dependsOn("renameReleaseBundle")
 }
 
 tasks.register<Copy>("renameReleaseApk") {
@@ -309,7 +321,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.navigation:navigation-compose:2.8.4")
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("androidx.datastore:datastore-preferences:1.2.1")
+    implementation("androidx.graphics:graphics-path:1.1.0")
 
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
