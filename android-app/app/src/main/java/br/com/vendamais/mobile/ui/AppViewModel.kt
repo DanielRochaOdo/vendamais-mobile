@@ -34,7 +34,12 @@ import br.com.vendamais.mobile.data.models.PlanoMap
 import br.com.vendamais.mobile.data.models.ProcessUploadQueueResponse
 import br.com.vendamais.mobile.data.models.LemmitLimitInfo
 import br.com.vendamais.mobile.data.models.LemmitResponse
+import br.com.vendamais.mobile.data.models.PublicCadastroAuthenticateResponse
+import br.com.vendamais.mobile.data.models.PublicCadastroCepResponse
 import br.com.vendamais.mobile.data.models.PublicCadastroCheckCpfResponse
+import br.com.vendamais.mobile.data.models.PublicCadastroContractPayload
+import br.com.vendamais.mobile.data.models.PublicCadastroContractPrepareResponse
+import br.com.vendamais.mobile.data.models.PublicCadastroDependentLookupResponse
 import br.com.vendamais.mobile.data.models.PublicCadastroLinkResolveResponse
 import br.com.vendamais.mobile.data.models.PublicCadastroPayload
 import br.com.vendamais.mobile.data.models.PublicCadastroSubmitResponse
@@ -2268,6 +2273,54 @@ class AppViewModel(
 
     suspend fun resolvePublicCadastroLink(token: String): PublicCadastroLinkResolveResponse {
         return workflowRepository.resolvePublicCadastroLink(token)
+    }
+
+    suspend fun authenticatePublicCadastro(
+        token: String,
+        cpf: String,
+        birthDate: String,
+    ): PublicCadastroAuthenticateResponse {
+        return workflowRepository.authenticatePublicCadastro(
+            token = token,
+            cpf = cpf,
+            birthDate = birthDate,
+        )
+    }
+
+    suspend fun consultarEnderecoCepPublicSecure(
+        attemptToken: String,
+        cep: String,
+    ): PublicCadastroCepResponse {
+        return workflowRepository.consultarEnderecoPorCepPublicSecure(attemptToken, cep)
+    }
+
+    suspend fun lookupPublicDependent(
+        attemptToken: String,
+        cpf: String,
+    ): PublicCadastroDependentLookupResponse {
+        return workflowRepository.lookupPublicDependent(attemptToken, cpf)
+    }
+
+    suspend fun preparePublicContract(
+        attemptToken: String,
+        confirmedEmail: String,
+        cadastro: PublicCadastroContractPayload,
+    ): PublicCadastroContractPrepareResponse {
+        return workflowRepository.preparePublicContract(attemptToken, confirmedEmail, cadastro)
+    }
+
+    suspend fun submitPublicCadastroSecure(
+        attemptToken: String,
+        contractToken: String,
+        acceptedTerms: Boolean,
+        acceptedData: Boolean,
+    ): PublicCadastroSubmitResponse {
+        return workflowRepository.submitPublicCadastroSecure(
+            attemptToken = attemptToken,
+            contractToken = contractToken,
+            acceptedTerms = acceptedTerms,
+            acceptedData = acceptedData,
+        )
     }
 
     suspend fun checkPublicCadastroCpf(token: String, cpf: String): PublicCadastroCheckCpfResponse {
