@@ -270,6 +270,8 @@ fun VendaMaisApp(
                         onGenerateLink = viewModel::createCadastroLink,
                         onRegenerateLink = viewModel::regenerateCadastroLink,
                         onDeleteLink = viewModel::deleteCadastroLink,
+                        onOpenLinkHistory = viewModel::openCadastroLinkHistory,
+                        onCloseLinkHistory = viewModel::closeCadastroLinkHistory,
                         onOpenWebApp = if (AppConfig.publicAppUrl.isBlank()) null else openWebApp,
                     )
 
