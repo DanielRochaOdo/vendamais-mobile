@@ -153,6 +153,19 @@ internal suspend inline fun <reified T> HttpClient.safeDelete(
     }
 }
 
+internal suspend fun HttpClient.safeDeleteNoContent(
+    url: String,
+    json: Json,
+    builder: HttpRequestBuilder.() -> Unit = {},
+) {
+    try {
+        val response = delete(url, builder)
+        if (!response.status.isSuccess()) throw response.toReadableException(json)
+    } catch (exception: ClientRequestException) {
+        throw exception.toReadableException(json)
+    }
+}
+
 internal suspend fun HttpClient.safePutBytes(
     url: String,
     json: Json,

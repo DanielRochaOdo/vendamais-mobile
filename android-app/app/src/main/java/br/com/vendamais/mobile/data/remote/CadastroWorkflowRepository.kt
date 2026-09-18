@@ -312,7 +312,7 @@ class CadastroWorkflowRepository(
     }
 
     suspend fun deleteCadastroLink(session: SavedSession, linkId: String) {
-        client.safeDelete<JsonElement>(
+        client.safeDeleteNoContent(
             url = "${AppConfig.supabaseUrl}/rest/v1/cadastro_links?id=eq.$linkId",
             json = json,
         ) {
