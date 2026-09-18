@@ -17,7 +17,10 @@ import br.com.vendamais.mobile.data.models.CadastroConfig
 import br.com.vendamais.mobile.data.models.CadastroDetalhe
 import br.com.vendamais.mobile.data.models.CadastroEndereco
 import br.com.vendamais.mobile.data.models.CadastroExcluidoItem
+import br.com.vendamais.mobile.data.models.CadastroLinkHistoryRow
+import br.com.vendamais.mobile.data.models.CadastroLinkHistorySummary
 import br.com.vendamais.mobile.data.models.CadastroLinkItem
+import br.com.vendamais.mobile.data.models.CadastroLinkMetrics
 import br.com.vendamais.mobile.data.models.CadastroResumo
 import br.com.vendamais.mobile.data.models.CadastroStats
 import br.com.vendamais.mobile.data.models.CpfConsultInput
@@ -150,6 +153,12 @@ data class LinkWorkspaceState(
     val selectedEmpresa: EmpresaResumo? = null,
     val operationLoading: Boolean = false,
     val links: List<CadastroLinkItem> = emptyList(),
+    val metricsByLinkId: Map<String, CadastroLinkMetrics> = emptyMap(),
+    val historyLinkId: String? = null,
+    val historySummary: CadastroLinkHistorySummary? = null,
+    val historyRows: List<CadastroLinkHistoryRow> = emptyList(),
+    val historyLoading: Boolean = false,
+    val historyError: String? = null,
 )
 
 data class AppUiState(
@@ -747,13 +756,14 @@ class AppViewModel(
             runCatching {
                 val activeSession = ensureFreshSession(session)
                 workflowRepository.createCadastroLink(activeSession, profile, empresa)
-                workflowRepository.fetchActiveLinks(activeSession)
-            }.onSuccess { links ->
+                loadLinkWorkspaceData(activeSession)
+            }.onSuccess { linkData ->
                 _uiState.update {
                     it.copy(
                         linkWorkspace = it.linkWorkspace.copy(
                             operationLoading = false,
-                            links = links,
+                            links = linkData.links,
+                            metricsByLinkId = linkData.metricsByLinkId,
                             selectedEmpresa = null,
                             empresaSearchResults = emptyList(),
                         ),
@@ -784,13 +794,14 @@ class AppViewModel(
             runCatching {
                 val activeSession = ensureFreshSession(session)
                 workflowRepository.regenerateCadastroLink(activeSession, linkId)
-                workflowRepository.fetchActiveLinks(activeSession)
-            }.onSuccess { links ->
+                loadLinkWorkspaceData(activeSession)
+            }.onSuccess { linkData ->
                 _uiState.update {
                     it.copy(
                         linkWorkspace = it.linkWorkspace.copy(
                             operationLoading = false,
-                            links = links,
+                            links = linkData.links,
+                            metricsByLinkId = linkData.metricsByLinkId,
                         ),
                         errorMessage = "Link regerado com sucesso.",
                     )
@@ -819,13 +830,14 @@ class AppViewModel(
             runCatching {
                 val activeSession = ensureFreshSession(session)
                 workflowRepository.deleteCadastroLink(activeSession, linkId)
-                workflowRepository.fetchActiveLinks(activeSession)
-            }.onSuccess { links ->
+                loadLinkWorkspaceData(activeSession)
+            }.onSuccess { linkData ->
                 _uiState.update {
                     it.copy(
                         linkWorkspace = it.linkWorkspace.copy(
                             operationLoading = false,
-                            links = links,
+                            links = linkData.links,
+                            metricsByLinkId = linkData.metricsByLinkId,
                         ),
                         errorMessage = "Link excluido com sucesso.",
                     )
@@ -839,6 +851,65 @@ class AppViewModel(
                     )
                 }
             }
+        }
+    }
+
+    fun openCadastroLinkHistory(linkId: String) {
+        val session = currentSession ?: return
+        if (linkId.isBlank()) return
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    linkWorkspace = it.linkWorkspace.copy(
+                        historyLinkId = linkId,
+                        historySummary = null,
+                        historyRows = emptyList(),
+                        historyLoading = true,
+                        historyError = null,
+                    ),
+                )
+            }
+
+            runCatching {
+                val activeSession = ensureFreshSession(session)
+                workflowRepository.fetchCadastroLinkHistory(activeSession, linkId)
+            }.onSuccess { response ->
+                _uiState.update {
+                    it.copy(
+                        linkWorkspace = it.linkWorkspace.copy(
+                            historySummary = response.summary,
+                            historyRows = response.rows,
+                            historyLoading = false,
+                            historyError = null,
+                        ),
+                    )
+                }
+            }.onFailure { throwable ->
+                Log.e(logTag, "Falha ao carregar historico do link", throwable)
+                _uiState.update {
+                    it.copy(
+                        linkWorkspace = it.linkWorkspace.copy(
+                            historyLoading = false,
+                            historyError = throwable.message ?: "Nao foi possivel carregar o historico deste link.",
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    fun closeCadastroLinkHistory() {
+        _uiState.update {
+            it.copy(
+                linkWorkspace = it.linkWorkspace.copy(
+                    historyLinkId = null,
+                    historySummary = null,
+                    historyRows = emptyList(),
+                    historyLoading = false,
+                    historyError = null,
+                ),
+            )
         }
     }
 
@@ -3144,7 +3215,10 @@ class AppViewModel(
                                     .takeIf { value -> support.adesionistas.any { it.id == value } }
                                     ?: "",
                             ),
-                            linkWorkspace = current.linkWorkspace.copy(links = support.links),
+                            linkWorkspace = current.linkWorkspace.copy(
+                                links = support.links,
+                                metricsByLinkId = support.linkMetricsById,
+                            ),
                         )
                     }
                 }
@@ -3188,6 +3262,15 @@ class AppViewModel(
         }
     }
 
+    private suspend fun loadLinkWorkspaceData(session: SavedSession): LinkWorkspaceData {
+        val links = workflowRepository.fetchActiveLinks(session)
+        val metrics = workflowRepository.fetchLinkMetrics(session, links.map { it.id })
+        return LinkWorkspaceData(
+            links = links,
+            metricsByLinkId = metrics,
+        )
+    }
+
     private suspend fun loadCadastroSupportData(
         session: SavedSession,
         profile: MobileProfile,
@@ -3210,16 +3293,18 @@ class AppViewModel(
                     emptyList()
                 }
             }
-            val linksDeferred = async { workflowRepository.fetchActiveLinks(activeSession) }
+            val linkDataDeferred = async { loadLinkWorkspaceData(activeSession) }
             val planosDeferred = async { workflowRepository.fetchPlanosMap(activeSession) }
             val parentescosDeferred = async { workflowRepository.fetchParentescosMap(activeSession) }
             val statusDeferred = async { workflowRepository.fetchStatusAdesoes(activeSession) }
 
+            val linkData = linkDataDeferred.await()
             CadastroSupportData(
                 config = configDeferred.await(),
                 vendedores = vendedoresDeferred.await(),
                 adesionistas = adesionistasDeferred.await(),
-                links = linksDeferred.await(),
+                links = linkData.links,
+                linkMetricsById = linkData.metricsByLinkId,
                 planos = planosDeferred.await(),
                 parentescos = parentescosDeferred.await(),
                 statusAdesoes = statusDeferred.await(),
@@ -3467,11 +3552,17 @@ private data class CriticalSessionData(
     val cadastroStats: CadastroStats,
 )
 
+private data class LinkWorkspaceData(
+    val links: List<CadastroLinkItem>,
+    val metricsByLinkId: Map<String, CadastroLinkMetrics>,
+)
+
 private data class CadastroSupportData(
     val config: CadastroConfig?,
     val vendedores: List<TeamMemberOption>,
     val adesionistas: List<TeamMemberOption>,
     val links: List<CadastroLinkItem>,
+    val linkMetricsById: Map<String, CadastroLinkMetrics>,
     val planos: List<PlanoMap>,
     val parentescos: List<ParentescoMap>,
     val statusAdesoes: List<StatusAdesao>,
