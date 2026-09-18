@@ -171,6 +171,7 @@ data class PublicCadastroLinkInfo(
     val empresaRaw: JsonElement? = null,
     @SerialName("empresaExigeMatricula")
     val empresaExigeMatricula: Int? = null,
+    val planos: List<PublicPlanoInfo> = emptyList(),
     @SerialName("planosRaw")
     val planosRaw: JsonElement? = null,
     @SerialName("planosOcultos")
@@ -185,15 +186,33 @@ data class PublicCadastroLinkInfo(
 )
 
 @Serializable
-data class PublicParentescoInfo(
-    @SerialName("parentescoId")
-    val parentescoId: Int,
-    val label: String,
-    val ativo: Boolean = true,
+data class PublicPlanoInfo(
+    @SerialName("Plano")
+    val plano: Int,
+    val nomeExibicao: String = "",
+    @SerialName("ValorTitular")
+    val valorTitular: Double = 0.0,
+    @SerialName("ValorDependente")
+    val valorDependente: Double = 0.0,
+    @SerialName("ValorAgregado")
+    val valorAgregado: Double = 0.0,
 )
 
 @Serializable
+data class PublicParentescoInfo(
+    val id: Int? = null,
+    @SerialName("parentescoId")
+    val parentescoId: Int? = null,
+    val label: String,
+    val ativo: Boolean = true,
+) {
+    val resolvedId: Int
+        get() = parentescoId ?: id ?: 0
+}
+
+@Serializable
 data class PublicCadastroPrefill(
+    val cpf: String? = null,
     val nome: String? = null,
     @SerialName("dataNascimento")
     val dataNascimento: String? = null,
@@ -203,6 +222,73 @@ data class PublicCadastroPrefill(
     val endereco: PublicCadastroEndereco? = null,
     @SerialName("nomeMae")
     val nomeMae: String? = null,
+)
+
+@Serializable
+data class PublicCadastroAuthenticateResponse(
+    val ok: Boolean = false,
+    val state: String? = null,
+    @SerialName("attemptToken")
+    val attemptToken: String? = null,
+    val person: PublicCadastroPrefill? = null,
+    val reason: String? = null,
+    val error: String? = null,
+    val code: String? = null,
+)
+
+@Serializable
+data class PublicCadastroCepResponse(
+    val ok: Boolean = false,
+    val dados: PublicCadastroCepData? = null,
+    val error: String? = null,
+)
+
+@Serializable
+data class PublicCadastroCepData(
+    @SerialName("IdTipoLogradouro")
+    val idTipoLogradouro: Int? = null,
+    @SerialName("TipoLogradouro")
+    val tipoLogradouro: String? = null,
+    @SerialName("Logradouro")
+    val logradouro: String? = null,
+    @SerialName("IdBairro")
+    val idBairro: Int? = null,
+    @SerialName("Bairro")
+    val bairro: String? = null,
+    @SerialName("IdMunicipio")
+    val idMunicipio: Int? = null,
+    @SerialName("Municipio")
+    val municipio: String? = null,
+    @SerialName("IdUf")
+    val idUf: Int? = null,
+    @SerialName("Uf")
+    val uf: String? = null,
+    @SerialName("UfSigla")
+    val ufSigla: String? = null,
+)
+
+@Serializable
+data class PublicCadastroDependentLookupResponse(
+    val ok: Boolean = false,
+    val pessoa: JsonElement? = null,
+    val error: String? = null,
+    val code: String? = null,
+    val canContinue: Boolean = false,
+)
+
+@Serializable
+data class PublicCadastroContractPrepareResponse(
+    val ok: Boolean = false,
+    @SerialName("contractToken")
+    val contractToken: String? = null,
+    @SerialName("contractHash")
+    val contractHash: String? = null,
+    @SerialName("contractText")
+    val contractText: String? = null,
+    val summary: JsonElement? = null,
+    val error: String? = null,
+    val code: String? = null,
+    val missingPlans: List<Int> = emptyList(),
 )
 
 @Serializable
