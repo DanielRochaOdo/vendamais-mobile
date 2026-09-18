@@ -546,6 +546,10 @@ class AppViewModel(
     }
 
     fun checkForAppUpdate(force: Boolean = false) {
+        if (!AppConfig.directUpdateEnabled || AppConfig.updateMetadataUrl.isBlank()) {
+            _uiState.update { it.copy(appUpdateInfo = null, appUpdateChecking = false, appUpdateError = null) }
+            return
+        }
         if (!force && _uiState.value.appUpdateChecking) return
         viewModelScope.launch {
             _uiState.update { it.copy(appUpdateChecking = true, appUpdateError = null) }
@@ -616,6 +620,17 @@ class AppViewModel(
         context: Context,
         onInstallIntent: (android.content.Intent) -> Unit,
     ) {
+        if (!AppConfig.directUpdateEnabled || AppConfig.updateMetadataUrl.isBlank()) {
+            _uiState.update {
+                it.copy(
+                    appUpdateInfo = null,
+                    appUpdateChecking = false,
+                    appUpdateError = null,
+                    noticeMessage = "Atualizacoes desta versao sao distribuidas pela Google Play.",
+                )
+            }
+            return
+        }
         viewModelScope.launch {
             _uiState.update { it.copy(appUpdateChecking = true, appUpdateError = null) }
             val currentVersionCode = runCatching { br.com.vendamais.mobile.BuildConfig.VERSION_CODE }.getOrDefault(0)
