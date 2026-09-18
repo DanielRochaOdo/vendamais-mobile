@@ -351,6 +351,7 @@ fun CadastrosScreen(
                 item {
                     CadastroLinksCard(
                         workspace = state.linkWorkspace,
+                        invalidCompanyCodes = state.cadastroWorkspace.config?.codigosEmpresaInvalidos.orEmpty(),
                         onSearchTypeChange = onLinkSearchTypeChange,
                         onSearchValueChange = onLinkSearchValueChange,
                         onSearchEmpresa = onLinkSearchEmpresa,
