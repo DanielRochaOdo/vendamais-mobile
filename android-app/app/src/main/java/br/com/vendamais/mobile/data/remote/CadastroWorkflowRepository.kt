@@ -12,7 +12,12 @@ import br.com.vendamais.mobile.data.models.CadastroLinkAssociadoResumo
 import br.com.vendamais.mobile.data.models.CadastroLinkHistoryResponse
 import br.com.vendamais.mobile.data.models.CadastroLinkItem
 import br.com.vendamais.mobile.data.models.CadastroLinkMetrics
+import br.com.vendamais.mobile.data.models.PublicCadastroAuthenticateResponse
+import br.com.vendamais.mobile.data.models.PublicCadastroCepResponse
 import br.com.vendamais.mobile.data.models.PublicCadastroCheckCpfResponse
+import br.com.vendamais.mobile.data.models.PublicCadastroContractPayload
+import br.com.vendamais.mobile.data.models.PublicCadastroContractPrepareResponse
+import br.com.vendamais.mobile.data.models.PublicCadastroDependentLookupResponse
 import br.com.vendamais.mobile.data.models.PublicCadastroLinkResolveResponse
 import br.com.vendamais.mobile.data.models.PublicCadastroPayload
 import br.com.vendamais.mobile.data.models.PublicCadastroSubmitResponse
@@ -2134,6 +2139,93 @@ class CadastroWorkflowRepository(
             json = json,
             body = buildJsonObject {
                 put("token", token.trim())
+            },
+        )
+    }
+
+    suspend fun authenticatePublicCadastro(
+        token: String,
+        cpf: String,
+        birthDate: String,
+        captchaToken: String? = null,
+    ): PublicCadastroAuthenticateResponse {
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-public-authenticate",
+            json = json,
+            body = buildJsonObject {
+                put("token", token.trim())
+                put("cpf", CadastroPayloadBuilder.normalizeDigits(cpf))
+                put("birthDate", birthDate.trim())
+                captchaToken?.trim()?.takeIf { it.isNotBlank() }?.let { put("captchaToken", it) }
+            },
+        )
+    }
+
+    suspend fun consultarEnderecoPorCepPublicSecure(
+        attemptToken: String,
+        cep: String,
+    ): PublicCadastroCepResponse {
+        val normalizedCep = CadastroPayloadBuilder.normalizeDigits(cep).take(8)
+        if (normalizedCep.length != 8) {
+            throw IllegalStateException("CEP invalido. Informe os 8 digitos.")
+        }
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-public-cep",
+            json = json,
+            body = buildJsonObject {
+                put("attemptToken", attemptToken.trim())
+                put("cep", normalizedCep)
+            },
+        )
+    }
+
+    suspend fun lookupPublicDependent(
+        attemptToken: String,
+        cpf: String,
+    ): PublicCadastroDependentLookupResponse {
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-public-dependent-lookup",
+            json = json,
+            body = buildJsonObject {
+                put("attemptToken", attemptToken.trim())
+                put("cpf", CadastroPayloadBuilder.normalizeDigits(cpf))
+            },
+        )
+    }
+
+    suspend fun preparePublicContract(
+        attemptToken: String,
+        confirmedEmail: String,
+        cadastro: PublicCadastroContractPayload,
+    ): PublicCadastroContractPrepareResponse {
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-public-contract-prepare",
+            json = json,
+            body = buildJsonObject {
+                put("attemptToken", attemptToken.trim())
+                put("confirmedEmail", confirmedEmail.trim().lowercase(Locale.ROOT))
+                put(
+                    "cadastro",
+                    json.encodeToJsonElement(PublicCadastroContractPayload.serializer(), cadastro),
+                )
+            },
+        )
+    }
+
+    suspend fun submitPublicCadastroSecure(
+        attemptToken: String,
+        contractToken: String,
+        acceptedTerms: Boolean,
+        acceptedData: Boolean,
+    ): PublicCadastroSubmitResponse {
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-public-submit",
+            json = json,
+            body = buildJsonObject {
+                put("attemptToken", attemptToken.trim())
+                put("contractToken", contractToken.trim())
+                put("acceptedTerms", acceptedTerms)
+                put("acceptedData", acceptedData)
             },
         )
     }
