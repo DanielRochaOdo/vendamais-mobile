@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -1486,15 +1487,6 @@ private fun formatCpf(value: String): String {
     val d = value.filter(Char::isDigit)
     if (d.length != 11) return value
     return "${d.substring(0, 3)}.${d.substring(3, 6)}.${d.substring(6, 9)}-${d.substring(9)}"
-}
-
-private fun formatPhone(value: String): String {
-    val d = value.filter(Char::isDigit)
-    return when (d.length) {
-        11 -> "(${d.substring(0, 2)}) ${d.substring(2, 7)}-${d.substring(7)}"
-        10 -> "(${d.substring(0, 2)}) ${d.substring(2, 6)}-${d.substring(6)}"
-        else -> value
-    }
 }
 
 private fun openAssociadoApp(context: android.content.Context) {
