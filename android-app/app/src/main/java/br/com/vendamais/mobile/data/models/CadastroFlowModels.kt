@@ -389,12 +389,68 @@ data class CadastroLinkItem(
     val isActive: Boolean = true,
     @SerialName("click_count")
     val clickCount: Int? = null,
+    @SerialName("last_clicked_at")
+    val lastClickedAt: String? = null,
     @SerialName("used_at")
     val usedAt: String? = null,
     @SerialName("used_cpf")
     val usedCpf: String? = null,
     @SerialName("created_at")
     val createdAt: String,
+    @SerialName("updated_at")
+    val updatedAt: String? = null,
+)
+
+data class CadastroLinkAssociadoResumo(
+    val nome: String,
+    val dependentes: List<String> = emptyList(),
+)
+
+data class CadastroLinkMetrics(
+    val associadosCount: Int = 0,
+    val dependentesCount: Int = 0,
+    val associados: List<CadastroLinkAssociadoResumo> = emptyList(),
+)
+
+@Serializable
+data class CadastroLinkHistoryResponse(
+    val ok: Boolean = false,
+    val link: CadastroLinkHistoryInfo? = null,
+    val summary: CadastroLinkHistorySummary? = null,
+    val rows: List<CadastroLinkHistoryRow> = emptyList(),
+    val error: String? = null,
+)
+
+@Serializable
+data class CadastroLinkHistoryInfo(
+    val id: String = "",
+    val empresaNome: String = "",
+    val empresaCodigo: Int = 0,
+    val vendedor: String = "",
+    val vendedorCodigo: String = "",
+)
+
+@Serializable
+data class CadastroLinkHistorySummary(
+    val clickCount: Int = 0,
+    val identifiedAttempts: Int = 0,
+    val anonymousDetailed: Int = 0,
+    val detailedAccessEvents: Int = 0,
+    val lastClickedAt: String? = null,
+)
+
+@Serializable
+data class CadastroLinkHistoryRow(
+    val id: String = "",
+    val timestamp: String = "",
+    val nomeRf: String? = null,
+    val dependentes: List<String> = emptyList(),
+    val telefone: String? = null,
+    val status: String = "",
+    val vendedor: String = "",
+    val vendedorCodigo: String = "",
+    val empresaNome: String = "",
+    val empresaCodigo: Int = 0,
 )
 
 @OptIn(ExperimentalSerializationApi::class)

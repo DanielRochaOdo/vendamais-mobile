@@ -8,8 +8,16 @@ import br.com.vendamais.mobile.data.models.CadastroConfig
 import br.com.vendamais.mobile.data.models.CadastroContato
 import br.com.vendamais.mobile.data.models.CadastroDetalhe
 import br.com.vendamais.mobile.data.models.CadastroEndereco
+import br.com.vendamais.mobile.data.models.CadastroLinkAssociadoResumo
+import br.com.vendamais.mobile.data.models.CadastroLinkHistoryResponse
 import br.com.vendamais.mobile.data.models.CadastroLinkItem
+import br.com.vendamais.mobile.data.models.CadastroLinkMetrics
+import br.com.vendamais.mobile.data.models.PublicCadastroAuthenticateResponse
+import br.com.vendamais.mobile.data.models.PublicCadastroCepResponse
 import br.com.vendamais.mobile.data.models.PublicCadastroCheckCpfResponse
+import br.com.vendamais.mobile.data.models.PublicCadastroContractPayload
+import br.com.vendamais.mobile.data.models.PublicCadastroContractPrepareResponse
+import br.com.vendamais.mobile.data.models.PublicCadastroDependentLookupResponse
 import br.com.vendamais.mobile.data.models.PublicCadastroLinkResolveResponse
 import br.com.vendamais.mobile.data.models.PublicCadastroPayload
 import br.com.vendamais.mobile.data.models.PublicCadastroSubmitResponse
@@ -160,12 +168,85 @@ class CadastroWorkflowRepository(
             query = {
                 parameter(
                     "select",
-                    "id,empresa_codigo,empresa_nome,empresa_cnpj,vendedor_nome,vendedor_codigo,link_url,is_active,click_count,used_at,used_cpf,created_at"
+                    "id,empresa_codigo,empresa_nome,empresa_cnpj,vendedor_nome,vendedor_codigo,link_url,is_active,click_count,last_clicked_at,used_at,used_cpf,created_at,updated_at"
                 )
                 parameter("is_active", "eq.true")
-                parameter("order", "created_at.desc")
+                parameter("order", "empresa_nome.asc,updated_at.desc")
             },
         )
+    }
+
+    suspend fun fetchLinkMetrics(
+        session: SavedSession,
+        linkIds: List<String>,
+    ): Map<String, CadastroLinkMetrics> {
+        if (linkIds.isEmpty()) return emptyMap()
+
+        val rows = getList<CadastroLinkCadastroRow>(
+            path = "cadastros",
+            session = session,
+            query = {
+                parameter("select", "origem_link_id,nome,dependentes")
+                parameter("origem_link_id", "in.(${linkIds.joinToString(",")})")
+                parameter("status", "eq.enviado")
+            },
+        )
+
+        val associados = mutableMapOf<String, MutableList<CadastroLinkAssociadoResumo>>()
+        val dependentesCount = mutableMapOf<String, Int>()
+
+        rows.forEach { row ->
+            val linkId = row.origemLinkId?.trim().orEmpty()
+            if (linkId.isBlank()) return@forEach
+
+            val dependentes = when (val normalized = decodeEmbeddedJsonElement(row.dependentes)) {
+                is JsonArray -> normalized
+                is JsonObject -> normalized["dependentes"] as? JsonArray ?: JsonArray(emptyList())
+                else -> JsonArray(emptyList())
+            }
+
+            val nomesDependentes = dependentes.mapNotNull { item ->
+                val obj = item as? JsonObject ?: return@mapNotNull null
+                val tipo = obj["tipo"]?.jsonPrimitive?.intOrNull
+                if (tipo == 1) return@mapNotNull null
+                obj["nome"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotBlank() }
+            }
+
+            dependentesCount[linkId] = (dependentesCount[linkId] ?: 0) + nomesDependentes.size
+            associados.getOrPut(linkId) { mutableListOf() }.add(
+                CadastroLinkAssociadoResumo(
+                    nome = row.nome?.trim().orEmpty().ifBlank { "Associado sem nome" },
+                    dependentes = nomesDependentes,
+                ),
+            )
+        }
+
+        return linkIds.distinct().associateWith { linkId ->
+            val linkAssociados = associados[linkId].orEmpty()
+            CadastroLinkMetrics(
+                associadosCount = linkAssociados.size,
+                dependentesCount = dependentesCount[linkId] ?: 0,
+                associados = linkAssociados,
+            )
+        }
+    }
+
+    suspend fun fetchCadastroLinkHistory(
+        session: SavedSession,
+        linkId: String,
+    ): CadastroLinkHistoryResponse {
+        val response: CadastroLinkHistoryResponse = client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-link-history",
+            json = json,
+            body = buildJsonObject { put("linkId", linkId) },
+        ) {
+            applyAuthHeaders(session)
+        }
+
+        if (!response.ok) {
+            throw IllegalStateException(response.error ?: "Nao foi possivel carregar o historico deste link.")
+        }
+        return response
     }
 
     suspend fun createCadastroLink(
@@ -2062,6 +2143,93 @@ class CadastroWorkflowRepository(
         )
     }
 
+    suspend fun authenticatePublicCadastro(
+        token: String,
+        cpf: String,
+        birthDate: String,
+        captchaToken: String? = null,
+    ): PublicCadastroAuthenticateResponse {
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-public-authenticate",
+            json = json,
+            body = buildJsonObject {
+                put("token", token.trim())
+                put("cpf", CadastroPayloadBuilder.normalizeDigits(cpf))
+                put("birthDate", birthDate.trim())
+                captchaToken?.trim()?.takeIf { it.isNotBlank() }?.let { put("captchaToken", it) }
+            },
+        )
+    }
+
+    suspend fun consultarEnderecoPorCepPublicSecure(
+        attemptToken: String,
+        cep: String,
+    ): PublicCadastroCepResponse {
+        val normalizedCep = CadastroPayloadBuilder.normalizeDigits(cep).take(8)
+        if (normalizedCep.length != 8) {
+            throw IllegalStateException("CEP invalido. Informe os 8 digitos.")
+        }
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-public-cep",
+            json = json,
+            body = buildJsonObject {
+                put("attemptToken", attemptToken.trim())
+                put("cep", normalizedCep)
+            },
+        )
+    }
+
+    suspend fun lookupPublicDependent(
+        attemptToken: String,
+        cpf: String,
+    ): PublicCadastroDependentLookupResponse {
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-public-dependent-lookup",
+            json = json,
+            body = buildJsonObject {
+                put("attemptToken", attemptToken.trim())
+                put("cpf", CadastroPayloadBuilder.normalizeDigits(cpf))
+            },
+        )
+    }
+
+    suspend fun preparePublicContract(
+        attemptToken: String,
+        confirmedEmail: String,
+        cadastro: PublicCadastroContractPayload,
+    ): PublicCadastroContractPrepareResponse {
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-public-contract-prepare",
+            json = json,
+            body = buildJsonObject {
+                put("attemptToken", attemptToken.trim())
+                put("confirmedEmail", confirmedEmail.trim().lowercase(Locale.ROOT))
+                put(
+                    "cadastro",
+                    json.encodeToJsonElement(PublicCadastroContractPayload.serializer(), cadastro),
+                )
+            },
+        )
+    }
+
+    suspend fun submitPublicCadastroSecure(
+        attemptToken: String,
+        contractToken: String,
+        acceptedTerms: Boolean,
+        acceptedData: Boolean,
+    ): PublicCadastroSubmitResponse {
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-public-submit",
+            json = json,
+            body = buildJsonObject {
+                put("attemptToken", attemptToken.trim())
+                put("contractToken", contractToken.trim())
+                put("acceptedTerms", acceptedTerms)
+                put("acceptedData", acceptedData)
+            },
+        )
+    }
+
     suspend fun checkPublicCadastroCpf(token: String, cpf: String): PublicCadastroCheckCpfResponse {
         return client.safePost(
             url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-link-check-cpf",
@@ -2336,6 +2504,14 @@ internal fun reconcileNumeroMatriculaForSend(
 @kotlinx.serialization.Serializable
 private data class CadastroIdRow(
     val id: String,
+)
+
+@kotlinx.serialization.Serializable
+private data class CadastroLinkCadastroRow(
+    @kotlinx.serialization.SerialName("origem_link_id")
+    val origemLinkId: String? = null,
+    val nome: String? = null,
+    val dependentes: JsonElement? = null,
 )
 
 @kotlinx.serialization.Serializable

@@ -141,6 +141,8 @@ fun CadastrosScreen(
     onGenerateLink: () -> Unit,
     onRegenerateLink: (String) -> Unit,
     onDeleteLink: (String) -> Unit,
+    onOpenLinkHistory: (String) -> Unit,
+    onCloseLinkHistory: () -> Unit,
     onOpenWebApp: (() -> Unit)? = null,
 ) {
     var showInclusaoDialog by rememberSaveable { mutableStateOf(false) }
@@ -349,6 +351,7 @@ fun CadastrosScreen(
                 item {
                     CadastroLinksCard(
                         workspace = state.linkWorkspace,
+                        invalidCompanyCodes = state.cadastroWorkspace.config?.codigosEmpresaInvalidos.orEmpty(),
                         onSearchTypeChange = onLinkSearchTypeChange,
                         onSearchValueChange = onLinkSearchValueChange,
                         onSearchEmpresa = onLinkSearchEmpresa,
@@ -357,6 +360,8 @@ fun CadastrosScreen(
                         onGenerateLink = onGenerateLink,
                         onRegenerateLink = onRegenerateLink,
                         onDeleteLink = onDeleteLink,
+                        onOpenHistory = onOpenLinkHistory,
+                        onCloseHistory = onCloseLinkHistory,
                     )
                 }
             }
