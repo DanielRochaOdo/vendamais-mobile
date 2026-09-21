@@ -173,7 +173,6 @@ fun PublicAdesaoParityScreen(
     var acceptedTerms by rememberSaveable(token) { mutableStateOf(false) }
     var acceptedData by rememberSaveable(token) { mutableStateOf(false) }
     var acceptedCoverage by rememberSaveable(token) { mutableStateOf(false) }
-    var coverageViewed by rememberSaveable(token) { mutableStateOf(false) }
     var preparedCoverageUrl by rememberSaveable(token) { mutableStateOf("") }
     var successMessage by rememberSaveable(token) { mutableStateOf("") }
 
@@ -222,7 +221,7 @@ fun PublicAdesaoParityScreen(
     val scrollState = rememberScrollState()
     LaunchedEffect(stageName) { scrollState.scrollTo(0) }
     LaunchedEffect(titularPlano) { preparedCoverageUrl = "" }
-    LaunchedEffect(titularPlano, coverageUrl) { acceptedCoverage = false; coverageViewed = false }
+    LaunchedEffect(titularPlano, coverageUrl) { acceptedCoverage = false }
     val relationships = remember(currentLink?.id, currentLink?.parentescos) {
         currentLink?.parentescos.orEmpty()
             .filter { it.ativo && it.resolvedId > 1 }
@@ -754,7 +753,6 @@ fun PublicAdesaoParityScreen(
                                             VendaButton(
                                                 label = "Ver cobertura do plano",
                                                 onClick = {
-                                                    coverageViewed = true
                                                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(coverageUrl)))
                                                 },
                                                 modifier = Modifier.fillMaxWidth(),
@@ -771,10 +769,10 @@ fun PublicAdesaoParityScreen(
                                                 Checkbox(
                                                     checked = acceptedCoverage,
                                                     onCheckedChange = { acceptedCoverage = it },
-                                                    enabled = coverageViewed && !busy,
+                                                    enabled = !busy,
                                                 )
                                                 Text(
-                                                    "Li e estou ciente da cobertura do plano contratado.",
+                                                    "Estou ciente da cobertura do plano contratado, disponibilizada para consulta.",
                                                     modifier = Modifier.padding(top = 12.dp),
                                                 )
                                             }
@@ -947,9 +945,9 @@ fun PublicAdesaoParityScreen(
                         VendaButton(
                             label = "Aceitar e concluir",
                             onClick = finalize@{
-                                if (!acceptedTerms || !acceptedData || (coverageUrl.isNotBlank() && (!acceptedCoverage || !coverageViewed))) {
+                                if (!acceptedTerms || !acceptedData || (coverageUrl.isNotBlank() && !acceptedCoverage)) {
                                     error = if (coverageUrl.isNotBlank()) {
-                                        "Leia o documento disponibilizado e marque os três aceites para concluir."
+                                        "Marque os três aceites para concluir. A cobertura está disponível para consulta, caso deseje."
                                     } else {
                                         "Aceite os termos do contrato e confirme os dados para concluir."
                                     }
@@ -988,7 +986,7 @@ fun PublicAdesaoParityScreen(
                             },
                             loading = busy,
                             enabled = !busy && acceptedTerms && acceptedData &&
-                                (coverageUrl.isBlank() || (acceptedCoverage && coverageViewed)),
+                                (coverageUrl.isBlank() || acceptedCoverage),
                             size = VendaButtonSize.MEDIUM,
                             modifier = Modifier.weight(1.2f),
                         )
@@ -1082,7 +1080,6 @@ fun PublicAdesaoParityScreen(
                                     acceptedTerms = false
                                     acceptedData = false
                                     acceptedCoverage = false
-                                    coverageViewed = false
                                     emailDialogOpen = false
                                     setStage(PublicStage.CONTRACT)
                                 }
