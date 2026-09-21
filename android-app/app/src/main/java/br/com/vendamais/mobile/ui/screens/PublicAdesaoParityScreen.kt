@@ -266,9 +266,7 @@ fun PublicAdesaoParityScreen(
     if (stage == PublicStage.SUCCESS) {
         PublicFinalStateScreen(
             title = "Adesão recebida",
-            message = "Parabéns! Sua adesão foi recebida com sucesso. " +
-                successMessage.ifBlank { "" } +
-                "\n\nSeu contrato será enviado ao e-mail confirmado. Agora você já pode aproveitar os benefícios e utilizar o App do Associado.",
+            message = successMessage,
             consultantName = currentLink.vendedorNome,
             consultantPhone = currentLink.vendedorTelefone,
             onInstallApp = { openAssociadoApp(context) },
@@ -972,8 +970,11 @@ fun PublicAdesaoParityScreen(
                                         if (!response.ok) {
                                             error = response.error ?: "Nao foi possivel concluir a adesao."
                                         } else {
-                                            successMessage = response.message
-                                                ?: "Adesao concluida com sucesso."
+                                            successMessage = if (response.message?.contains("processada", ignoreCase = true) == true) {
+                                                "Recebemos sua adesão e ela está sendo processada. Não é necessário preencher novamente."
+                                            } else {
+                                                "Adesão concluída com sucesso! Seu contrato será enviado para o e-mail confirmado. Agora você já pode aproveitar os benefícios e utilizar o App Odontoart Associado."
+                                            }
                                             setStage(PublicStage.SUCCESS)
                                         }
                                     }.onFailure {
