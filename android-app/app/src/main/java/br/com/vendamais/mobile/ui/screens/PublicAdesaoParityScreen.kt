@@ -16,6 +16,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -34,6 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -1196,15 +1198,20 @@ private fun ConsultantContactCard(name: String?, phone: String?) {
             if (!name.isNullOrBlank()) Text(name)
             if (phoneDigits.length >= 10) {
                 Text("WhatsApp: $phone")
-                VendaButton(
-                    label = "Falar com meu consultor",
-                    modifier = Modifier.fillMaxWidth(),
+                Button(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFEA580C),
+                        contentColor = Color.White,
+                    ),
                     onClick = {
                         val message = Uri.encode("Olá! Preciso de ajuda com minha adesão à Odontoart.")
                         val uri = Uri.parse("https://wa.me/$whatsappNumber?text=$message")
                         context.startActivity(Intent(Intent.ACTION_VIEW, uri))
                     },
-                )
+                ) {
+                    Text("Falar com meu consultor", fontWeight = FontWeight.ExtraBold)
+                }
             }
         }
     }
