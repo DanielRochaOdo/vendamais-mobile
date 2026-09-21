@@ -102,7 +102,7 @@ private data class PublicDependentDraft(
 private fun coverageFamilyLabel(code: Int): String = when (code) {
     18 -> "Multiprev"
     19 -> "Multiplus"
-    2, 5, 17, 20 -> "Multimaster"
+    2, 17, 20 -> "Multimaster"
     else -> "Plano sem cobertura configurada"
 }
 
@@ -1291,7 +1291,7 @@ private fun DependentsCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text("Dependentes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text("${items.size}/4", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(items.size.toString(), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
             items.forEachIndexed { index, dep ->
@@ -1368,15 +1368,13 @@ private fun DependentsCard(
 
             Button(
                 onClick = {
-                    if (items.size < 4) {
-                        val plan = plans.singleOrNull()
-                        items.add(PublicDependentDraft(
-                            plano = plan?.codigo ?: 0,
-                            planoValor = plan?.dependenteValor() ?: "0,00",
-                        ))
-                    }
+                    val plan = plans.singleOrNull()
+                    items.add(PublicDependentDraft(
+                        plano = plan?.codigo ?: 0,
+                        planoValor = plan?.dependenteValor() ?: "0,00",
+                    ))
                 },
-                enabled = !disabled && items.size < 4 && relationships.isNotEmpty() && plans.isNotEmpty(),
+                enabled = !disabled && relationships.isNotEmpty() && plans.isNotEmpty(),
             ) {
                 Text("Adicionar dependente")
             }
