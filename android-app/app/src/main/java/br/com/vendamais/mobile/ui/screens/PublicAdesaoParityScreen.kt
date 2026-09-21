@@ -99,22 +99,11 @@ private data class PublicDependentDraft(
     val nomeMae: String = "",
 )
 
-private fun coverageFamilyLabel(planName: String, code: Int): String {
-    when (code) {
-        18 -> return "Multiprev"
-        19 -> return "Multiplus"
-        2, 5, 17, 20 -> return "Multimaster"
-    }
-    val normalized = java.text.Normalizer.normalize(planName, java.text.Normalizer.Form.NFD)
-        .replace(Regex("[\\u0300-\\u036f]"), "")
-        .lowercase(Locale.ROOT)
-        .replace(Regex("[^a-z0-9]"), "")
-    return when {
-        "multimaster" in normalized -> "Multimaster"
-        "multiplus" in normalized -> "Multiplus"
-        "multiprev" in normalized -> "Multiprev"
-        else -> planName
-    }
+private fun coverageFamilyLabel(code: Int): String = when (code) {
+    18 -> "Multiprev"
+    19 -> "Multiplus"
+    2, 5, 17, 20 -> "Multimaster"
+    else -> "Plano sem cobertura configurada"
 }
 
 private data class PublicSecurePlan(
@@ -225,8 +214,7 @@ fun PublicAdesaoParityScreen(
         }
     }
     val coverageUrl = currentLink?.coberturaPlanos?.get(titularPlano.toString()).orEmpty()
-    val coveragePlanName = plans.firstOrNull { it.codigo == titularPlano }?.nome.orEmpty()
-    val coverageLabel = coverageFamilyLabel(coveragePlanName, titularPlano)
+    val coverageLabel = coverageFamilyLabel(titularPlano)
     val scrollState = rememberScrollState()
     LaunchedEffect(stageName) { scrollState.scrollTo(0) }
     LaunchedEffect(titularPlano, coverageUrl) { acceptedCoverage = false; coverageViewed = false }
