@@ -175,6 +175,7 @@ fun PublicAdesaoParityScreen(
     var acceptedCoverage by rememberSaveable(token) { mutableStateOf(false) }
     var preparedCoverageUrl by rememberSaveable(token) { mutableStateOf("") }
     var successMessage by rememberSaveable(token) { mutableStateOf("") }
+    val linkVisitId = rememberSaveable(token) { UUID.randomUUID().toString() }
 
     fun setStage(value: PublicStage) {
         stageName = value.name
@@ -185,7 +186,7 @@ fun PublicAdesaoParityScreen(
 
     LaunchedEffect(token) {
         loading = true
-        runCatching { viewModel.resolvePublicCadastroLink(token) }
+        runCatching { viewModel.resolvePublicCadastroLink(token, linkVisitId) }
             .onSuccess { result ->
                 if (result.ok && result.link != null) {
                     link = result.link
