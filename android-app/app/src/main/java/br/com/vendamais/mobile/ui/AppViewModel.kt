@@ -2329,12 +2329,14 @@ class AppViewModel(
         contractToken: String,
         acceptedTerms: Boolean,
         acceptedData: Boolean,
+        acceptedCoverage: Boolean,
     ): PublicCadastroSubmitResponse {
         return workflowRepository.submitPublicCadastroSecure(
             attemptToken = attemptToken,
             contractToken = contractToken,
             acceptedTerms = acceptedTerms,
             acceptedData = acceptedData,
+            acceptedCoverage = acceptedCoverage,
         )
     }
 
