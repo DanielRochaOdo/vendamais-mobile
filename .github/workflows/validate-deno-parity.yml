@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'supabase/functions/update-user/**'
+      - 'supabase/functions/_shared/**'
+      - 'supabase/functions/cadastro-public-contract-prepare/**'
       - 'supabase/functions/cadastro-link-resolve/**'
       - 'supabase/functions/cadastro-link-check-cpf/**'
       - 'supabase/functions/erp-novo-usuario2/**'
@@ -15,6 +17,8 @@ on:
       - main
     paths:
       - 'supabase/functions/update-user/**'
+      - 'supabase/functions/_shared/**'
+      - 'supabase/functions/cadastro-public-contract-prepare/**'
       - 'supabase/functions/cadastro-link-resolve/**'
       - 'supabase/functions/cadastro-link-check-cpf/**'
       - 'supabase/functions/erp-novo-usuario2/**'
@@ -44,3 +48,6 @@ jobs:
             supabase/functions/erp-novo-usuario2/index.ts \
             supabase/functions/erp-enqueue-upload/index.ts \
             supabase/functions/erp-process-upload-queue/index.ts
+            supabase/functions/cadastro-public-contract-prepare/index.ts
+      - name: Test plan coverage resolution
+        run: deno test --node-modules-dir=auto supabase/functions/_shared/plan-coverages.test.ts
