@@ -2133,12 +2133,13 @@ class CadastroWorkflowRepository(
         }
     }
 
-    suspend fun resolvePublicCadastroLink(token: String): PublicCadastroLinkResolveResponse {
+    suspend fun resolvePublicCadastroLink(token: String, visitId: String): PublicCadastroLinkResolveResponse {
         return client.safePost(
             url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-link-resolve",
             json = json,
             body = buildJsonObject {
                 put("token", token.trim())
+                put("visitId", visitId)
             },
         )
     }
