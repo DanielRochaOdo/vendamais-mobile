@@ -1,5 +1,6 @@
 package br.com.vendamais.mobile.ui.screens
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
@@ -120,6 +121,7 @@ fun PublicAdesaoParityScreen(
     var loading by rememberSaveable(token) { mutableStateOf(true) }
     var busy by rememberSaveable(token) { mutableStateOf(false) }
     var link by remember { mutableStateOf<PublicCadastroLinkInfo?>(null) }
+    var invalidConsultant by remember { mutableStateOf<br.com.vendamais.mobile.data.models.PublicConsultantInfo?>(null) }
     var error by rememberSaveable(token) { mutableStateOf<String?>(null) }
     var notice by rememberSaveable(token) { mutableStateOf<String?>(null) }
     var stageName by rememberSaveable(token) { mutableStateOf(PublicStage.IDENTIFY.name) }
@@ -160,6 +162,8 @@ fun PublicAdesaoParityScreen(
     var contractHash by rememberSaveable(token) { mutableStateOf("") }
     var acceptedTerms by rememberSaveable(token) { mutableStateOf(false) }
     var acceptedData by rememberSaveable(token) { mutableStateOf(false) }
+    var acceptedCoverage by rememberSaveable(token) { mutableStateOf(false) }
+    var coverageViewed by rememberSaveable(token) { mutableStateOf(false) }
     var successMessage by rememberSaveable(token) { mutableStateOf("") }
 
     fun setStage(value: PublicStage) {
@@ -175,6 +179,7 @@ fun PublicAdesaoParityScreen(
                 if (result.ok && result.link != null) {
                     link = result.link
                 } else {
+                    invalidConsultant = result.consultant
                     error = result.error ?: "Link invalido ou inativo."
                 }
             }
@@ -199,6 +204,10 @@ fun PublicAdesaoParityScreen(
             extractLegacyPlans(currentLink?.planosRaw, currentLink?.planosOcultos.orEmpty())
         }
     }
+    val coverageUrl = currentLink?.coberturaPlanos?.get(titularPlano.toString()).orEmpty()
+    val scrollState = rememberScrollState()
+    LaunchedEffect(stageName) { scrollState.scrollTo(0) }
+    LaunchedEffect(titularPlano) { acceptedCoverage = false; coverageViewed = false }
     val relationships = remember(currentLink?.id, currentLink?.parentescos) {
         currentLink?.parentescos.orEmpty()
             .filter { it.ativo && it.resolvedId > 1 }
@@ -211,14 +220,16 @@ fun PublicAdesaoParityScreen(
     }
 
     if (currentLink == null) {
-        PublicUnavailableScreen(error = error, onClose = onClose)
+        PublicUnavailableScreen(error = error, consultant = invalidConsultant, onClose = onClose)
         return
     }
 
     if (stage == PublicStage.COMPLETED) {
         PublicFinalStateScreen(
-            title = "Sua adesao ja foi realizada",
-            message = "Identificamos que voce ja concluiu sua adesao. Para incluir dependentes, consultar seu plano ou realizar outras solicitacoes, utilize o App do Associado.",
+            title = "Sua adesão já foi realizada",
+            message = "Identificamos que você já concluiu sua adesão. Para consultar seu plano ou realizar outras solicitações, utilize o App do Associado.",
+            consultantName = currentLink.vendedorNome,
+            consultantPhone = currentLink.vendedorTelefone,
             onInstallApp = { openAssociadoApp(context) },
             onClose = onClose,
         )
@@ -227,8 +238,10 @@ fun PublicAdesaoParityScreen(
 
     if (stage == PublicStage.NOT_ELIGIBLE) {
         PublicFinalStateScreen(
-            title = "Nao foi possivel continuar por este canal",
-            message = "Seu cadastro precisa de uma tratativa especifica. Utilize o App do Associado ou os canais de atendimento da Odontoart.",
+            title = "Vamos continuar seu atendimento pelo WhatsApp",
+            message = "Não foi possível concluir por este canal, mas fique tranquilo. Seu consultor está disponível para continuar seu atendimento.",
+            consultantName = currentLink.vendedorNome,
+            consultantPhone = currentLink.vendedorTelefone,
             onInstallApp = { openAssociadoApp(context) },
             onClose = onClose,
         )
@@ -237,9 +250,12 @@ fun PublicAdesaoParityScreen(
 
     if (stage == PublicStage.SUCCESS) {
         PublicFinalStateScreen(
-            title = "Adesao recebida",
-            message = successMessage.ifBlank { "Adesao concluida com sucesso." } +
-                "\n\nSeu contrato sera enviado para o e-mail confirmado. A partir de agora, utilize o App do Associado.",
+            title = "Adesão recebida",
+            message = "Parabéns! Sua adesão foi recebida com sucesso. " +
+                successMessage.ifBlank { "" } +
+                "\n\nSeu contrato e a cobertura do plano serão enviados ao e-mail confirmado. Agora você já pode aproveitar os benefícios e utilizar o App do Associado.",
+            consultantName = currentLink.vendedorNome,
+            consultantPhone = currentLink.vendedorTelefone,
             onInstallApp = { openAssociadoApp(context) },
             onClose = onClose,
         )
@@ -257,15 +273,16 @@ fun PublicAdesaoParityScreen(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(scrollState),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 OdontoartBrandMark(modifier = Modifier.fillMaxWidth())
                 ScreenHeading(
-                    "Nova Adesao",
+                    "Nova Adesão",
                     "Empresa: ${currentLink.empresaNome}" +
-                        (currentLink.vendedorNome?.takeIf { it.isNotBlank() }?.let { " · Atendimento: $it" } ?: ""),
+                        (currentLink.vendedorNome?.takeIf { it.isNotBlank() }?.let { " · Consultor: $it" } ?: ""),
                 )
+                ConsultantContactCard(currentLink.vendedorNome, currentLink.vendedorTelefone)
 
                 if (stage != PublicStage.IDENTIFY) {
                     val progressStep = when (stage) {
@@ -277,7 +294,7 @@ fun PublicAdesaoParityScreen(
                     }
                     VendaWizardProgress(
                         currentStep = progressStep,
-                        labels = listOf("Dados", "Dependentes", "Revisao", "Contrato"),
+                        labels = listOf("Dados", "Plano", "Dependentes", "Confirmação"),
                     )
                 }
 
