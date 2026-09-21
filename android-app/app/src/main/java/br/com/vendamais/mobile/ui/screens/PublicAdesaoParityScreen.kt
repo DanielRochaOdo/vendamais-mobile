@@ -99,6 +99,19 @@ private data class PublicDependentDraft(
     val nomeMae: String = "",
 )
 
+private fun coverageFamilyLabel(planName: String): String {
+    val normalized = java.text.Normalizer.normalize(planName, java.text.Normalizer.Form.NFD)
+        .replace(Regex("[\\u0300-\\u036f]"), "")
+        .lowercase(Locale.ROOT)
+        .replace(Regex("[^a-z0-9]"), "")
+    return when {
+        "multimaster" in normalized -> "Multimaster"
+        "multiplus" in normalized -> "Multiplus"
+        "multiprev" in normalized -> "Multiprev"
+        else -> planName
+    }
+}
+
 private data class PublicSecurePlan(
     val codigo: Int,
     val nome: String,
@@ -207,9 +220,11 @@ fun PublicAdesaoParityScreen(
         }
     }
     val coverageUrl = currentLink?.coberturaPlanos?.get(titularPlano.toString()).orEmpty()
+    val coveragePlanName = plans.firstOrNull { it.codigo == titularPlano }?.nome.orEmpty()
+    val coverageLabel = coverageFamilyLabel(coveragePlanName)
     val scrollState = rememberScrollState()
     LaunchedEffect(stageName) { scrollState.scrollTo(0) }
-    LaunchedEffect(titularPlano) { acceptedCoverage = false; coverageViewed = false }
+    LaunchedEffect(titularPlano, coverageUrl) { acceptedCoverage = false; coverageViewed = false }
     val relationships = remember(currentLink?.id, currentLink?.parentescos) {
         currentLink?.parentescos.orEmpty()
             .filter { it.ativo && it.resolvedId > 1 }
@@ -737,7 +752,7 @@ fun PublicAdesaoParityScreen(
                                 }
                                 WebCard {
                                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text("Cobertura do plano", fontWeight = FontWeight.Bold)
+                                        Text("Cobertura do plano $coverageLabel", fontWeight = FontWeight.Bold)
                                         Text("Leia os procedimentos cobertos antes de concluir a sua adesão.")
                                         if (coverageUrl.isNotBlank()) {
                                             VendaButton(
@@ -757,7 +772,7 @@ fun PublicAdesaoParityScreen(
                                                 modifier = Modifier.fillMaxWidth(),
                                             )
                                         } else {
-                                            Text("Cobertura indisponível. Fale com seu consultor.", color = MaterialTheme.colorScheme.error)
+                                            Text("Não foi possível localizar o documento de cobertura deste plano. Fale com seu consultor para continuar.", color = MaterialTheme.colorScheme.error)
                                         }
                                         Row {
                                             Checkbox(
