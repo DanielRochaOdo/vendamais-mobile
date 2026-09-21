@@ -10,6 +10,7 @@ import { formatCEP, formatCPF, formatMobilePhone, formatPhone, removeCPFMask, va
 import { mapLemitToCadastro } from '../lib/mappers';
 import { useCadastros } from '../hooks/useCadastros';
 import { useConfigCadastro } from '../contexts/ConfigCadastroContext';
+import { getPublicLinkVisitId } from '../lib/publicLinkVisit';
 
 interface LinkEmpresa {
   id: number;
@@ -330,7 +331,7 @@ export function PublicCadastroLink() {
               'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ token }),
+            body: JSON.stringify({ token, visitId: getPublicLinkVisitId(token) }),
           }
         );
 
