@@ -2217,6 +2217,7 @@ class CadastroWorkflowRepository(
         contractToken: String,
         acceptedTerms: Boolean,
         acceptedData: Boolean,
+        acceptedCoverage: Boolean,
     ): PublicCadastroSubmitResponse {
         return client.safePost(
             url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-public-submit",
@@ -2226,6 +2227,7 @@ class CadastroWorkflowRepository(
                 put("contractToken", contractToken.trim())
                 put("acceptedTerms", acceptedTerms)
                 put("acceptedData", acceptedData)
+                put("acceptedCoverage", acceptedCoverage)
             },
         )
     }

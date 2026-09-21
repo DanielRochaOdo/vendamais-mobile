@@ -1,5 +1,6 @@
 package br.com.vendamais.mobile.ui.screens
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
@@ -120,8 +121,10 @@ fun PublicAdesaoParityScreen(
     var loading by rememberSaveable(token) { mutableStateOf(true) }
     var busy by rememberSaveable(token) { mutableStateOf(false) }
     var link by remember { mutableStateOf<PublicCadastroLinkInfo?>(null) }
+    var invalidConsultant by remember { mutableStateOf<br.com.vendamais.mobile.data.models.PublicConsultantInfo?>(null) }
     var error by rememberSaveable(token) { mutableStateOf<String?>(null) }
     var notice by rememberSaveable(token) { mutableStateOf<String?>(null) }
+    var validationErrors by remember { mutableStateOf<List<String>>(emptyList()) }
     var stageName by rememberSaveable(token) { mutableStateOf(PublicStage.IDENTIFY.name) }
     val stage = runCatching { PublicStage.valueOf(stageName) }.getOrDefault(PublicStage.IDENTIFY)
 
@@ -160,12 +163,15 @@ fun PublicAdesaoParityScreen(
     var contractHash by rememberSaveable(token) { mutableStateOf("") }
     var acceptedTerms by rememberSaveable(token) { mutableStateOf(false) }
     var acceptedData by rememberSaveable(token) { mutableStateOf(false) }
+    var acceptedCoverage by rememberSaveable(token) { mutableStateOf(false) }
+    var coverageViewed by rememberSaveable(token) { mutableStateOf(false) }
     var successMessage by rememberSaveable(token) { mutableStateOf("") }
 
     fun setStage(value: PublicStage) {
         stageName = value.name
         error = null
         notice = null
+        validationErrors = emptyList()
     }
 
     LaunchedEffect(token) {
@@ -175,6 +181,7 @@ fun PublicAdesaoParityScreen(
                 if (result.ok && result.link != null) {
                     link = result.link
                 } else {
+                    invalidConsultant = result.consultant
                     error = result.error ?: "Link invalido ou inativo."
                 }
             }
@@ -199,6 +206,10 @@ fun PublicAdesaoParityScreen(
             extractLegacyPlans(currentLink?.planosRaw, currentLink?.planosOcultos.orEmpty())
         }
     }
+    val coverageUrl = currentLink?.coberturaPlanos?.get(titularPlano.toString()).orEmpty()
+    val scrollState = rememberScrollState()
+    LaunchedEffect(stageName) { scrollState.scrollTo(0) }
+    LaunchedEffect(titularPlano) { acceptedCoverage = false; coverageViewed = false }
     val relationships = remember(currentLink?.id, currentLink?.parentescos) {
         currentLink?.parentescos.orEmpty()
             .filter { it.ativo && it.resolvedId > 1 }
@@ -211,14 +222,16 @@ fun PublicAdesaoParityScreen(
     }
 
     if (currentLink == null) {
-        PublicUnavailableScreen(error = error, onClose = onClose)
+        PublicUnavailableScreen(error = error, consultant = invalidConsultant, onClose = onClose)
         return
     }
 
     if (stage == PublicStage.COMPLETED) {
         PublicFinalStateScreen(
-            title = "Sua adesao ja foi realizada",
-            message = "Identificamos que voce ja concluiu sua adesao. Para incluir dependentes, consultar seu plano ou realizar outras solicitacoes, utilize o App do Associado.",
+            title = "Sua adesão já foi realizada",
+            message = "Identificamos que você já concluiu sua adesão. Para consultar seu plano ou realizar outras solicitações, utilize o App do Associado.",
+            consultantName = currentLink.vendedorNome,
+            consultantPhone = currentLink.vendedorTelefone,
             onInstallApp = { openAssociadoApp(context) },
             onClose = onClose,
         )
@@ -227,8 +240,10 @@ fun PublicAdesaoParityScreen(
 
     if (stage == PublicStage.NOT_ELIGIBLE) {
         PublicFinalStateScreen(
-            title = "Nao foi possivel continuar por este canal",
-            message = "Seu cadastro precisa de uma tratativa especifica. Utilize o App do Associado ou os canais de atendimento da Odontoart.",
+            title = "Vamos continuar seu atendimento pelo WhatsApp",
+            message = "Não foi possível concluir por este canal, mas fique tranquilo. Seu consultor está disponível para continuar seu atendimento.",
+            consultantName = currentLink.vendedorNome,
+            consultantPhone = currentLink.vendedorTelefone,
             onInstallApp = { openAssociadoApp(context) },
             onClose = onClose,
         )
@@ -237,9 +252,12 @@ fun PublicAdesaoParityScreen(
 
     if (stage == PublicStage.SUCCESS) {
         PublicFinalStateScreen(
-            title = "Adesao recebida",
-            message = successMessage.ifBlank { "Adesao concluida com sucesso." } +
-                "\n\nSeu contrato sera enviado para o e-mail confirmado. A partir de agora, utilize o App do Associado.",
+            title = "Adesão recebida",
+            message = "Parabéns! Sua adesão foi recebida com sucesso. " +
+                successMessage.ifBlank { "" } +
+                "\n\nSeu contrato e a cobertura do plano serão enviados ao e-mail confirmado. Agora você já pode aproveitar os benefícios e utilizar o App do Associado.",
+            consultantName = currentLink.vendedorNome,
+            consultantPhone = currentLink.vendedorTelefone,
             onInstallApp = { openAssociadoApp(context) },
             onClose = onClose,
         )
@@ -257,15 +275,16 @@ fun PublicAdesaoParityScreen(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(scrollState),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 OdontoartBrandMark(modifier = Modifier.fillMaxWidth())
                 ScreenHeading(
-                    "Nova Adesao",
+                    "Nova Adesão",
                     "Empresa: ${currentLink.empresaNome}" +
-                        (currentLink.vendedorNome?.takeIf { it.isNotBlank() }?.let { " · Atendimento: $it" } ?: ""),
+                        (currentLink.vendedorNome?.takeIf { it.isNotBlank() }?.let { " · Consultor: $it" } ?: ""),
                 )
+                ConsultantContactCard(currentLink.vendedorNome, currentLink.vendedorTelefone)
 
                 if (stage != PublicStage.IDENTIFY) {
                     val progressStep = when (stage) {
@@ -277,7 +296,7 @@ fun PublicAdesaoParityScreen(
                     }
                     VendaWizardProgress(
                         currentStep = progressStep,
-                        labels = listOf("Dados", "Dependentes", "Revisao", "Contrato"),
+                        labels = listOf("Dados", "Plano", "Dependentes", "Confirmação"),
                     )
                 }
 
@@ -316,21 +335,29 @@ fun PublicAdesaoParityScreen(
                                     modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                                     label = { Text("CPF") },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    isError = validationErrors.contains("CPF"),
                                     enabled = !busy,
                                 )
                                 OutlinedTextField(
-                                    value = birthDate,
-                                    onValueChange = { birthDate = it.take(10) },
+                                    value = displayBirthDate(birthDate),
+                                    onValueChange = { birthDate = parseBirthDate(it) },
                                     modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                                    label = { Text("Data de nascimento (YYYY-MM-DD)") },
+                                    label = { Text("Data de nascimento (dd/mm/aaaa)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    isError = validationErrors.contains("Data de nascimento"),
                                     enabled = !busy,
                                 )
                                 VendaButton(
                                     label = "Continuar",
                                     onClick = authenticate@{
                                         val cpfDigits = cpf.filter(Char::isDigit)
-                                        if (!CadastroPayloadBuilder.validateCpf(cpfDigits) || !isIsoDate(birthDate)) {
-                                            error = "Informe um CPF valido e sua data de nascimento."
+                                        val missing = listOfNotNull(
+                                            if (!CadastroPayloadBuilder.validateCpf(cpfDigits)) "CPF" else null,
+                                            if (!isIsoDate(birthDate)) "Data de nascimento" else null,
+                                        )
+                                        if (missing.isNotEmpty()) {
+                                            validationErrors = missing
+                                            error = null
                                             return@authenticate
                                         }
                                         busy = true
@@ -392,6 +419,7 @@ fun PublicAdesaoParityScreen(
                                                                 idMunicipio = address.idMunicipio
                                                                 idUf = address.idUf
                                                             }
+                                                            if (plans.size == 1) titularPlano = plans.first().codigo
                                                             setStage(PublicStage.DETAILS)
                                                         }
                                                     }
@@ -430,10 +458,10 @@ fun PublicAdesaoParityScreen(
                                     enabled = !busy,
                                 )
                                 OutlinedTextField(
-                                    dataNascimento,
-                                    { dataNascimento = it.take(10) },
+                                    displayBirthDate(dataNascimento),
+                                    { dataNascimento = parseBirthDate(it) },
                                     modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                                    label = { Text("Data de nascimento (YYYY-MM-DD)") },
+                                    label = { Text("Data de nascimento (dd/mm/aaaa)") },
                                     enabled = false,
                                 )
                                 PublicChoiceField(
@@ -707,6 +735,43 @@ fun PublicAdesaoParityScreen(
                                         style = MaterialTheme.typography.bodySmall,
                                     )
                                 }
+                                WebCard {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text("Cobertura do plano", fontWeight = FontWeight.Bold)
+                                        Text("Leia os procedimentos cobertos antes de concluir a sua adesão.")
+                                        if (coverageUrl.isNotBlank()) {
+                                            VendaButton(
+                                                label = "Ver cobertura do plano",
+                                                onClick = {
+                                                    coverageViewed = true
+                                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(coverageUrl)))
+                                                },
+                                                modifier = Modifier.fillMaxWidth(),
+                                            )
+                                            VendaButton(
+                                                label = "Baixar PDF de cobertura",
+                                                onClick = {
+                                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(coverageUrl)))
+                                                },
+                                                style = VendaButtonStyle.SECONDARY,
+                                                modifier = Modifier.fillMaxWidth(),
+                                            )
+                                        } else {
+                                            Text("Cobertura indisponível. Fale com seu consultor.", color = MaterialTheme.colorScheme.error)
+                                        }
+                                        Row {
+                                            Checkbox(
+                                                checked = acceptedCoverage,
+                                                onCheckedChange = { acceptedCoverage = it },
+                                                enabled = coverageViewed && coverageUrl.isNotBlank() && !busy,
+                                            )
+                                            Text(
+                                                "Li e estou ciente da cobertura do plano contratado.",
+                                                modifier = Modifier.padding(top = 12.dp),
+                                            )
+                                        }
+                                    }
+                                }
                                 Row {
                                     Checkbox(
                                         checked = acceptedTerms,
@@ -734,6 +799,17 @@ fun PublicAdesaoParityScreen(
                     }
 
                     else -> Unit
+                }
+            }
+
+            if (validationErrors.isNotEmpty()) {
+                WebCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Corrija os seguintes campos:", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                        validationErrors.forEach { field ->
+                            Text("• $field", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
                 }
             }
 
@@ -780,8 +856,25 @@ fun PublicAdesaoParityScreen(
                                     cidade = cidade,
                                     uf = uf,
                                 )
-                                if (validation != null) error = validation
-                                else setStage(PublicStage.DEPENDENTS)
+                                if (validation != null) {
+                                    validationErrors = listOfNotNull(
+                                        if (nome.isBlank()) "Nome completo" else null,
+                                        if (!isIsoDate(dataNascimento)) "Data de nascimento" else null,
+                                        if (sexo !in setOf(0, 1)) "Sexo" else null,
+                                        if (nomeMae.isBlank()) "Nome da mãe" else null,
+                                        if (titularPlano <= 0) "Plano do titular" else null,
+                                        if (currentLink.empresaExigeMatricula == 1 && numeroMatricula.isBlank()) "Matrícula" else null,
+                                        if (contatos.none { it.tipo != "email" && it.valor.filter(Char::isDigit).length >= 10 }) "Telefone" else null,
+                                        if (contatos.none { it.tipo == "email" && isValidEmail(it.valor) }) "E-mail" else null,
+                                        if (cep.filter(Char::isDigit).length != 8) "CEP" else null,
+                                        if (logradouro.isBlank()) "Logradouro" else null,
+                                        if (numero.isBlank()) "Número" else null,
+                                        if (bairro.isBlank()) "Bairro" else null,
+                                        if (cidade.isBlank()) "Cidade" else null,
+                                        if (uf.length != 2) "UF" else null,
+                                    )
+                                    error = null
+                                } else setStage(PublicStage.DEPENDENTS)
                             },
                             size = VendaButtonSize.MEDIUM,
                             modifier = Modifier.weight(1.2f),
@@ -807,8 +900,10 @@ fun PublicAdesaoParityScreen(
                             label = if (dependentes.isEmpty()) "Continuar sem dependentes" else "Continuar",
                             onClick = {
                                 val validation = validateDependents(cpf, dependentes)
-                                if (validation != null) error = validation
-                                else setStage(PublicStage.REVIEW)
+                                if (validation != null) {
+                                    validationErrors = listOf(validation)
+                                    error = null
+                                } else setStage(PublicStage.REVIEW)
                             },
                             size = VendaButtonSize.MEDIUM,
                             modifier = Modifier.weight(1.2f),
@@ -843,8 +938,8 @@ fun PublicAdesaoParityScreen(
                         VendaButton(
                             label = "Aceitar e concluir",
                             onClick = finalize@{
-                                if (!acceptedTerms || !acceptedData) {
-                                    error = "Marque os dois aceites para concluir."
+                                if (!acceptedTerms || !acceptedData || !acceptedCoverage || !coverageViewed || coverageUrl.isBlank()) {
+                                    error = "Leia a cobertura do plano e marque os três aceites para concluir."
                                     return@finalize
                                 }
                                 busy = true
@@ -856,6 +951,7 @@ fun PublicAdesaoParityScreen(
                                             contractToken = contractToken,
                                             acceptedTerms = acceptedTerms,
                                             acceptedData = acceptedData,
+                                            acceptedCoverage = acceptedCoverage,
                                         )
                                     }.onSuccess { response ->
                                         if (!response.ok) {
@@ -875,7 +971,7 @@ fun PublicAdesaoParityScreen(
                                 }
                             },
                             loading = busy,
-                            enabled = !busy && acceptedTerms && acceptedData,
+                            enabled = !busy && acceptedTerms && acceptedData && acceptedCoverage && coverageViewed && coverageUrl.isNotBlank(),
                             size = VendaButtonSize.MEDIUM,
                             modifier = Modifier.weight(1.2f),
                         )
@@ -967,6 +1063,8 @@ fun PublicAdesaoParityScreen(
                                     contractHash = response.contractHash.orEmpty()
                                     acceptedTerms = false
                                     acceptedData = false
+                                    acceptedCoverage = false
+                                    coverageViewed = false
                                     emailDialogOpen = false
                                     setStage(PublicStage.CONTRACT)
                                 }
@@ -1007,6 +1105,7 @@ private fun PublicLoadingScreen() {
 @Composable
 private fun PublicUnavailableScreen(
     error: String?,
+    consultant: br.com.vendamais.mobile.data.models.PublicConsultantInfo?,
     onClose: () -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -1016,10 +1115,11 @@ private fun PublicUnavailableScreen(
         ) {
             OdontoartBrandMark(modifier = Modifier.fillMaxWidth())
             VendaInlineFeedback(
-                title = "Link indisponivel",
-                message = error ?: "Nao foi possivel carregar este link de adesao.",
+                title = "Link indisponível",
+                message = error ?: "Não foi possível carregar este link de adesão.",
                 tone = VendaFeedbackTone.ERROR,
             )
+            ConsultantContactCard(consultant?.nome, consultant?.telefone)
             VendaButton(
                 label = "Fechar",
                 onClick = onClose,
@@ -1033,6 +1133,8 @@ private fun PublicUnavailableScreen(
 private fun PublicFinalStateScreen(
     title: String,
     message: String,
+    consultantName: String?,
+    consultantPhone: String?,
     onInstallApp: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -1051,6 +1153,7 @@ private fun PublicFinalStateScreen(
                     Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+            ConsultantContactCard(consultantName, consultantPhone)
             VendaButton(
                 label = "Instalar aplicativo",
                 onClick = onInstallApp,
@@ -1062,6 +1165,32 @@ private fun PublicFinalStateScreen(
                 style = VendaButtonStyle.SECONDARY,
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
+    }
+}
+
+@Composable
+private fun ConsultantContactCard(name: String?, phone: String?) {
+    val context = LocalContext.current
+    val phoneDigits = phone.orEmpty().filter(Char::isDigit)
+    val whatsappNumber = if (phoneDigits.startsWith("55")) phoneDigits else "55$phoneDigits"
+    if (name.isNullOrBlank() && phoneDigits.length < 10) return
+    WebCard {
+        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Text("Precisa de ajuda? Fale com seu consultor", fontWeight = FontWeight.Bold)
+            if (!name.isNullOrBlank()) Text(name)
+            if (phoneDigits.length >= 10) {
+                Text("WhatsApp: $phone")
+                VendaButton(
+                    label = "Falar com meu consultor",
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        val message = Uri.encode("Olá! Preciso de ajuda com minha adesão à Odontoart.")
+                        val uri = Uri.parse("https://wa.me/$whatsappNumber?text=$message")
+                        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                    },
+                )
+            }
         }
     }
 }
@@ -1223,7 +1352,15 @@ private fun DependentsCard(
             }
 
             Button(
-                onClick = { if (items.size < 4) items.add(PublicDependentDraft()) },
+                onClick = {
+                    if (items.size < 4) {
+                        val plan = plans.singleOrNull()
+                        items.add(PublicDependentDraft(
+                            plano = plan?.codigo ?: 0,
+                            planoValor = plan?.dependenteValor() ?: "0,00",
+                        ))
+                    }
+                },
                 enabled = !disabled && items.size < 4 && relationships.isNotEmpty() && plans.isNotEmpty(),
             ) {
                 Text("Adicionar dependente")
@@ -1472,6 +1609,25 @@ private fun resolvePersonSex(value: String?, fallback: Int): Int {
 private fun normalizePersonDate(value: String): String {
     val trimmed = value.trim()
     return if (Regex("^\\d{4}-\\d{2}-\\d{2}").containsMatchIn(trimmed)) trimmed.take(10) else trimmed
+}
+
+private fun displayBirthDate(value: String): String {
+    return if (Regex("^\\d{4}-\\d{2}-\\d{2}$").matches(value)) {
+        value.substring(8, 10) + "/" + value.substring(5, 7) + "/" + value.substring(0, 4)
+    } else value
+}
+
+private fun parseBirthDate(value: String): String {
+    val digits = value.filter(Char::isDigit).take(8)
+    if (digits.length < 8) {
+        return when {
+            digits.length <= 2 -> digits
+            digits.length <= 4 -> digits.take(2) + "/" + digits.drop(2)
+            else -> digits.take(2) + "/" + digits.substring(2, 4) + "/" + digits.drop(4)
+        }
+    }
+    val iso = digits.substring(4, 8) + "-" + digits.substring(2, 4) + "-" + digits.take(2)
+    return if (runCatching { LocalDate.parse(iso) }.isSuccess) iso else value.take(10)
 }
 
 private fun isIsoDate(value: String): Boolean =

@@ -155,7 +155,14 @@ data class CadastroExcluidoItem(
 data class PublicCadastroLinkResolveResponse(
     val ok: Boolean = false,
     val link: PublicCadastroLinkInfo? = null,
+    val consultant: PublicConsultantInfo? = null,
     val error: String? = null,
+)
+
+@Serializable
+data class PublicConsultantInfo(
+    val nome: String = "",
+    val telefone: String = "",
 )
 
 @Serializable
@@ -183,6 +190,8 @@ data class PublicCadastroLinkInfo(
     val vendedorNome: String? = null,
     @SerialName("vendedorTelefone")
     val vendedorTelefone: String? = null,
+    @SerialName("coberturaPlanos")
+    val coberturaPlanos: Map<String, String> = emptyMap(),
 )
 
 @Serializable
