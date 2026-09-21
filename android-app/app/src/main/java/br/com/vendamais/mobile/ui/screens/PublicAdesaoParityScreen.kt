@@ -172,6 +172,7 @@ fun PublicAdesaoParityScreen(
     var acceptedData by rememberSaveable(token) { mutableStateOf(false) }
     var acceptedCoverage by rememberSaveable(token) { mutableStateOf(false) }
     var coverageViewed by rememberSaveable(token) { mutableStateOf(false) }
+    var preparedCoverageUrl by rememberSaveable(token) { mutableStateOf("") }
     var successMessage by rememberSaveable(token) { mutableStateOf("") }
 
     fun setStage(value: PublicStage) {
@@ -213,10 +214,12 @@ fun PublicAdesaoParityScreen(
             extractLegacyPlans(currentLink?.planosRaw, currentLink?.planosOcultos.orEmpty())
         }
     }
-    val coverageUrl = currentLink?.coberturaPlanos?.get(titularPlano.toString()).orEmpty()
+    // Apenas a sessao preparada pelo servidor determina se ha cobertura a apresentar.
+    val coverageUrl = preparedCoverageUrl
     val coverageLabel = coverageFamilyLabel(titularPlano)
     val scrollState = rememberScrollState()
     LaunchedEffect(stageName) { scrollState.scrollTo(0) }
+    LaunchedEffect(titularPlano) { preparedCoverageUrl = "" }
     LaunchedEffect(titularPlano, coverageUrl) { acceptedCoverage = false; coverageViewed = false }
     val relationships = remember(currentLink?.id, currentLink?.parentescos) {
         currentLink?.parentescos.orEmpty()
@@ -263,7 +266,7 @@ fun PublicAdesaoParityScreen(
             title = "Adesão recebida",
             message = "Parabéns! Sua adesão foi recebida com sucesso. " +
                 successMessage.ifBlank { "" } +
-                "\n\nSeu contrato e a cobertura do plano serão enviados ao e-mail confirmado. Agora você já pode aproveitar os benefícios e utilizar o App do Associado.",
+                "\n\nSeu contrato será enviado ao e-mail confirmado. Agora você já pode aproveitar os benefícios e utilizar o App do Associado.",
             consultantName = currentLink.vendedorNome,
             consultantPhone = currentLink.vendedorTelefone,
             onInstallApp = { openAssociadoApp(context) },
@@ -743,11 +746,11 @@ fun PublicAdesaoParityScreen(
                                         style = MaterialTheme.typography.bodySmall,
                                     )
                                 }
-                                WebCard {
-                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text("Cobertura do plano $coverageLabel", fontWeight = FontWeight.Bold)
-                                        Text("Leia os procedimentos cobertos antes de concluir a sua adesão.")
-                                        if (coverageUrl.isNotBlank()) {
+                                if (coverageUrl.isNotBlank()) {
+                                    WebCard {
+                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Text("Cobertura do plano $coverageLabel", fontWeight = FontWeight.Bold)
+                                            Text("Leia os procedimentos cobertos antes de concluir a sua adesão.")
                                             VendaButton(
                                                 label = "Ver cobertura do plano",
                                                 onClick = {
@@ -764,19 +767,17 @@ fun PublicAdesaoParityScreen(
                                                 style = VendaButtonStyle.SECONDARY,
                                                 modifier = Modifier.fillMaxWidth(),
                                             )
-                                        } else {
-                                            Text("Não foi possível localizar o documento de cobertura deste plano. Fale com seu consultor para continuar.", color = MaterialTheme.colorScheme.error)
-                                        }
-                                        Row {
-                                            Checkbox(
-                                                checked = acceptedCoverage,
-                                                onCheckedChange = { acceptedCoverage = it },
-                                                enabled = coverageViewed && coverageUrl.isNotBlank() && !busy,
-                                            )
-                                            Text(
-                                                "Li e estou ciente da cobertura do plano contratado.",
-                                                modifier = Modifier.padding(top = 12.dp),
-                                            )
+                                            Row {
+                                                Checkbox(
+                                                    checked = acceptedCoverage,
+                                                    onCheckedChange = { acceptedCoverage = it },
+                                                    enabled = coverageViewed && !busy,
+                                                )
+                                                Text(
+                                                    "Li e estou ciente da cobertura do plano contratado.",
+                                                    modifier = Modifier.padding(top = 12.dp),
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -946,8 +947,12 @@ fun PublicAdesaoParityScreen(
                         VendaButton(
                             label = "Aceitar e concluir",
                             onClick = finalize@{
-                                if (!acceptedTerms || !acceptedData || !acceptedCoverage || !coverageViewed || coverageUrl.isBlank()) {
-                                    error = "Leia a cobertura do plano e marque os três aceites para concluir."
+                                if (!acceptedTerms || !acceptedData || (coverageUrl.isNotBlank() && (!acceptedCoverage || !coverageViewed))) {
+                                    error = if (coverageUrl.isNotBlank()) {
+                                        "Leia o documento disponibilizado e marque os três aceites para concluir."
+                                    } else {
+                                        "Aceite os termos do contrato e confirme os dados para concluir."
+                                    }
                                     return@finalize
                                 }
                                 busy = true
@@ -959,7 +964,7 @@ fun PublicAdesaoParityScreen(
                                             contractToken = contractToken,
                                             acceptedTerms = acceptedTerms,
                                             acceptedData = acceptedData,
-                                            acceptedCoverage = acceptedCoverage,
+                                            acceptedCoverage = coverageUrl.isNotBlank() && acceptedCoverage,
                                         )
                                     }.onSuccess { response ->
                                         if (!response.ok) {
@@ -979,7 +984,8 @@ fun PublicAdesaoParityScreen(
                                 }
                             },
                             loading = busy,
-                            enabled = !busy && acceptedTerms && acceptedData && acceptedCoverage && coverageViewed && coverageUrl.isNotBlank(),
+                            enabled = !busy && acceptedTerms && acceptedData &&
+                                (coverageUrl.isBlank() || (acceptedCoverage && coverageViewed)),
                             size = VendaButtonSize.MEDIUM,
                             modifier = Modifier.weight(1.2f),
                         )
@@ -1067,6 +1073,7 @@ fun PublicAdesaoParityScreen(
                                     }
                                 } else {
                                     contractToken = response.contractToken
+                                    preparedCoverageUrl = if (response.coverageAvailable) response.coverageUrl.orEmpty() else ""
                                     contractText = response.contractText
                                     contractHash = response.contractHash.orEmpty()
                                     acceptedTerms = false
