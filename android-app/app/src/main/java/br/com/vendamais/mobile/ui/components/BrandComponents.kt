@@ -56,7 +56,7 @@ fun OdontoartBrandMark(
     modifier: Modifier = Modifier,
 ) {
     Image(
-        painter = painterResource(id = R.drawable.identidade_odontoart2026_glow),
+        painter = painterResource(id = R.drawable.odontoart_logo_publica),
         contentDescription = "Odontoart Planos Odontologicos",
         modifier = modifier,
         contentScale = ContentScale.Fit,
