@@ -294,6 +294,10 @@ data class PublicCadastroContractPrepareResponse(
     val contractHash: String? = null,
     @SerialName("contractText")
     val contractText: String? = null,
+    @SerialName("coverageAvailable")
+    val coverageAvailable: Boolean = false,
+    @SerialName("coverageUrl")
+    val coverageUrl: String? = null,
     val summary: JsonElement? = null,
     val error: String? = null,
     val code: String? = null,
