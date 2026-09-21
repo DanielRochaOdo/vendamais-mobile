@@ -115,6 +115,7 @@ fun PublicAdesaoTokenScreen(
     var cpfLocked by rememberSaveable(token) { mutableStateOf(false) }
     var selectedPlanoCodigo by rememberSaveable(token) { mutableStateOf("") }
     var submissionId by rememberSaveable(token) { mutableStateOf("") }
+    val linkVisitId = rememberSaveable(token) { UUID.randomUUID().toString() }
     var draftRestored by rememberSaveable(token) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -157,7 +158,7 @@ fun PublicAdesaoTokenScreen(
         error = null
         notice = null
         success = null
-        runCatching { viewModel.resolvePublicCadastroLink(token) }
+        runCatching { viewModel.resolvePublicCadastroLink(token, linkVisitId) }
             .onSuccess { response ->
                 if (!response.ok || response.link == null) {
                     error = CadastroApiErrorMapper.mapUserMessage(
