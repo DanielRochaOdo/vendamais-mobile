@@ -2286,8 +2286,8 @@ class AppViewModel(
         }
     }
 
-    suspend fun resolvePublicCadastroLink(token: String): PublicCadastroLinkResolveResponse {
-        return workflowRepository.resolvePublicCadastroLink(token)
+    suspend fun resolvePublicCadastroLink(token: String, visitId: String): PublicCadastroLinkResolveResponse {
+        return workflowRepository.resolvePublicCadastroLink(token, visitId)
     }
 
     suspend fun authenticatePublicCadastro(
