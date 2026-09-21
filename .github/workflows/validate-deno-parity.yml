@@ -50,4 +50,4 @@ jobs:
             supabase/functions/erp-process-upload-queue/index.ts \
             supabase/functions/cadastro-public-contract-prepare/index.ts
       - name: Test plan coverage resolution
-        run: deno test --node-modules-dir=auto supabase/functions/_shared/plan-coverages.test.ts
+        run: deno test --node-modules-dir=auto supabase/functions/_shared/plan-coverages.test.ts supabase/functions/_shared/contract-duration.test.ts
