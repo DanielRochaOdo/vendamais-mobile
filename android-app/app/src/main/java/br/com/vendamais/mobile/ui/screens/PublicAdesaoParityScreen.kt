@@ -124,6 +124,7 @@ fun PublicAdesaoParityScreen(
     var invalidConsultant by remember { mutableStateOf<br.com.vendamais.mobile.data.models.PublicConsultantInfo?>(null) }
     var error by rememberSaveable(token) { mutableStateOf<String?>(null) }
     var notice by rememberSaveable(token) { mutableStateOf<String?>(null) }
+    var validationErrors by remember { mutableStateOf<List<String>>(emptyList()) }
     var stageName by rememberSaveable(token) { mutableStateOf(PublicStage.IDENTIFY.name) }
     val stage = runCatching { PublicStage.valueOf(stageName) }.getOrDefault(PublicStage.IDENTIFY)
 
@@ -170,6 +171,7 @@ fun PublicAdesaoParityScreen(
         stageName = value.name
         error = null
         notice = null
+        validationErrors = emptyList()
     }
 
     LaunchedEffect(token) {
@@ -333,21 +335,29 @@ fun PublicAdesaoParityScreen(
                                     modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                                     label = { Text("CPF") },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    isError = validationErrors.contains("CPF"),
                                     enabled = !busy,
                                 )
                                 OutlinedTextField(
-                                    value = birthDate,
-                                    onValueChange = { birthDate = it.take(10) },
+                                    value = displayBirthDate(birthDate),
+                                    onValueChange = { birthDate = parseBirthDate(it) },
                                     modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                                    label = { Text("Data de nascimento (YYYY-MM-DD)") },
+                                    label = { Text("Data de nascimento (dd/mm/aaaa)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    isError = validationErrors.contains("Data de nascimento"),
                                     enabled = !busy,
                                 )
                                 VendaButton(
                                     label = "Continuar",
                                     onClick = authenticate@{
                                         val cpfDigits = cpf.filter(Char::isDigit)
-                                        if (!CadastroPayloadBuilder.validateCpf(cpfDigits) || !isIsoDate(birthDate)) {
-                                            error = "Informe um CPF valido e sua data de nascimento."
+                                        val missing = listOfNotNull(
+                                            if (!CadastroPayloadBuilder.validateCpf(cpfDigits)) "CPF" else null,
+                                            if (!isIsoDate(birthDate)) "Data de nascimento" else null,
+                                        )
+                                        if (missing.isNotEmpty()) {
+                                            validationErrors = missing
+                                            error = null
                                             return@authenticate
                                         }
                                         busy = true
@@ -448,10 +458,10 @@ fun PublicAdesaoParityScreen(
                                     enabled = !busy,
                                 )
                                 OutlinedTextField(
-                                    dataNascimento,
-                                    { dataNascimento = it.take(10) },
+                                    displayBirthDate(dataNascimento),
+                                    { dataNascimento = parseBirthDate(it) },
                                     modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                                    label = { Text("Data de nascimento (YYYY-MM-DD)") },
+                                    label = { Text("Data de nascimento (dd/mm/aaaa)") },
                                     enabled = false,
                                 )
                                 PublicChoiceField(
@@ -792,6 +802,17 @@ fun PublicAdesaoParityScreen(
                 }
             }
 
+            if (validationErrors.isNotEmpty()) {
+                WebCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Corrija os seguintes campos:", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                        validationErrors.forEach { field ->
+                            Text("• $field", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+            }
+
             when (stage) {
                 PublicStage.IDENTIFY -> {
                     VendaButton(
@@ -835,8 +856,25 @@ fun PublicAdesaoParityScreen(
                                     cidade = cidade,
                                     uf = uf,
                                 )
-                                if (validation != null) error = validation
-                                else setStage(PublicStage.DEPENDENTS)
+                                if (validation != null) {
+                                    validationErrors = listOfNotNull(
+                                        if (nome.isBlank()) "Nome completo" else null,
+                                        if (!isIsoDate(dataNascimento)) "Data de nascimento" else null,
+                                        if (sexo !in setOf(0, 1)) "Sexo" else null,
+                                        if (nomeMae.isBlank()) "Nome da mãe" else null,
+                                        if (titularPlano <= 0) "Plano do titular" else null,
+                                        if (currentLink.empresaExigeMatricula == 1 && numeroMatricula.isBlank()) "Matrícula" else null,
+                                        if (contatos.none { it.tipo != "email" && it.valor.filter(Char::isDigit).length >= 10 }) "Telefone" else null,
+                                        if (contatos.none { it.tipo == "email" && isValidEmail(it.valor) }) "E-mail" else null,
+                                        if (cep.filter(Char::isDigit).length != 8) "CEP" else null,
+                                        if (logradouro.isBlank()) "Logradouro" else null,
+                                        if (numero.isBlank()) "Número" else null,
+                                        if (bairro.isBlank()) "Bairro" else null,
+                                        if (cidade.isBlank()) "Cidade" else null,
+                                        if (uf.length != 2) "UF" else null,
+                                    )
+                                    error = null
+                                } else setStage(PublicStage.DEPENDENTS)
                             },
                             size = VendaButtonSize.MEDIUM,
                             modifier = Modifier.weight(1.2f),
@@ -862,8 +900,10 @@ fun PublicAdesaoParityScreen(
                             label = if (dependentes.isEmpty()) "Continuar sem dependentes" else "Continuar",
                             onClick = {
                                 val validation = validateDependents(cpf, dependentes)
-                                if (validation != null) error = validation
-                                else setStage(PublicStage.REVIEW)
+                                if (validation != null) {
+                                    validationErrors = listOf(validation)
+                                    error = null
+                                } else setStage(PublicStage.REVIEW)
                             },
                             size = VendaButtonSize.MEDIUM,
                             modifier = Modifier.weight(1.2f),
@@ -1569,6 +1609,25 @@ private fun resolvePersonSex(value: String?, fallback: Int): Int {
 private fun normalizePersonDate(value: String): String {
     val trimmed = value.trim()
     return if (Regex("^\\d{4}-\\d{2}-\\d{2}").containsMatchIn(trimmed)) trimmed.take(10) else trimmed
+}
+
+private fun displayBirthDate(value: String): String {
+    return if (Regex("^\\d{4}-\\d{2}-\\d{2}$").matches(value)) {
+        value.substring(8, 10) + "/" + value.substring(5, 7) + "/" + value.substring(0, 4)
+    } else value
+}
+
+private fun parseBirthDate(value: String): String {
+    val digits = value.filter(Char::isDigit).take(8)
+    if (digits.length < 8) {
+        return when {
+            digits.length <= 2 -> digits
+            digits.length <= 4 -> digits.take(2) + "/" + digits.drop(2)
+            else -> digits.take(2) + "/" + digits.substring(2, 4) + "/" + digits.drop(4)
+        }
+    }
+    val iso = digits.substring(4, 8) + "-" + digits.substring(2, 4) + "-" + digits.take(2)
+    return if (runCatching { LocalDate.parse(iso) }.isSuccess) iso else value.take(10)
 }
 
 private fun isIsoDate(value: String): Boolean =
