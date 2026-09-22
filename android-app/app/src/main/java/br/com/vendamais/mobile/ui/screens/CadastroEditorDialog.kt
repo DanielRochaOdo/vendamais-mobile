@@ -884,7 +884,7 @@ fun CadastroEditorDialog(
         if (nome.isBlank()) return "Nome completo obrigatório."
         if (dataIso == null) return "Data de nascimento inválida. Use dd/mm/aaaa."
         if (sexoCodigo.toIntOrNull() !in setOf(0, 1)) return "Selecione o sexo."
-        if (nomeMae.isBlank()) return "Nome da mãé obrigatório."
+        if (nomeMae.isBlank()) return "Nome da mãe é obrigatório."
         if (cadastro.empresaExigeMatricula == 1 && numeroMatricula.isBlank()) {
             return "Matrícula obrigatória para esta empresa."
         }
@@ -926,7 +926,7 @@ fun CadastroEditorDialog(
             if (dep.sexo !in setOf(0, 1)) return "$label: sexo obrigatório."
             if (index > 0 && dep.tipo == 0) return "$label: parentesco obrigatório."
             if (dep.plano == 0) return "$label: plano obrigatório."
-            if (dep.nomeMae.isBlank()) return "$label: nome da mãé obrigatório."
+            if (dep.nomeMae.isBlank()) return "$label: nome da mãe é obrigatório."
         }
 
         return null
@@ -2276,8 +2276,8 @@ private fun shouldRetryLemmitRequest(message: String?): Boolean {
         ?.trim()
         .orEmpty()
     if (normalized.isBlank()) return true
-    if (normalized.contains("cpf inválido")) return false
-    if (normalized.contains("não encontrado")) return false
+    if (normalized.contains("cpf invalido")) return false
+    if (normalized.contains("nao encontrado")) return false
     if (normalized.contains("não encontrado")) return false
     if (normalized.contains("forbidden") || normalized.contains("unauthorized")) return false
 
@@ -2421,15 +2421,15 @@ private fun resolveEnderecoObject(value: JsonElement?): JsonObject? {
     val nestedResponsavel = data?.jsonObjectFlexible("responsavelFinanceiro", "responsavel_financeiro", "ResponsavelFinanceiro")
     val candidates = listOfNotNull(
         root,
-        root.jsonObjectFlexible("endereco", "Endereço"),
+        root.jsonObjectFlexible("endereco", "Endereco"),
         data,
-        data?.jsonObjectFlexible("endereco", "Endereço"),
+        data?.jsonObjectFlexible("endereco", "Endereco"),
         dados,
-        dados?.jsonObjectFlexible("endereco", "Endereço"),
+        dados?.jsonObjectFlexible("endereco", "Endereco"),
         responsavel,
-        responsavel?.jsonObjectFlexible("endereco", "Endereço"),
+        responsavel?.jsonObjectFlexible("endereco", "Endereco"),
         nestedResponsavel,
-        nestedResponsavel?.jsonObjectFlexible("endereco", "Endereço"),
+        nestedResponsavel?.jsonObjectFlexible("endereco", "Endereco"),
     )
     return candidates.firstOrNull { it.hasEnderecoHints() } ?: candidates.firstOrNull()
 }
@@ -2644,7 +2644,7 @@ private fun parseCadastroEndereco(value: JsonElement?): CadastroEnderecoFormStat
         ?: obj.jsonString("enderecoCep", "cepResponsavel")
     val tipoLogradouro = obj.jsonString("tipoLogradouro", "tipo_logradouro", "TipoLogradouro")
         ?: tipoLogradouroObj?.jsonString("nome", "descricao", "tipo")
-    val logradouro = obj.jsonString("logradouro", "Logradouro", "endereco", "Endereço")
+    val logradouro = obj.jsonString("logradouro", "Logradouro", "endereco", "Endereco")
     val bairro = obj.jsonString("bairro", "Bairro")
         ?: bairroObj?.jsonString("nome", "descricao")
     val cidade = obj.jsonString("cidade", "Cidade", "municipio", "Municipio")
