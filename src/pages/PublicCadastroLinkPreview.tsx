@@ -62,7 +62,7 @@ export function PublicCadastroLinkPreview() {
               </div>
               <div>
                 <p className="text-emerald-100 text-sm uppercase tracking-[0.18em]">Preview local</p>
-                <h1 className="text-2xl font-bold">Adesao por Link</h1>
+                <h1 className="text-2xl font-bold">Adesão por Link</h1>
               </div>
             </div>
 
@@ -70,12 +70,12 @@ export function PublicCadastroLinkPreview() {
               <div className="bg-white/10 border border-white/15 rounded-2xl p-4">
                 <p className="text-emerald-100 text-xs uppercase tracking-[0.18em] mb-2">Empresa</p>
                 <p className="text-lg font-semibold">Odontoart Clinicas Integradas</p>
-                <p className="text-sm text-emerald-100">Codigo 4451</p>
+                <p className="text-sm text-emerald-100">Código 4451</p>
               </div>
               <div className="bg-white/10 border border-white/15 rounded-2xl p-4">
                 <p className="text-emerald-100 text-xs uppercase tracking-[0.18em] mb-2">Vendedor</p>
                 <p className="text-lg font-semibold">Carlos Henrique</p>
-                <p className="text-sm text-emerald-100">Codigo 9876</p>
+                <p className="text-sm text-emerald-100">Código 9876</p>
               </div>
             </div>
           </div>
