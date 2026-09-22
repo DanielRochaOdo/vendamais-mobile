@@ -187,12 +187,12 @@ fun CadastroLinksCard(
         Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = "Links de adesao",
+                    text = "Links de adesão",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = "Selecione uma empresa para gerar um link publico e acompanhe os links ativos.",
+                    text = "Selecione uma empresa para gerar um link público e acompanhe os links ativos.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -217,7 +217,7 @@ fun CadastroLinksCard(
                     label = {
                         Text(
                             when (workspace.empresaSearchType) {
-                                EmpresaSearchType.CODIGO -> "Codigo da empresa"
+                                EmpresaSearchType.CODIGO -> "Código da empresa"
                                 EmpresaSearchType.CNPJ -> "CNPJ"
                                 EmpresaSearchType.NOME -> "Nome da empresa"
                             },
@@ -226,7 +226,7 @@ fun CadastroLinksCard(
                     placeholder = {
                         Text(
                             when (workspace.empresaSearchType) {
-                                EmpresaSearchType.CODIGO -> "Digite o codigo"
+                                EmpresaSearchType.CODIGO -> "Digite o código"
                                 EmpresaSearchType.CNPJ -> "00.000.000/0000-00"
                                 EmpresaSearchType.NOME -> "Digite o nome da empresa"
                             },
@@ -300,14 +300,14 @@ fun CadastroLinksCard(
                                 )
                             }
                             Text(
-                                text = "Codigo ${workspace.selectedEmpresa.id} · ${workspace.selectedEmpresa.cnpj}",
+                                text = "Código ${workspace.selectedEmpresa.id} · ${workspace.selectedEmpresa.cnpj}",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
 
                         VendaButton(
-                            label = "Gerar link publico",
+                            label = "Gerar link público",
                             onClick = onGenerateLink,
                             loading = workspace.operationLoading,
                             leadingIcon = Icons.Rounded.Share,
@@ -362,7 +362,7 @@ fun CadastroLinksCard(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("Buscar links") },
-                    placeholder = { Text("Empresa, codigo, CNPJ ou vendedor") },
+                    placeholder = { Text("Empresa, código, CNPJ ou vendedor") },
                     leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
                     singleLine = true,
                 )
@@ -371,7 +371,7 @@ fun CadastroLinksCard(
                     text = if (filteredLinks.isEmpty()) {
                         "Nenhum link encontrado"
                     } else {
-                        "Mostrando ${pageStart + 1}-${minOf(pageStart + LINK_PAGE_SIZE, filteredLinks.size)} de ${filteredLinks.size} links · 5 por pagina"
+                        "Mostrando ${pageStart + 1}-${minOf(pageStart + LINK_PAGE_SIZE, filteredLinks.size)} de ${filteredLinks.size} links · 5 por página"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -381,12 +381,12 @@ fun CadastroLinksCard(
             if (workspace.links.isEmpty()) {
                 VendaEmptyState(
                     title = "Nenhum link criado",
-                    message = "Selecione uma empresa e gere um link publico de adesao.",
+                    message = "Selecione uma empresa e gere um link público de adesão.",
                 )
             } else if (filteredLinks.isEmpty()) {
                 VendaEmptyState(
                     title = "Nenhum resultado",
-                    message = "Tente buscar por outro codigo, empresa ou vendedor.",
+                    message = "Tente buscar por outro código, empresa ou vendedor.",
                 )
             } else {
                 groups.forEach { group ->
@@ -421,7 +421,7 @@ fun CadastroLinksCard(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = "Pagina $currentPage de $totalPages",
+                            text = "Página $currentPage de $totalPages",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -448,7 +448,7 @@ fun CadastroLinksCard(
                     showObservacoesModal = false
                     showAuthorizationModal = true
                 },
-                title = { Text("Observacoes da Empresa") },
+                title = { Text("Observações da Empresa") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
@@ -505,7 +505,7 @@ fun CadastroLinksCard(
         AlertDialog(
             onDismissRequest = { invalidCompanyName = null },
             title = { Text("Empresa bloqueada") },
-            text = { Text("A empresa $empresaNome esta com situacao bloqueada para novos cadastros.") },
+            text = { Text("A empresa $empresaNome esta com situação bloqueada para novos cadastros.") },
             confirmButton = {
                 TextButton(onClick = { invalidCompanyName = null }) { Text("Buscar outra") }
             },
@@ -553,7 +553,7 @@ private fun LinkSearchTypeRow(
     ) {
         LinkSearchTypePill(
             modifier = Modifier.weight(1f),
-            label = "Codigo",
+            label = "Código",
             selected = selected == EmpresaSearchType.CODIGO,
             onClick = { onSelected(EmpresaSearchType.CODIGO) },
         )
@@ -628,7 +628,7 @@ private fun LinkEmpresaResultCard(
                 )
             }
             Text(
-                text = "Codigo ${empresa.id} · ${empresa.cnpj}",
+                text = "Código ${empresa.id} · ${empresa.cnpj}",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -680,7 +680,7 @@ private fun LinkEmpresaGroupCard(
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                text = "Codigo ${group.codigo}${group.cnpj?.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()}",
+                                text = "Código ${group.codigo}${group.cnpj?.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()}",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodySmall,
                             )
@@ -816,7 +816,7 @@ private fun LinkListItem(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = "Codigo ${link.vendedorCodigo ?: "-"} · ${link.clickCount ?: 0} cliques · ${formatDateTime(link.createdAt)}",
+                        text = "Código ${link.vendedorCodigo ?: "-"} · ${link.clickCount ?: 0} cliques · ${formatDateTime(link.createdAt)}",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -857,7 +857,7 @@ private fun LinkListItem(
             ) {
                 LinkActionChip(
                     icon = Icons.Rounded.History,
-                    label = "Historico",
+                    label = "Histórico",
                     enabled = !loading,
                     onClick = onOpenHistory,
                 )
@@ -1035,23 +1035,23 @@ private fun LinkHistoryDialog(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Historico do link",
+                            text = "Histórico do link",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )
                         Text(
-                            text = "${link.empresaNome} · Codigo ${link.empresaCodigo}",
+                            text = "${link.empresaNome} · Código ${link.empresaCodigo}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = "Vendedor: ${link.vendedorNome ?: "-"} (Codigo ${link.vendedorCodigo ?: "-"})",
+                            text = "Vendedor: ${link.vendedorNome ?: "-"} (Código ${link.vendedorCodigo ?: "-"})",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Rounded.Close, contentDescription = "Fechar historico")
+                        Icon(Icons.Rounded.Close, contentDescription = "Fechar histórico")
                     }
                 }
 
@@ -1070,7 +1070,7 @@ private fun LinkHistoryDialog(
                             HistorySummaryBox("So abriu", it.anonymousDetailed.toString(), Modifier.weight(1f))
                         }
                         Text(
-                            text = "Ultimo clique: ${it.lastClickedAt?.let(::formatDateTime) ?: "-"}",
+                            text = "Último clique: ${it.lastClickedAt?.let(::formatDateTime) ?: "-"}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -1113,7 +1113,7 @@ private fun LinkHistoryDialog(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Text(
-                            text = "Mostrando ${pageStart + 1}-${minOf(pageStart + HISTORY_PAGE_SIZE, rows.size)} de ${rows.size} registros · 10 por pagina",
+                            text = "Mostrando ${pageStart + 1}-${minOf(pageStart + HISTORY_PAGE_SIZE, rows.size)} de ${rows.size} registros · 10 por página",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -1150,7 +1150,7 @@ private fun LinkHistoryDialog(
                             val uri = LinkHistoryXlsxExporter.exportToDownloads(context, link, rows)
                             Toast.makeText(
                                 context,
-                                if (uri != null) "Historico XLSX salvo com sucesso." else "Nao foi possivel exportar o historico.",
+                                if (uri != null) "Histórico XLSX salvo com sucesso." else "Não foi possível exportar o histórico.",
                                 Toast.LENGTH_SHORT,
                             ).show()
                         },
@@ -1228,7 +1228,7 @@ private fun LinkHistoryRowCard(row: CadastroLinkHistoryRow) {
                 }
             }
             Text(
-                text = row.nomeRf ?: "Acesso sem identificacao",
+                text = row.nomeRf ?: "Acesso sem identificação",
                 fontWeight = FontWeight.SemiBold,
             )
             if (!row.telefone.isNullOrBlank()) {
@@ -1286,7 +1286,7 @@ private fun LinkQrCodeDialog(
                     )
                 } else {
                     Text(
-                        text = "Nao foi possivel gerar o QR Code para este link.",
+                        text = "Não foi possível gerar o QR Code para este link.",
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                     )
