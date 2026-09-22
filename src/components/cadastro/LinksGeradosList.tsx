@@ -212,7 +212,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
       setTimeout(() => setCopyFeedbackId(null), 2500);
     } catch (err) {
       console.error('Error copying generated link:', err);
-      setError('Nao foi possivel copiar o link');
+      setError('Não foi possível copiar o link');
     }
   };
 
@@ -244,11 +244,11 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
 
   const handleRegenerateLink = async (link: CadastroLinkRow) => {
     if (!profile?.id) {
-      setError('Usuario nao autenticado');
+      setError('Usuário não autenticado');
       return;
     }
 
-    const confirmed = window.confirm(`Regerar um novo link para ${link.empresa_nome}? O link atual sera inativado.`);
+    const confirmed = window.confirm(`Regerar um novo link para ${link.empresa_nome}? O link atual será inativado.`);
     if (!confirmed) return;
 
     setActionLoadingId(link.id);
@@ -372,7 +372,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                         {group.empresaCnpj ? ` • CNPJ ${group.empresaCnpj}` : ''}
                       </p>
                       <p className="text-xs text-slate-500 mt-2">
-                        {isExpanded ? 'Clique para ocultar detalhes e opcoes' : 'Clique para expandir detalhes e opcoes'}
+                        {isExpanded ? 'Clique para ocultar detalhes e opções' : 'Clique para expandir detalhes e opções'}
                       </p>
                       </div>
                     </div>
@@ -415,7 +415,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
               {group.links.map((link) => {
                 const isCopyingCurrent = copyFeedbackId === link.id;
                 const isActionLoading = actionLoadingId === link.id;
-                const status = link.is_active ? 'Disponivel' : 'Inativo';
+                const status = link.is_active ? 'Disponível' : 'Inativo';
                 const statusClasses = link.is_active
                   ? 'bg-green-100 text-green-700'
                   : 'bg-amber-100 text-amber-700';
@@ -449,7 +449,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
 
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-xs text-slate-500">
-                          {isCopyingCurrent ? 'Link copiado com sucesso.' : 'Acoes do link'}
+                          {isCopyingCurrent ? 'Link copiado com sucesso.' : 'Ações do link'}
                         </p>
 
                         <div className="flex flex-wrap items-center gap-2">
