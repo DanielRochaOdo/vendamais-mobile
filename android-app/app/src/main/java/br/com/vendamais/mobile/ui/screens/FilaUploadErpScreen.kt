@@ -88,7 +88,7 @@ fun FilaUploadErpScreen(
         item {
             ScreenHeading(
                 title = "Fila ERP",
-                subtitle = "Acompanhe documentos aguardando sincronizacao e resolva falhas sem perder o cadastro.",
+                subtitle = "Acompanhe documentos aguardando sincronização e resolva falhas sem perder o cadastro.",
             )
         }
 
@@ -122,7 +122,7 @@ fun FilaUploadErpScreen(
         }
 
         item {
-            WebCard(title = "Operacao da fila") {
+            WebCard(title = "Operação da fila") {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     SelectionField(
                         label = "Status",
@@ -172,7 +172,7 @@ fun FilaUploadErpScreen(
                     }
                     state.resetQueueResult?.let { result ->
                         OperationalNotice(
-                            message = "${result.resetCount} item(ns) liberado(s) no ultimo reset.",
+                            message = "${result.resetCount} item(ns) liberado(s) no último reset.",
                             isError = false,
                         )
                     }
@@ -207,7 +207,7 @@ fun FilaUploadErpScreen(
             item {
                 VendaEmptyState(
                     title = "Nenhum documento na fila",
-                    message = "Nao ha itens correspondentes ao status selecionado.",
+                    message = "Não ha itens correspondentes ao status selecionado.",
                 )
             }
         } else {
@@ -249,7 +249,7 @@ fun FilaUploadErpScreen(
                                 modifier = Modifier.weight(1f),
                             )
                             QueueDetail(
-                                label = "Proxima tentativa",
+                                label = "Próxima tentativa",
                                 value = item.nextAttemptAt?.let(::formatQueueDateTime) ?: "-",
                                 modifier = Modifier.weight(2f),
                             )
@@ -264,7 +264,7 @@ fun FilaUploadErpScreen(
                         }
 
                         item.lastError?.takeIf { it.isNotBlank() }?.let { error ->
-                            OperationalNotice(message = "Nao foi possivel sincronizar o documento. Detalhes tecnicos: $error", isError = true)
+                            OperationalNotice(message = "Não foi possível sincronizar o documento. Detalhes técnicos: $error", isError = true)
                         }
 
                         Row(
@@ -286,11 +286,11 @@ fun FilaUploadErpScreen(
                                                         },
                                                     )
                                                 }.onFailure {
-                                                    fileError = "Nao foi possivel abrir o arquivo neste dispositivo."
+                                                    fileError = "Não foi possível abrir o arquivo neste dispositivo."
                                                 }
                                             }
                                             .onFailure { throwable ->
-                                                fileError = "Nao foi possivel preparar o arquivo para abertura."
+                                                fileError = "Não foi possível preparar o arquivo para abertura."
                                             }
                                     }
                                 },
@@ -403,7 +403,7 @@ private fun QueueDetail(
 @Composable
 private fun OperationalNotice(message: String, isError: Boolean) {
     VendaInlineFeedback(
-        title = if (isError) "Atencao na sincronizacao" else "Operacao concluida",
+        title = if (isError) "Atenção na sincronização" else "Operação concluida",
         message = message,
         tone = if (isError) VendaFeedbackTone.ERROR else VendaFeedbackTone.SUCCESS,
     )
