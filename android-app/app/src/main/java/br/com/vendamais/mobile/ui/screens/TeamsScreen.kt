@@ -72,9 +72,9 @@ fun TeamsScreen(
             ScreenHeading(
                 title = if (isSupervisor) "Minha Equipe" else "Equipes",
                 subtitle = if (isSupervisor) {
-                    "Acompanhe e organize vendedores e adesionistas da sua operacao."
+                    "Acompanhe e organize vendedores e adesionistas da sua operação."
                 } else {
-                    "Organize a estrutura comercial e os responsaveis por cada equipe."
+                    "Organize a estrutura comercial e os responsáveis por cada equipe."
                 },
             )
         }
@@ -322,7 +322,7 @@ private fun TeamEditorSheet(
 
             if (team != null) {
                 Text(
-                    text = "Membros disponiveis",
+                    text = "Membros disponíveis",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
