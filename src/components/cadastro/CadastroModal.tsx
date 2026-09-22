@@ -861,7 +861,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess, forceStartStepOne 
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        throw new Error('Sessao nao encontrada');
+        throw new Error('Sessão não encontrada');
       }
 
       const idDependente = parseInt(String(dependenteCodigo));
@@ -1914,7 +1914,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess, forceStartStepOne 
             </div>
           )}
 
-          <div className="sticky bottom-0 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 sm:pt-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-4 bg-white/95 backdrop-blur border-t border-slate-200 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <div className="sticky bottom-0 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 sm:pt-4 pb-[calc(0.75rem+env(safe-área-inset-bottom))] sm:pb-4 bg-white/95 backdrop-blur border-t border-slate-200 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
             <div className="flex flex-col sm:flex-row gap-2">
               {currentStep === 1 && canDelete && (
                 <Button
