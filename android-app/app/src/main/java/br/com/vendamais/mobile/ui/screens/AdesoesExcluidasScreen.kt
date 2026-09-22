@@ -106,8 +106,8 @@ fun AdesoesExcluidasScreen(
     ) {
         item {
             ScreenHeading(
-                title = "Adesoes Excluidas",
-                subtitle = "Audite exclusoes logicas, motivo, responsavel e dados preservados do cadastro.",
+                title = "Adesões Excluidas",
+                subtitle = "Audite exclusoes logicas, motivo, responsável e dados preservados do cadastro.",
             )
         }
 
@@ -118,7 +118,7 @@ fun AdesoesExcluidasScreen(
             ) {
                 DeletedMetric(
                     value = state.cadastrosExcluidos.size.toString(),
-                    label = "Historico",
+                    label = "Histórico",
                     modifier = Modifier.weight(1f),
                 )
                 DeletedMetric(
@@ -202,7 +202,7 @@ fun AdesoesExcluidasScreen(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = "${paged.size} nesta pagina",
+                    text = "${paged.size} nesta página",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -213,7 +213,7 @@ fun AdesoesExcluidasScreen(
             item {
                 WebCard {
                     Text(
-                        text = "Nenhuma exclusao encontrada para os filtros informados.",
+                        text = "Nenhuma exclusão encontrada para os filtros informados.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -221,7 +221,7 @@ fun AdesoesExcluidasScreen(
         } else {
             items(paged) { item ->
                 val obj = runCatching { item.dadosCadastro.jsonObject }.getOrNull()
-                val title = obj?.get("nome")?.jsonPrimitive?.contentOrNull ?: "Nome nao informado"
+                val title = obj?.get("nome")?.jsonPrimitive?.contentOrNull ?: "Nome não informado"
                 val empresa = obj?.get("empresa_nome")?.jsonPrimitive?.contentOrNull ?: "-"
                 val vendedor = obj?.get("vendedor_nome")?.jsonPrimitive?.contentOrNull ?: "-"
 
@@ -268,7 +268,7 @@ fun AdesoesExcluidasScreen(
                             color = Red100,
                         ) {
                             Text(
-                                text = item.motivoExclusao.ifBlank { "Motivo nao informado" },
+                                text = item.motivoExclusao.ifBlank { "Motivo não informado" },
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Red500,
@@ -332,7 +332,7 @@ fun AdesoesExcluidasScreen(
     selected?.let { current ->
         val obj = runCatching { current.dadosCadastro.jsonObject }.getOrNull()
         val deps = runCatching { obj?.get("dependentes")?.jsonArray }.getOrNull().orEmpty()
-        val title = obj?.get("nome")?.jsonPrimitive?.contentOrNull ?: "Detalhes da exclusao"
+        val title = obj?.get("nome")?.jsonPrimitive?.contentOrNull ?: "Detalhes da exclusão"
 
         ModalBottomSheet(onDismissRequest = { selected = null }) {
             Column(
@@ -377,7 +377,7 @@ fun AdesoesExcluidasScreen(
                             fontWeight = FontWeight.SemiBold,
                         )
                         Text(
-                            text = current.motivoExclusao.ifBlank { "Nao informado" },
+                            text = current.motivoExclusao.ifBlank { "Não informado" },
                             style = MaterialTheme.typography.bodyMedium,
                             color = Red500,
                         )
