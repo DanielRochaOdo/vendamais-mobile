@@ -65,7 +65,7 @@ fun SettingsScreen(state: AppUiState, viewModel: AppViewModel) {
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        item { ScreenHeading(title = "Configuracoes", subtitle = "Regras operacionais, tabelas do ERP e diagnostico do sistema.") }
+        item { ScreenHeading(title = "Configurações", subtitle = "Regras operacionais, tabelas do ERP e diagnóstico do sistema.") }
         item {
             val entries = listOf(
                 SettingsSection.GERAL to "Geral",
@@ -87,12 +87,12 @@ fun SettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                 if (config == null) item { SettingsLoadingCard() } else {
                     item { ConfigSwitchCard("Consulta Lemmit", "Consulta a Lemmit no fluxo de cadastro.", config.ativarLemmit) { v -> scope.launch { viewModel.updateCadastroConfig(buildJsonObject { put("ativar_lemmit", v) }) } } }
                     item { ConfigSwitchCard("Exigir Envio de Arquivo", "Quando ativo, o envio exige documento anexado.", config.exigirArquivo) { v -> scope.launch { viewModel.updateCadastroConfig(buildJsonObject { put("exigir_arquivo", v) }) } } }
-                    item { ConfigSwitchCard("Lemmit no Dependente", "Preenchimento automatico no dependente do novo cadastro.", config.lemmitDependente) { v -> scope.launch { viewModel.updateCadastroConfig(buildJsonObject { put("lemmit_dependente", v) }) } } }
-                    item { ConfigSwitchCard("Lemmit Incluir Dep.", "Preenchimento automatico na inclusao de dependente.", config.lemmitInclusaoDependente) { v -> scope.launch { viewModel.updateCadastroConfig(buildJsonObject { put("lemmit_inclusao_dependente", v) }) } } }
-                    item { ConfigListEditorCard("Situacoes que Barram Cadastro", "Codigos que impedem recadastro.", config.situacoesQueBarram.joinToString(", ")) { value -> scope.launch { viewModel.updateCadastroConfig(buildJsonObject { put("situacoes_que_barram", settingsIntJsonArray(value.split(',').mapNotNull { it.trim().toIntOrNull() })) }) } } }
+                    item { ConfigSwitchCard("Lemmit no Dependente", "Preenchimento automático no dependente do novo cadastro.", config.lemmitDependente) { v -> scope.launch { viewModel.updateCadastroConfig(buildJsonObject { put("lemmit_dependente", v) }) } } }
+                    item { ConfigSwitchCard("Lemmit Incluir Dep.", "Preenchimento automático na inclusão de dependente.", config.lemmitInclusaoDependente) { v -> scope.launch { viewModel.updateCadastroConfig(buildJsonObject { put("lemmit_inclusao_dependente", v) }) } } }
+                    item { ConfigListEditorCard("Situacoes que Barram Cadastro", "Códigos que impedem recadastro.", config.situacoesQueBarram.joinToString(", ")) { value -> scope.launch { viewModel.updateCadastroConfig(buildJsonObject { put("situacoes_que_barram", settingsIntJsonArray(value.split(',').mapNotNull { it.trim().toIntOrNull() })) }) } } }
                     item { ConfigListEditorCard("Planos Validos", "Planos permitidos para recadastro.", config.planosValidos.joinToString(", ")) { value -> scope.launch { viewModel.updateCadastroConfig(buildJsonObject { put("planos_validos", settingsIntJsonArray(value.split(',').mapNotNull { it.trim().toIntOrNull() })) }) } } }
-                    item { ConfigListEditorCard("Planos Ocultos", "Codigos que nao aparecem na selecao.", config.planosOcultos.joinToString(", ")) { value -> scope.launch { viewModel.updateCadastroConfig(buildJsonObject { put("planos_ocultos", settingsStringJsonArray(value.split(',').map { it.trim() }.filter { it.isNotBlank() })) }) } } }
-                    item { ConfigListEditorCard("Codigos de Empresa Invalidos", "Empresas invalidas para novos cadastros.", config.codigosEmpresaInvalidos.joinToString(", ")) { value -> scope.launch { viewModel.updateCadastroConfig(buildJsonObject { put("codigos_empresa_invalidos", settingsStringJsonArray(value.split(',').map { it.trim() }.filter { it.isNotBlank() })) }) } } }
+                    item { ConfigListEditorCard("Planos Ocultos", "Códigos que não aparecem na seleção.", config.planosOcultos.joinToString(", ")) { value -> scope.launch { viewModel.updateCadastroConfig(buildJsonObject { put("planos_ocultos", settingsStringJsonArray(value.split(',').map { it.trim() }.filter { it.isNotBlank() })) }) } } }
+                    item { ConfigListEditorCard("Códigos de Empresa Invalidos", "Empresas invalidas para novos cadastros.", config.codigosEmpresaInvalidos.joinToString(", ")) { value -> scope.launch { viewModel.updateCadastroConfig(buildJsonObject { put("codigos_empresa_invalidos", settingsStringJsonArray(value.split(',').map { it.trim() }.filter { it.isNotBlank() })) }) } } }
                 }
             }
             SettingsSection.PLANOS -> item { PlanosEditor(state, viewModel, canModifyMappings, canDeleteMappings) }
@@ -152,7 +152,7 @@ private fun PlanoDialog(item: PlanoMap?, onDismiss: () -> Unit, onSave: (Int, St
     AlertDialog(onDismissRequest = onDismiss, title = { Text(if (item == null) "Novo Plano" else "Editar Plano") }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(id, { id = it.filter(Char::isDigit) }, label = { Text("ID do Plano no ERP") }, enabled = item == null, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-            OutlinedTextField(nome, { nome = it }, label = { Text("Nome para Exibicao") })
+            OutlinedTextField(nome, { nome = it }, label = { Text("Nome para Exibição") })
             OutlinedTextField(registro, { registro = it }, label = { Text("Registro do Produto") })
             SettingsChoiceField("Regra de Valor", regra, listOf("titular" to "Titular", "dependente" to "Dependente", "agregado" to "Agregado", "fixo" to "Fixo", "manual" to "Manual"), onSelected = { regra = it })
             Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(ativo, { ativo = it }); Text("Ativo") }
@@ -177,7 +177,7 @@ private fun ParentescosEditor(state: AppUiState, viewModel: AppViewModel, canMod
             if (canModify) TextButton(onClick = { editing = item }) { Text("Editar") }
             if (canDelete) TextButton(onClick = { scope.launch { viewModel.deleteParentescoMap(item.id) } }) { Text("Excluir") }
         } }
-        if (state.parentescosMap.isEmpty()) VendaEmptyState(title = "Nenhum parentesco cadastrado", message = "Os parentescos disponiveis para cadastro aparecerao aqui.")
+        if (state.parentescosMap.isEmpty()) VendaEmptyState(title = "Nenhum parentesco cadastrado", message = "Os parentescos disponíveis para cadastro aparecerao aqui.")
     } }
     if (creating || editing != null) ParentescoDialog(editing, { creating = false; editing = null }) { id, label, ativo -> scope.launch {
         val payload = buildJsonObject { put("parentesco_id", id); put("label", label); put("ativo", ativo) }
@@ -191,7 +191,7 @@ private fun ParentescoDialog(item: ParentescoMap?, onDismiss: () -> Unit, onSave
     var id by remember(item?.id) { mutableStateOf(item?.parentescoId?.toString().orEmpty()) }; var label by remember(item?.id) { mutableStateOf(item?.label.orEmpty()) }; var ativo by remember(item?.id) { mutableStateOf(item?.ativo ?: true) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text(if (item == null) "Novo Parentesco" else "Editar Parentesco") }, text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(id, { id = it.filter(Char::isDigit) }, label = { Text("ID do Parentesco no ERP") }, enabled = item == null, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-        OutlinedTextField(label, { label = it }, label = { Text("Label para Exibicao") })
+        OutlinedTextField(label, { label = it }, label = { Text("Label para Exibição") })
         Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(ativo, { ativo = it }); Text("Ativo") }
     } }, confirmButton = { TextButton(onClick = { val parsed = id.toIntOrNull() ?: 0; if (parsed > 0 && label.isNotBlank()) onSave(parsed, label.trim(), ativo) }) { Text("Salvar") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } })
 }
@@ -200,7 +200,7 @@ private fun ParentescoDialog(item: ParentescoMap?, onDismiss: () -> Unit, onSave
 private fun StatusEditor(state: AppUiState, viewModel: AppViewModel) {
     val scope = rememberCoroutineScope(); var editing by remember { mutableStateOf<StatusAdesao?>(null) }; var creating by remember { mutableStateOf(false) }
     WebCard { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Status de Adesoes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text("Status de Adesões", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         VendaButton(label = "Adicionar status", onClick = { creating = true }, modifier = Modifier.fillMaxWidth())
         state.statusAdesoes.forEach { status ->
             Row(
@@ -227,7 +227,7 @@ private fun StatusEditor(state: AppUiState, viewModel: AppViewModel) {
                 TextButton(onClick = { scope.launch { viewModel.deleteStatusAdesao(status.id) } }) { Text("Excluir") }
             }
         }
-        if (state.statusAdesoes.isEmpty()) VendaEmptyState(title = "Nenhum status cadastrado", message = "Crie os estados operacionais usados nas adesoes.")
+        if (state.statusAdesoes.isEmpty()) VendaEmptyState(title = "Nenhum status cadastrado", message = "Crie os estados operacionais usados nas adesões.")
     } }
     if (creating || editing != null) StatusDialog(editing, { creating = false; editing = null }, state.statusAdesoes.maxOfOrNull { it.ordem } ?: 0) { nome, cor, ordem -> scope.launch {
         val payload = buildJsonObject { put("nome", nome); put("cor", cor); put("ordem", ordem) }
@@ -257,10 +257,10 @@ private fun ApiLogsEditor(state: AppUiState, viewModel: AppViewModel) {
         Text("Logs de API", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Text("Investigue chamadas, latencia e erros sem sair do aplicativo.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         SettingsChoiceField("Status", filter, listOf("all" to "Todos", "success" to "Sucesso", "error" to "Erros"), onSelected = { filter = it; page = 1 })
-        OutlinedTextField(start, { start = it; page = 1 }, label = { Text("Data Inicio (YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(start, { start = it; page = 1 }, label = { Text("Data Início (YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(end, { end = it; page = 1 }, label = { Text("Data Fim (YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth())
         if (state.apiLogs.isEmpty()) {
-            VendaEmptyState(title = "Nenhum log encontrado", message = "Nao ha chamadas correspondentes aos filtros selecionados.")
+            VendaEmptyState(title = "Nenhum log encontrado", message = "Não ha chamadas correspondentes aos filtros selecionados.")
         } else {
             state.apiLogs.forEach { log ->
                 Surface(
@@ -278,21 +278,21 @@ private fun ApiLogsEditor(state: AppUiState, viewModel: AppViewModel) {
                             )
                         }
                         Text("${log.userEmail ?: "Anonimo"} | ${formatLogDate(log.createdAt)} | ${log.durationMs ?: 0}ms | HTTP ${log.statusCode ?: "-"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        if (!log.success) Text("Nao foi possivel concluir esta chamada. Toque para ver os detalhes tecnicos.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        if (!log.success) Text("Não foi possível concluir esta chamada. Toque para ver os detalhes técnicos.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                     }
                 }
             }
         }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { TextButton(onClick = { if (page > 1) page-- }, enabled = page > 1) { Text("Anterior") }; Text("Pagina $page"); TextButton(onClick = { page++ }, enabled = state.apiLogs.size == size) { Text("Proxima") } }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { TextButton(onClick = { if (page > 1) page-- }, enabled = page > 1) { Text("Anterior") }; Text("Página $page"); TextButton(onClick = { page++ }, enabled = state.apiLogs.size == size) { Text("Proxima") } }
     } }
-    selected?.let { log -> AlertDialog(onDismissRequest = { selected = null }, title = { Text(log.endpoint) }, text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { Text("Metodo: ${log.method}"); Text("Status: ${log.statusCode ?: "-"}"); Text("Usuario: ${log.userEmail ?: "Anonimo"}"); Text("Duracao: ${log.durationMs ?: 0}ms"); Text("Custo: ${log.cost ?: 0.0}"); log.errorMessage?.let { Text("Erro: $it") }; Text("Request: ${log.requestBody ?: "-"}", style = MaterialTheme.typography.bodySmall); Text("Response: ${log.responseBody ?: "-"}", style = MaterialTheme.typography.bodySmall) } }, confirmButton = { TextButton(onClick = { selected = null }) { Text("Fechar") } }) }
+    selected?.let { log -> AlertDialog(onDismissRequest = { selected = null }, title = { Text(log.endpoint) }, text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { Text("Metodo: ${log.method}"); Text("Status: ${log.statusCode ?: "-"}"); Text("Usuário: ${log.userEmail ?: "Anonimo"}"); Text("Duracao: ${log.durationMs ?: 0}ms"); Text("Custo: ${log.cost ?: 0.0}"); log.errorMessage?.let { Text("Erro: $it") }; Text("Request: ${log.requestBody ?: "-"}", style = MaterialTheme.typography.bodySmall); Text("Response: ${log.responseBody ?: "-"}", style = MaterialTheme.typography.bodySmall) } }, confirmButton = { TextButton(onClick = { selected = null }) { Text("Fechar") } }) }
 }
 
 @Composable
 private fun ConfigSwitchCard(title: String, description: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) { WebCard { Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Column(modifier = Modifier.weight(1f)) { Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold); Text(description, style = MaterialTheme.typography.bodySmall) }; Switch(checked, onCheckedChange) } } }
 
 @Composable
-private fun ConfigListEditorCard(title: String, description: String, value: String, onSave: (String) -> Unit) { var editing by remember { mutableStateOf(false) }; var text by remember(value) { mutableStateOf(value) }; WebCard { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold); Text(description, style = MaterialTheme.typography.bodySmall); if (editing) { OutlinedTextField(text, { text = it }, modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus()); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { VendaButton(label = "Salvar", size = VendaButtonSize.SMALL, onClick = { onSave(text); editing = false }); VendaButton(label = "Cancelar", size = VendaButtonSize.SMALL, style = VendaButtonStyle.TERTIARY, onClick = { editing = false }) } } else { Text(value.ifBlank { "Nao configurado" }); TextButton(onClick = { editing = true }) { Text("Editar") } } } } }
+private fun ConfigListEditorCard(title: String, description: String, value: String, onSave: (String) -> Unit) { var editing by remember { mutableStateOf(false) }; var text by remember(value) { mutableStateOf(value) }; WebCard { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold); Text(description, style = MaterialTheme.typography.bodySmall); if (editing) { OutlinedTextField(text, { text = it }, modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus()); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { VendaButton(label = "Salvar", size = VendaButtonSize.SMALL, onClick = { onSave(text); editing = false }); VendaButton(label = "Cancelar", size = VendaButtonSize.SMALL, style = VendaButtonStyle.TERTIARY, onClick = { editing = false }) } } else { Text(value.ifBlank { "Não configurado" }); TextButton(onClick = { editing = true }) { Text("Editar") } } } } }
 
 private fun formatLogDate(value: String): String = runCatching { java.time.OffsetDateTime.parse(value).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")) }.getOrDefault(value)
 
@@ -300,7 +300,7 @@ private fun formatLogDate(value: String): String = runCatching { java.time.Offse
 @Composable
 private fun SettingsLoadingCard() {
     VendaLoadingState(
-        title = "Carregando configuracoes",
+        title = "Carregando configurações",
         message = "Atualizando as regras operacionais do Venda+.",
     )
 }
