@@ -369,7 +369,7 @@ fun CadastroEditorDialog(
             .onFailure { throwable ->
                 cepLookupError = CadastroApiErrorMapper.mapUserMessage(
                     throwable.message,
-                    "Nao foi possivel consultar o endereco pelo CEP.",
+                    "Não foi possível consultar o endereço pelo CEP.",
                 )
             }
 
@@ -423,7 +423,7 @@ fun CadastroEditorDialog(
     suspend fun openArquivoPreview() {
         val path = arquivoPath.trim()
         if (path.isBlank()) {
-            localMessage = "Nenhum arquivo anexado para visualizacao."
+            localMessage = "Nenhum arquivo anexado para visualização."
             return
         }
         previewingArquivo = true
@@ -448,7 +448,7 @@ fun CadastroEditorDialog(
         }.onFailure { throwable ->
             localMessage = CadastroApiErrorMapper.mapUserMessage(
                 throwable.message,
-                "Nao foi possivel abrir o arquivo.",
+                "Não foi possível abrir o arquivo.",
             )
         }
         previewingArquivo = false
@@ -462,7 +462,7 @@ fun CadastroEditorDialog(
             runCatching {
                 val bytes = withContext(Dispatchers.IO) {
                     context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                        ?: error("Nao foi possivel ler o arquivo.")
+                        ?: error("Não foi possível ler o arquivo.")
                 }
                 uploadSelectedArquivo(
                     fileName = resolveFileName(context, uri),
@@ -704,7 +704,7 @@ fun CadastroEditorDialog(
     fun requestCloseEditor() {
         if (statusAdesaoId.isBlank()) {
             if (state.statusAdesoes.isEmpty()) {
-                localMessage = "Nenhum status de adesao disponivel. Cadastre ao menos um status antes de fechar."
+                localMessage = "Nenhum status de adesão disponível. Cadastre ao menos um status antes de fechar."
                 return
             }
             showSelectStatusOnClose = true
@@ -783,7 +783,7 @@ fun CadastroEditorDialog(
                 val motivo = if (limitInfo?.limiteMensal != null) {
                     "Limite mensal da Lemmit atingido."
                 } else {
-                    "Consulta Lemmit indisponivel para este usuario."
+                    "Consulta Lemmit indisponivel para este usuário."
                 }
                 cpfValidationErrors[index] = "$motivo Apague e digite novamente o CPF para nova leitura."
                 return
@@ -881,12 +881,12 @@ fun CadastroEditorDialog(
         if (requiresVendedorSelection(profile) && vendedor?.externalId.isNullOrBlank()) {
             return "Selecione um vendedor antes de continuar."
         }
-        if (nome.isBlank()) return "Nome completo obrigatorio."
-        if (dataIso == null) return "Data de nascimento invalida. Use dd/mm/aaaa."
+        if (nome.isBlank()) return "Nome completo obrigatório."
+        if (dataIso == null) return "Data de nascimento inválida. Use dd/mm/aaaa."
         if (sexoCodigo.toIntOrNull() !in setOf(0, 1)) return "Selecione o sexo."
-        if (nomeMae.isBlank()) return "Nome da mae obrigatorio."
+        if (nomeMae.isBlank()) return "Nome da mãé obrigatório."
         if (cadastro.empresaExigeMatricula == 1 && numeroMatricula.isBlank()) {
-            return "Matricula obrigatoria para esta empresa."
+            return "Matrícula obrigatória para esta empresa."
         }
 
         val telefones = contatos.filter {
@@ -895,38 +895,38 @@ fun CadastroEditorDialog(
         if (telefones.isEmpty()) return "Adicione pelo menos um telefone."
 
         val cepDigits = enderecoCep.filter(Char::isDigit).take(8)
-        if (cepDigits.length != 8) return "CEP obrigatorio. Informe 8 digitos."
-        if (enderecoLogradouro.isBlank()) return "Logradouro obrigatorio."
-        if (enderecoNumero.isBlank()) return "Numero do endereco obrigatorio."
-        if (enderecoBairro.isBlank()) return "Bairro obrigatorio."
-        if (enderecoCidade.isBlank()) return "Cidade obrigatoria."
-        if (enderecoUf.trim().length != 2) return "UF obrigatoria."
+        if (cepDigits.length != 8) return "CEP obrigatório. Informe 8 digitos."
+        if (enderecoLogradouro.isBlank()) return "Logradouro obrigatório."
+        if (enderecoNumero.isBlank()) return "Número do endereço obrigatório."
+        if (enderecoBairro.isBlank()) return "Bairro obrigatório."
+        if (enderecoCidade.isBlank()) return "Cidade obrigatória."
+        if (enderecoUf.trim().length != 2) return "UF obrigatória."
 
         if (dependentes.isEmpty()) return "Adicione ao menos o titular e um plano."
         val titular = dependentes.firstOrNull()
-        if (titular == null || titular.tipo != 1) return "Titular nao identificado nos dependentes."
+        if (titular == null || titular.tipo != 1) return "Titular não identificado nos dependentes."
 
         dependentes.forEachIndexed { index, dep ->
             val label = if (index == 0) "Titular" else "Dependente ${index + 1}"
             val dateIsoDep = toIsoDateOrNull(dep.dataNascimento.text)
-            if (dep.nome.isBlank()) return "$label: nome obrigatorio."
-            if (dateIsoDep == null) return "$label: data de nascimento invalida."
+            if (dep.nome.isBlank()) return "$label: nome obrigatório."
+            if (dateIsoDep == null) return "$label: data de nascimento inválida."
 
             val cpfDigits = dep.cpf.text.filter(Char::isDigit)
-            if (index == 0 && !validateCpf(cpfDigits)) return "$label: CPF invalido."
+            if (index == 0 && !validateCpf(cpfDigits)) return "$label: CPF inválido."
             if (index > 0) {
                 if (!isUnder18(dateIsoDep) && cpfDigits.length != 11) {
-                    return "$label: CPF obrigatorio para maior de idade."
+                    return "$label: CPF obrigatório para maior de idade."
                 }
                 if (cpfDigits.isNotBlank() && !validateCpf(cpfDigits)) {
-                    return "$label: CPF invalido."
+                    return "$label: CPF inválido."
                 }
             }
 
-            if (dep.sexo !in setOf(0, 1)) return "$label: sexo obrigatorio."
-            if (index > 0 && dep.tipo == 0) return "$label: parentesco obrigatorio."
-            if (dep.plano == 0) return "$label: plano obrigatorio."
-            if (dep.nomeMae.isBlank()) return "$label: nome da mae obrigatorio."
+            if (dep.sexo !in setOf(0, 1)) return "$label: sexo obrigatório."
+            if (index > 0 && dep.tipo == 0) return "$label: parentesco obrigatório."
+            if (dep.plano == 0) return "$label: plano obrigatório."
+            if (dep.nomeMae.isBlank()) return "$label: nome da mãé obrigatório."
         }
 
         return null
@@ -938,13 +938,13 @@ fun CadastroEditorDialog(
     ): JsonObject? {
         val dataIso = toIsoDateOrNull(dataNascimentoField.text)
         if (!silentValidation && dataNascimentoField.text.isNotBlank() && dataIso == null) {
-            localMessage = "Data de nascimento invalida. Use formato dd/mm/aaaa."
+            localMessage = "Data de nascimento inválida. Use formato dd/mm/aaaa."
             return null
         }
 
         if (requireStatus && statusAdesaoId.isBlank()) {
             if (!silentValidation) {
-                localMessage = "Selecione o status da adesao antes de continuar."
+                localMessage = "Selecione o status da adesão antes de continuar."
             }
             return null
         }
@@ -1106,7 +1106,7 @@ fun CadastroEditorDialog(
             return
         }
         if (arquivoPath.isBlank()) {
-            localMessage = "Anexo obrigatorio. Selecione um arquivo antes de finalizar."
+            localMessage = "Anexo obrigatório. Selecione um arquivo antes de finalizar."
             Log.w("CadastroEditorDialog", "[$submitTraceId] blocked missingArquivoPath cadastroId=${cadastro.id}")
             saving = false
             return
@@ -1277,12 +1277,12 @@ fun CadastroEditorDialog(
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
-                            text = "Nova adesao",
+                            text = "Nova adesão",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                         )
                         Text(
-                            text = if (currentStep == 1) "Etapa 1 de 2 · Dados do titular" else "Etapa 2 de 2 · Documento e conclusao",
+                            text = if (currentStep == 1) "Etapa 1 de 2 · Dados do titular" else "Etapa 2 de 2 · Documento e conclusão",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall,
                         )
@@ -1365,7 +1365,7 @@ fun CadastroEditorDialog(
                                 value = nomeMae,
                                 onValueChange = { nomeMae = it },
                                 modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                                label = { Text("Nome da Mae") },
+                                label = { Text("Nome da Mãe") },
                                 colors = enderecoFieldColors,
                             )
                             if (cadastro.empresaExigeMatricula == 1) {
@@ -1373,7 +1373,7 @@ fun CadastroEditorDialog(
                                     value = numeroMatricula,
                                     onValueChange = { numeroMatricula = it },
                                     modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                                    label = { Text("Matricula") },
+                                    label = { Text("Matrícula") },
                                     colors = enderecoFieldColors,
                                 )
                             }
@@ -1418,7 +1418,7 @@ fun CadastroEditorDialog(
                                 )
                             }
 
-                            Text("Endereco", fontWeight = FontWeight.SemiBold)
+                            Text("Endereço", fontWeight = FontWeight.SemiBold)
                             OutlinedTextField(
                                 value = enderecoCep,
                                 onValueChange = {
@@ -1438,7 +1438,7 @@ fun CadastroEditorDialog(
                             )
                             if (cepLookupLoading) {
                                 Text(
-                                    text = "Buscando endereco pelo CEP...",
+                                    text = "Buscando endereço pelo CEP...",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -1470,7 +1470,7 @@ fun CadastroEditorDialog(
                                 value = enderecoNumero,
                                 onValueChange = { enderecoNumero = it },
                                 modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                                label = { Text("Numero") },
+                                label = { Text("Número") },
                                 singleLine = true,
                                 colors = enderecoFieldColors,
                             )
@@ -1622,7 +1622,7 @@ fun CadastroEditorDialog(
 
                                 if (planoOptions.isEmpty()) {
                                     Text(
-                                        "Nenhum plano disponivel para a empresa selecionada.",
+                                        "Nenhum plano disponível para a empresa selecionada.",
                                         color = MaterialTheme.colorScheme.error,
                                     )
                                 }
@@ -1696,7 +1696,7 @@ fun CadastroEditorDialog(
                                                         }
 
                                                         !validateCpf(digits) -> {
-                                                            cpfValidationErrors[index] = "CPF invalido."
+                                                            cpfValidationErrors[index] = "CPF inválido."
                                                             consultedCpfByIndex.remove(index)
                                                         }
 
@@ -1793,7 +1793,7 @@ fun CadastroEditorDialog(
                                                     dependentes[index] = dependentes[index].copy(nomeMae = value)
                                                 },
                                                 modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                                                label = { Text("Nome da Mae") },
+                                                label = { Text("Nome da Mãe") },
                                                 enabled = !isTitular,
                                                 colors = enderecoFieldColors,
                                             )
@@ -1818,8 +1818,8 @@ fun CadastroEditorDialog(
                     } else {
                         val titularDependente = dependentes.firstOrNull()
                         val planoTitularResumo = when {
-                            titularDependente == null -> "Nao informado"
-                            titularDependente.plano <= 0 -> "Nao informado"
+                            titularDependente == null -> "Não informado"
+                            titularDependente.plano <= 0 -> "Não informado"
                             else -> planoOptions
                                 .firstOrNull { it.codigo == titularDependente.plano }
                                 ?.label
@@ -1834,7 +1834,7 @@ fun CadastroEditorDialog(
                                 Text("Plano do titular: $planoTitularResumo")
                                 Text("Dependentes: ${dependentes.size}")
                                 Text("Contatos: ${contatos.size}")
-                                Text("Arquivo obrigatorio: ${if (state.cadastroWorkspace.config?.exigirArquivo == true) "Sim" else "Nao"}")
+                                Text("Arquivo obrigatório: ${if (state.cadastroWorkspace.config?.exigirArquivo == true) "Sim" else "Nao"}")
                             }
                         }
 
@@ -2126,7 +2126,7 @@ fun CadastroEditorDialog(
                                 suppressBackgroundPersist = false
                                 localMessage = CadastroApiErrorMapper.mapUserMessage(
                                     throwable.message,
-                                    "Nao foi possivel iniciar a camera.",
+                                    "Não foi possível iniciar a camera.",
                                 )
                             }
                         },
@@ -2170,9 +2170,9 @@ fun CadastroEditorDialog(
             title = { Text("Selecionar status") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Antes de fechar, selecione o status da adesao.")
+                    Text("Antes de fechar, selecione o status da adesão.")
                     SelectionField(
-                        label = "Status da Adesao",
+                        label = "Status da Adesão",
                         value = state.statusAdesoes.firstOrNull { it.id == statusAdesaoId }?.nome ?: "Selecione",
                         options = listOf("" to "Selecione") + state.statusAdesoes.map { it.id to it.nome },
                         onSelected = { statusAdesaoId = it },
@@ -2276,8 +2276,8 @@ private fun shouldRetryLemmitRequest(message: String?): Boolean {
         ?.trim()
         .orEmpty()
     if (normalized.isBlank()) return true
-    if (normalized.contains("cpf invalido")) return false
-    if (normalized.contains("nao encontrado")) return false
+    if (normalized.contains("cpf inválido")) return false
+    if (normalized.contains("não encontrado")) return false
     if (normalized.contains("não encontrado")) return false
     if (normalized.contains("forbidden") || normalized.contains("unauthorized")) return false
 
@@ -2421,15 +2421,15 @@ private fun resolveEnderecoObject(value: JsonElement?): JsonObject? {
     val nestedResponsavel = data?.jsonObjectFlexible("responsavelFinanceiro", "responsavel_financeiro", "ResponsavelFinanceiro")
     val candidates = listOfNotNull(
         root,
-        root.jsonObjectFlexible("endereco", "Endereco"),
+        root.jsonObjectFlexible("endereco", "Endereço"),
         data,
-        data?.jsonObjectFlexible("endereco", "Endereco"),
+        data?.jsonObjectFlexible("endereco", "Endereço"),
         dados,
-        dados?.jsonObjectFlexible("endereco", "Endereco"),
+        dados?.jsonObjectFlexible("endereco", "Endereço"),
         responsavel,
-        responsavel?.jsonObjectFlexible("endereco", "Endereco"),
+        responsavel?.jsonObjectFlexible("endereco", "Endereço"),
         nestedResponsavel,
-        nestedResponsavel?.jsonObjectFlexible("endereco", "Endereco"),
+        nestedResponsavel?.jsonObjectFlexible("endereco", "Endereço"),
     )
     return candidates.firstOrNull { it.hasEnderecoHints() } ?: candidates.firstOrNull()
 }
@@ -2644,7 +2644,7 @@ private fun parseCadastroEndereco(value: JsonElement?): CadastroEnderecoFormStat
         ?: obj.jsonString("enderecoCep", "cepResponsavel")
     val tipoLogradouro = obj.jsonString("tipoLogradouro", "tipo_logradouro", "TipoLogradouro")
         ?: tipoLogradouroObj?.jsonString("nome", "descricao", "tipo")
-    val logradouro = obj.jsonString("logradouro", "Logradouro", "endereco", "Endereco")
+    val logradouro = obj.jsonString("logradouro", "Logradouro", "endereco", "Endereço")
     val bairro = obj.jsonString("bairro", "Bairro")
         ?: bairroObj?.jsonString("nome", "descricao")
     val cidade = obj.jsonString("cidade", "Cidade", "municipio", "Municipio")
@@ -2666,7 +2666,7 @@ private fun parseCadastroEndereco(value: JsonElement?): CadastroEnderecoFormStat
         cep = cep?.filter(Char::isDigit).orEmpty().take(8),
         tipoLogradouro = tipoLogradouro.orEmpty(),
         logradouro = logradouro.orEmpty(),
-        numero = obj.jsonString("numero", "Numero", "numeroLogradouro").orEmpty(),
+        numero = obj.jsonString("numero", "Número", "numeroLogradouro").orEmpty(),
         complemento = obj.jsonString("complemento", "Complemento").orEmpty(),
         bairro = bairro.orEmpty(),
         cidade = cidade.orEmpty(),
@@ -2710,7 +2710,7 @@ private fun resolvePlanoFromMetadados(
         if (codigoMatch != null) {
         Log.i(
             "CadastroEditorDialog",
-            "Plano restaurado por codigo para dependente index=$dependenteIndex plano=${codigoMatch.codigo}",
+            "Plano restaurado por código para dependente index=$dependenteIndex plano=${codigoMatch.codigo}",
         )
         return PlanoResolutionResult(
             plano = codigoMatch.codigo,
@@ -2726,7 +2726,7 @@ private fun resolvePlanoFromMetadados(
     if (nomeNorm.isBlank() && tipoNorm.isBlank() && valorNorm.isBlank()) {
         Log.w(
             "CadastroEditorDialog",
-            "Plano salvo no rascunho nao encontrado em planoOptions index=$dependenteIndex sem metadados suficientes",
+            "Plano salvo no rascunho não encontrado em planoOptions index=$dependenteIndex sem metadados suficientes",
         )
         return PlanoResolutionResult(
             plano = planoCodigo,
@@ -2784,7 +2784,7 @@ private fun resolvePlanoFromMetadados(
         nameMatches.size > 1 || typeMatches.size > 1 || exactMatches.size > 1 -> {
             Log.w(
                 "CadastroEditorDialog",
-                "Fallback de plano ambiguo; selecao automatica ignorada index=$dependenteIndex matches=${exactMatches.size}/${typeMatches.size}/${nameMatches.size}",
+                "Fallback de plano ambiguo; seleção automática ignorada index=$dependenteIndex matches=${exactMatches.size}/${typeMatches.size}/${nameMatches.size}",
             )
             PlanoResolutionResult(
                 plano = planoCodigo,
@@ -2796,7 +2796,7 @@ private fun resolvePlanoFromMetadados(
         else -> {
             Log.w(
                 "CadastroEditorDialog",
-                "Plano salvo no rascunho nao encontrado em planoOptions index=$dependenteIndex nome=${planoNome.take(40)} tipo=${tipoPlano.take(24)}",
+                "Plano salvo no rascunho não encontrado em planoOptions index=$dependenteIndex nome=${planoNome.take(40)} tipo=${tipoPlano.take(24)}",
             )
             PlanoResolutionResult(
                 plano = planoCodigo,
@@ -2938,12 +2938,12 @@ private fun resolveAdesionista(
 
 private fun TeamMemberOption.toTeamSelectionLabel(): String {
     val codigo = externalId?.takeIf { it.isNotBlank() } ?: "-"
-    return "$name - Codigo $codigo"
+    return "$name - Código $codigo"
 }
 
 private fun MobileProfile.toTeamSelectionLabel(): String {
     val codigo = externalId?.takeIf { it.isNotBlank() } ?: "-"
-    return "$name - Codigo $codigo"
+    return "$name - Código $codigo"
 }
 
 private fun resolveCadastroMessageTone(message: String): CadastroMessageTone {
@@ -3077,7 +3077,7 @@ private fun validateUpload(fileName: String, mimeType: String, size: Long) {
     val lower = fileName.lowercase()
     val acceptedName = lower.endsWith(".pdf") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png")
     val acceptedMime = mimeType in setOf("application/pdf", "image/jpeg", "image/png")
-    if (!acceptedName && !acceptedMime) throw IllegalStateException("Arquivo invalido. Use PDF, JPG ou PNG.")
+    if (!acceptedName && !acceptedMime) throw IllegalStateException("Arquivo inválido. Use PDF, JPG ou PNG.")
     if (size > MAX_UPLOAD_BYTES) throw IllegalStateException("O anexo excede o limite de 5 MB aceito pelo ERP. Escolha um arquivo menor.")
 }
 
