@@ -31,7 +31,7 @@ object LinkHistoryXlsxExporter {
 
         val companyPart = safeFilePart(link.empresaNome).ifBlank { "empresa" }
         val datePart = java.time.LocalDate.now().toString()
-        val fileName = "historico-link-${link.empresaCodigo}-$companyPart-$datePart.xlsx"
+        val fileName = "histórico-link-${link.empresaCodigo}-$companyPart-$datePart.xlsx"
 
         return runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -87,9 +87,9 @@ object LinkHistoryXlsxExporter {
             "Telefone",
             "Status",
             "Vendedor",
-            "Codigo do vendedor",
+            "Código do vendedor",
             "Empresa",
-            "Codigo da empresa",
+            "Código da empresa",
         )
 
         val data = buildList {
@@ -150,7 +150,7 @@ object LinkHistoryXlsxExporter {
         .replace("<", "&lt;")
         .replace(">", "&gt;")
         .replace("\"", "&quot;")
-        .replace("'", "&apos;")
+        .replace("'", "&após;")
 
     private fun safeFilePart(value: String): String = Normalizer
         .normalize(value, Normalizer.Form.NFD)
