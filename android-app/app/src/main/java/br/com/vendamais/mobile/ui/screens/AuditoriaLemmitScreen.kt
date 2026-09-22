@@ -78,7 +78,7 @@ fun AuditoriaLemmitScreen(
         }
 
         item {
-            WebCard(title = "Periodo analisado") {
+            WebCard(title = "Período analisado") {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -102,7 +102,7 @@ fun AuditoriaLemmitScreen(
                         )
                     }
                     VendaButton(
-                        label = "Atualizar periodo",
+                        label = "Atualizar período",
                         onClick = {
                             currentPage = 1
                             val startIso = "${startDate}T00:00:00Z"
@@ -177,11 +177,11 @@ fun AuditoriaLemmitScreen(
         }
 
         item {
-            WebCard(title = "Uso por usuario") {
+            WebCard(title = "Uso por usuário") {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (audit.usuarioConsulta.isEmpty()) {
                         Text(
-                            text = "Sem dados de consumo para o periodo.",
+                            text = "Sem dados de consumo para o período.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     } else {
@@ -197,11 +197,11 @@ fun AuditoriaLemmitScreen(
         }
 
         item {
-            WebCard(title = "Custo por usuario") {
+            WebCard(title = "Custo por usuário") {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (audit.usuarioCusto.isEmpty()) {
                         Text(
-                            text = "Sem dados de custo para o periodo.",
+                            text = "Sem dados de custo para o período.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     } else {
@@ -229,7 +229,7 @@ fun AuditoriaLemmitScreen(
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        text = "Pagina $currentPage",
+                        text = "Página $currentPage",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -240,7 +240,7 @@ fun AuditoriaLemmitScreen(
         if (audit.ultimasConsultas.isEmpty()) {
             item {
                 VendaEmptyState(
-                    title = "Nenhuma consulta no periodo",
+                    title = "Nenhuma consulta no período",
                     message = "Ajuste o intervalo de datas para consultar outros registros Lemmit.",
                 )
             }
@@ -297,7 +297,7 @@ fun AuditoriaLemmitScreen(
                         Text("Anterior")
                     }
                     Text(
-                        text = "Pagina $currentPage",
+                        text = "Página $currentPage",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
