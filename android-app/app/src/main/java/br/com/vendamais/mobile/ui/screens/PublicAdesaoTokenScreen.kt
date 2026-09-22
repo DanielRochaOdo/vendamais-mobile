@@ -163,7 +163,7 @@ fun PublicAdesaoTokenScreen(
                 if (!response.ok || response.link == null) {
                     error = CadastroApiErrorMapper.mapUserMessage(
                         response.error,
-                        "Link invalido ou inativo.",
+                        "Link inválido ou inativo.",
                     )
                 } else {
                     linkInfo = response.link
@@ -348,7 +348,7 @@ fun PublicAdesaoTokenScreen(
             .onFailure { throwable ->
                 cepLookupError = CadastroApiErrorMapper.mapUserMessage(
                     throwable.message,
-                    "Nao foi possivel consultar o CEP no S4E.",
+                    "Não foi possível consultar o CEP no S4E.",
                 )
             }
 
@@ -387,10 +387,10 @@ fun PublicAdesaoTokenScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 ScreenHeading(
-                    title = "Adesao por link",
-                    subtitle = "Nao foi possivel iniciar o fluxo publico.",
+                    title = "Adesão por link",
+                    subtitle = "Não foi possível iniciar o fluxo público.",
                 )
-                Text(error ?: "Link invalido.")
+                Text(error ?: "Link inválido.")
                 Button(onClick = onClose) {
                     Text("Fechar")
                 }
@@ -413,7 +413,7 @@ fun PublicAdesaoTokenScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             ScreenHeading(
-                title = "Adesao por link",
+                title = "Adesão por link",
                 subtitle = "Empresa ${empresa.empresaNome}",
             )
 
@@ -441,7 +441,7 @@ fun PublicAdesaoTokenScreen(
                         value = cpf,
                         onValueChange = { cpf = it.filter(Char::isDigit).take(11) },
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                        label = { Text("CPF (somente numeros)") },
+                        label = { Text("CPF (somente números)") },
                         singleLine = true,
                         enabled = !cpfLocked && !consultingCpf && !submitting,
                     )
@@ -450,7 +450,7 @@ fun PublicAdesaoTokenScreen(
                             onClick = {
                                 val cpfDigits = CadastroPayloadBuilder.normalizeDigits(cpf)
                                 if (!CadastroPayloadBuilder.validateCpf(cpfDigits)) {
-                                    error = "CPF invalido. Verifique os digitos."
+                                    error = "CPF inválido. Verifique os digitos."
                                     return@Button
                                 }
                                 consultingCpf = true
@@ -463,7 +463,7 @@ fun PublicAdesaoTokenScreen(
                                             throw IllegalStateException(
                                                 CadastroApiErrorMapper.mapUserMessage(
                                                     cpfValidation.error,
-                                                    "CPF nao permitido neste link.",
+                                                    "CPF não permitido neste link.",
                                                 ),
                                             )
                                         }
@@ -517,7 +517,7 @@ fun PublicAdesaoTokenScreen(
                         value = nomeMae,
                         onValueChange = { nomeMae = it },
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                        label = { Text("Nome da mae") },
+                        label = { Text("Nome da mãe") },
                     )
                     OutlinedTextField(
                         value = telefone,
@@ -530,7 +530,7 @@ fun PublicAdesaoTokenScreen(
                             value = numeroMatricula,
                             onValueChange = { numeroMatricula = it },
                             modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                            label = { Text("Numero matricula") },
+                            label = { Text("Número matrícula") },
                         )
                     }
                     SelectionField(
@@ -544,7 +544,7 @@ fun PublicAdesaoTokenScreen(
 
             WebCard {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Endereco", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text("Endereço", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     OutlinedTextField(
                         value = cep,
                         onValueChange = {
@@ -585,7 +585,7 @@ fun PublicAdesaoTokenScreen(
                             value = numero,
                             onValueChange = { numero = it },
                             modifier = Modifier.weight(1f).bringIntoViewOnFocus(),
-                            label = { Text("Numero") },
+                            label = { Text("Número") },
                             colors = enderecoFieldColors,
                         )
                         OutlinedTextField(
@@ -650,39 +650,39 @@ fun PublicAdesaoTokenScreen(
                             return@Button
                         }
                         if (planoCodigo <= 0) {
-                            error = "Selecione um plano valido para o titular."
+                            error = "Selecione um plano válido para o titular."
                             return@Button
                         }
                         val cpfDigits = CadastroPayloadBuilder.normalizeDigits(cpf)
                         if (!CadastroPayloadBuilder.validateCpf(cpfDigits)) {
-                            error = "CPF invalido."
+                            error = "CPF inválido."
                             return@Button
                         }
                         val dataNascimentoNormalizada = dataNascimento.trim()
                         if (!isIsoDateValid(dataNascimentoNormalizada)) {
-                            error = "Data nascimento invalida. Use YYYY-MM-DD."
+                            error = "Data nascimento inválida. Use YYYY-MM-DD."
                             return@Button
                         }
                         if (nome.trim().isBlank()) {
-                            error = "Campo obrigatorio: Nome Completo."
+                            error = "Campo obrigatório: Nome Completo."
                             return@Button
                         }
                         if (nomeMae.trim().isBlank()) {
-                            error = "Campo obrigatorio: Nome da Mae."
+                            error = "Campo obrigatório: Nome da Mãe."
                             return@Button
                         }
                         val sexoCodigo = sexo.toIntOrNull() ?: -1
                         if (sexoCodigo !in setOf(0, 1)) {
-                            error = "Campo obrigatorio: Sexo."
+                            error = "Campo obrigatório: Sexo."
                             return@Button
                         }
                         val telefoneDigits = telefone.filter(Char::isDigit)
                         if (telefoneDigits.length < 10) {
-                            error = "Adicione pelo menos um telefone valido antes de cadastrar."
+                            error = "Adicione pelo menos um telefone válido antes de cadastrar."
                             return@Button
                         }
                         if (empresa.empresaExigeMatricula == 1 && numeroMatricula.trim().isBlank()) {
-                            error = "Campo obrigatorio: Matricula."
+                            error = "Campo obrigatório: Matrícula."
                             return@Button
                         }
                         if (
@@ -693,7 +693,7 @@ fun PublicAdesaoTokenScreen(
                             cidade.trim().isBlank() ||
                             uf.trim().length != 2
                         ) {
-                            error = "Preencha todos os campos obrigatorios do endereco."
+                            error = "Preencha todos os campos obrigatórios do endereço."
                             return@Button
                         }
 
@@ -765,7 +765,7 @@ fun PublicAdesaoTokenScreen(
                                     throw IllegalStateException(
                                         CadastroApiErrorMapper.mapUserMessage(
                                             cpfValidation.error,
-                                            "CPF nao permitido neste link.",
+                                            "CPF não permitido neste link.",
                                         ),
                                     )
                                 }
@@ -775,7 +775,7 @@ fun PublicAdesaoTokenScreen(
                                 if (!response.ok) {
                                     error = CadastroApiErrorMapper.mapUserMessage(
                                         response.error,
-                                        "Falha ao concluir adesao.",
+                                        "Falha ao concluir adesão.",
                                     )
                                 } else {
                                     success = response.message ?: "Cadastro concluido com sucesso."
@@ -798,7 +798,7 @@ fun PublicAdesaoTokenScreen(
                     if (submitting) {
                         CircularProgressIndicator(strokeWidth = 2.dp)
                     } else {
-                        Text("Concluir adesao")
+                        Text("Concluir adesão")
                     }
                 }
             }
