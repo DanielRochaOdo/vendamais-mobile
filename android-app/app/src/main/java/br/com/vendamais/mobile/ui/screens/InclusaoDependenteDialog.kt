@@ -301,7 +301,7 @@ fun InclusaoDependenteDialog(
         val dependente = dependentes.getOrNull(index)
         val arquivo = dependente?.arquivo
         if (arquivo == null || arquivo.path.isBlank()) {
-            localError = "Nenhum arquivo anexado para visualizacao."
+            localError = "Nenhum arquivo anexado para visualização."
             return
         }
         previewingArquivoIndex = index
@@ -322,7 +322,7 @@ fun InclusaoDependenteDialog(
         }.onFailure { throwable ->
             localError = CadastroApiErrorMapper.mapUserMessage(
                 throwable.message,
-                "Nao foi possivel abrir o arquivo.",
+                "Não foi possível abrir o arquivo.",
             )
         }
         previewingArquivoIndex = null
@@ -336,7 +336,7 @@ fun InclusaoDependenteDialog(
             updateDependente(dependentes, index) { it.copy(uploading = true) }
             runCatching {
                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                    ?: error("Nao foi possivel ler o arquivo.")
+                    ?: error("Não foi possível ler o arquivo.")
                 uploadDependenteArquivo(
                     index = index,
                     fileName = resolveFileName(context, uri),
@@ -433,16 +433,16 @@ fun InclusaoDependenteDialog(
 
     fun validateDependente(dep: DependenteFormState, index: Int): String? {
         val iso = toIsoDateOrNull(dep.dataNascimento.text)
-        if (dep.nome.isBlank()) return "Dependente ${index + 1}: nome obrigatorio."
-        if (iso == null) return "Dependente ${index + 1}: data de nascimento invalida."
-        if (!isUnder18(iso) && dep.cpf.text.length != 11) return "Dependente ${index + 1}: CPF obrigatorio."
-        if (dep.cpf.text.isNotBlank() && !validateCpf(dep.cpf.text)) return "Dependente ${index + 1}: CPF invalido."
-        if (dep.sexo !in setOf(0, 1)) return "Dependente ${index + 1}: sexo obrigatorio."
-        if (dep.parentesco == 0) return "Dependente ${index + 1}: parentesco obrigatorio."
-        if (dep.plano == 0) return "Dependente ${index + 1}: plano obrigatorio."
-        if (dep.nomeMae.isBlank()) return "Dependente ${index + 1}: nome da mae obrigatorio."
+        if (dep.nome.isBlank()) return "Dependente ${index + 1}: nome obrigatório."
+        if (iso == null) return "Dependente ${index + 1}: data de nascimento inválida."
+        if (!isUnder18(iso) && dep.cpf.text.length != 11) return "Dependente ${index + 1}: CPF obrigatório."
+        if (dep.cpf.text.isNotBlank() && !validateCpf(dep.cpf.text)) return "Dependente ${index + 1}: CPF inválido."
+        if (dep.sexo !in setOf(0, 1)) return "Dependente ${index + 1}: sexo obrigatório."
+        if (dep.parentesco == 0) return "Dependente ${index + 1}: parentesco obrigatório."
+        if (dep.plano == 0) return "Dependente ${index + 1}: plano obrigatório."
+        if (dep.nomeMae.isBlank()) return "Dependente ${index + 1}: nome da mãé obrigatório."
         if (state.cadastroWorkspace.config?.exigirArquivo == true && dep.arquivo == null) {
-            return "Dependente ${index + 1}: arquivo obrigatorio."
+            return "Dependente ${index + 1}: arquivo obrigatório."
         }
         return null
     }
@@ -464,12 +464,12 @@ fun InclusaoDependenteDialog(
     fun ensureStatusSelecionado(): Boolean {
         if (state.statusAdesoes.isEmpty()) {
             showSelectStatusDialog = false
-            localError = "Nenhum status de adesao disponivel. Cadastre ao menos um status para continuar."
+            localError = "Nenhum status de adesão disponível. Cadastre ao menos um status para continuar."
             return false
         }
         if (selectedStatusId.isBlank()) {
             showSelectStatusDialog = true
-            localError = "Selecione o status da adesao antes de continuar."
+            localError = "Selecione o status da adesão antes de continuar."
             return false
         }
         return true
@@ -486,7 +486,7 @@ fun InclusaoDependenteDialog(
                 empresaNaoIdentificadaRequired = true,
             ),
         )
-        localError = "Selecione uma empresa valida antes de continuar."
+        localError = "Selecione uma empresa válida antes de continuar."
         return false
     }
 
@@ -599,7 +599,7 @@ fun InclusaoDependenteDialog(
 
     suspend fun salvarPendente() {
         val responsavel = responsavelSelecionado ?: run {
-            localError = "Selecione um responsavel financeiro."
+            localError = "Selecione um responsável financeiro."
             return
         }
         if (!ensureStatusSelecionado()) return
@@ -610,7 +610,7 @@ fun InclusaoDependenteDialog(
             return
         }
         if (vendedor?.externalId.isNullOrBlank()) {
-            localError = "Selecione um vendedor valido."
+            localError = "Selecione um vendedor válido."
             return
         }
 
@@ -655,7 +655,7 @@ fun InclusaoDependenteDialog(
 
     suspend fun enviarDependentes() {
         val responsavel = responsavelSelecionado ?: run {
-            localError = "Selecione um responsavel financeiro."
+            localError = "Selecione um responsável financeiro."
             return
         }
         if (!ensureEmpresaIdentificada(responsavel)) return
@@ -669,13 +669,13 @@ fun InclusaoDependenteDialog(
         } else {
             vendedor?.externalId?.toIntOrNull()
         } ?: run {
-            localError = "Vendedor sem codigo externo valido."
+            localError = "Vendedor sem código externo válido."
             return
         }
 
         val base = dependentes.toList()
         if (base.isEmpty()) {
-            localError = "Nenhum dependente valido para envio."
+            localError = "Nenhum dependente válido para envio."
             return
         }
         base.forEachIndexed { index, dep ->
@@ -754,7 +754,7 @@ fun InclusaoDependenteDialog(
         if (hasAttachments) {
             if (funcionario <= 0 || cadastroId == null) {
                 throw IllegalStateException(
-                    "Dependentes criados no ERP, mas o anexo nao pode ser enfileirado. O cadastro foi mantido pendente para nova tentativa.",
+                    "Dependentes criados no ERP, mas o anexo não pode ser enfileirado. O cadastro foi mantido pendente para nova tentativa.",
                 )
             }
 
@@ -762,7 +762,7 @@ fun InclusaoDependenteDialog(
                 val file = dep.arquivo ?: return@forEachIndexed
                 val code = codes.getOrNull(idx)
                     ?: throw IllegalStateException(
-                        "Dependente ${idx + 1} criado no ERP, mas sem codigo para envio do anexo. O cadastro foi mantido pendente.",
+                        "Dependente ${idx + 1} criado no ERP, mas sem código para envio do anexo. O cadastro foi mantido pendente.",
                     )
                 runCatching {
                     viewModel.enqueueDependenteUpload(cadastroId, funcionario, code, file.path, file.nome)
@@ -786,7 +786,7 @@ fun InclusaoDependenteDialog(
             }
         }
         successDialogMessage = if (completionHasPendingAttachments) {
-            "Dependentes incluidos. Os anexos estao sendo enviados ao ERP e o cadastro permanecera pendente ate a confirmacao."
+            "Dependentes incluidos. Os anexos estao sendo enviados ao ERP e o cadastro permanecera pendente até a confirmação."
         } else {
             "Dependentes incluidos com sucesso."
         }
@@ -875,12 +875,12 @@ fun InclusaoDependenteDialog(
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
-                            if (isContinuacao) "Continuar inclusao de dependentes" else "Inclusao de dependente",
+                            if (isContinuacao) "Continuar inclusão de dependentes" else "Inclusão de dependente",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                         )
                         Text(
-                            text = if (inclusaoStep == 1) "Etapa 1 de 2 · Localize o responsavel financeiro" else "Etapa 2 de 2 · Dependentes, documentos e envio",
+                            text = if (inclusaoStep == 1) "Etapa 1 de 2 · Localize o responsável financeiro" else "Etapa 2 de 2 · Dependentes, documentos e envio",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -899,7 +899,7 @@ fun InclusaoDependenteDialog(
                     )
                     if (state.vendedores.isEmpty()) {
                         Text(
-                            text = "Nenhum vendedor disponivel. Entre em contato com o administrador.",
+                            text = "Nenhum vendedor disponível. Entre em contato com o administrador.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall,
                         )
@@ -926,7 +926,7 @@ fun InclusaoDependenteDialog(
                                         containerColor = if (codigoSelecionado) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                                         contentColor = if (codigoSelecionado) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                                     ),
-                                ) { Text("Codigo") }
+                                ) { Text("Código") }
                                 Button(
                                     onClick = { tipoBusca = InclusaoBuscaTipo.CPF },
                                     colors = ButtonDefaults.buttonColors(
@@ -939,7 +939,7 @@ fun InclusaoDependenteDialog(
                                 value = valorBusca,
                                 onValueChange = { valorBusca = if (tipoBusca == InclusaoBuscaTipo.CPF) sanitizeDigitsInput(it, 11) else it.copy(text = it.text.filter(Char::isDigit).take(20)) },
                                 modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                                label = { Text(if (tipoBusca == InclusaoBuscaTipo.CODIGO) "Codigo associado" else "CPF associado") },
+                                label = { Text(if (tipoBusca == InclusaoBuscaTipo.CODIGO) "Código associado" else "CPF associado") },
                                 visualTransformation = if (tipoBusca == InclusaoBuscaTipo.CPF) DependenteCpfVisualTransformation() else VisualTransformation.None,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             )
@@ -954,7 +954,7 @@ fun InclusaoDependenteDialog(
                                         if (tipoBusca == InclusaoBuscaTipo.CPF) {
                                             val cpfDigits = query.filter(Char::isDigit)
                                             if (cpfDigits.length != 11) {
-                                                localError = "Informe um CPF valido com 11 digitos."
+                                                localError = "Informe um CPF válido com 11 digitos."
                                                 return@launch
                                             }
                                         }
@@ -1071,7 +1071,7 @@ fun InclusaoDependenteDialog(
                                 Modifier.fillMaxWidth()
                             },
                         ) {
-                            Text("${item.nome} - Codigo ${item.codigo} - ${item.empresa}", modifier = Modifier.fillMaxWidth().padding(10.dp))
+                            Text("${item.nome} - Código ${item.codigo} - ${item.empresa}", modifier = Modifier.fillMaxWidth().padding(10.dp))
                         }
                     }
                     LaunchedEffect(resultados.firstOrNull()?.codigo) {
@@ -1082,7 +1082,7 @@ fun InclusaoDependenteDialog(
                 responsavelSelecionado?.let { responsavel ->
                     WebCard {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("Responsavel: ${responsavel.nome}")
+                            Text("Responsável: ${responsavel.nome}")
                             Text("CPF: ${formatCpf(responsavel.cpf)}")
                             Text("Empresa: ${empresaNome.ifBlank { responsavel.empresa }}")
                         }
@@ -1095,7 +1095,7 @@ fun InclusaoDependenteDialog(
                         onSelected = { selectedAdesionistaId = it },
                     )
                     SelectionField(
-                        label = "Status da Adesao",
+                        label = "Status da Adesão",
                         value = state.statusAdesoes.firstOrNull { it.id == selectedStatusId }?.nome ?: "Nenhum",
                         options = listOf("" to "Selecione") + state.statusAdesoes.map { it.id to it.nome },
                         onSelected = { selectedStatusId = it },
@@ -1199,7 +1199,7 @@ fun InclusaoDependenteDialog(
                                                 consultedCpfByIndex.remove(index)
                                             }
                                             !validateCpf(cpfDigits) -> {
-                                                cpfValidationErrors[index] = "CPF invalido."
+                                                cpfValidationErrors[index] = "CPF inválido."
                                                 consultedCpfByIndex.remove(index)
                                             }
                                             else -> {
@@ -1275,7 +1275,7 @@ fun InclusaoDependenteDialog(
                                         }
                                     },
                                     modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                                    label = { Text("Nome da mae") },
+                                    label = { Text("Nome da mãe") },
                                 )
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Button(onClick = { targetUploadIndex = index; showArquivoSourceModal = true }, enabled = !dep.uploading && !enviando && !salvando) {
@@ -1487,7 +1487,7 @@ fun InclusaoDependenteDialog(
                                 targetUploadIndex = null
                                 localError = CadastroApiErrorMapper.mapUserMessage(
                                     throwable.message,
-                                    "Nao foi possivel iniciar a camera.",
+                                    "Não foi possível iniciar a camera.",
                                 )
                             }
                         },
@@ -1513,9 +1513,9 @@ fun InclusaoDependenteDialog(
             title = { Text("Selecionar status") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Antes de continuar, selecione o status da adesao.")
+                    Text("Antes de continuar, selecione o status da adesão.")
                     SelectionField(
-                        label = "Status da Adesao",
+                        label = "Status da Adesão",
                         value = state.statusAdesoes.firstOrNull { it.id == selectedStatusId }?.nome ?: "Selecione",
                         options = listOf("" to "Selecione") + state.statusAdesoes.map { it.id to it.nome },
                         onSelected = { selectedStatusId = it },
@@ -1526,7 +1526,7 @@ fun InclusaoDependenteDialog(
                 TextButton(
                     onClick = {
                         if (selectedStatusId.isBlank()) {
-                            localError = "Selecione o status da adesao antes de continuar."
+                            localError = "Selecione o status da adesão antes de continuar."
                             return@TextButton
                         }
                         showSelectStatusDialog = false
@@ -1548,7 +1548,7 @@ fun InclusaoDependenteDialog(
         val (container, textColor) = inclusaoMessageToneColors(tone)
         val title = when (tone) {
             InclusaoMessageTone.ERROR -> "Erro"
-            InclusaoMessageTone.ALERT -> "Atencao"
+            InclusaoMessageTone.ALERT -> "Atenção"
             InclusaoMessageTone.WARNING -> "Aviso"
             InclusaoMessageTone.SUCCESS -> "Sucesso"
         }
@@ -1659,8 +1659,8 @@ private fun shouldRetryLemmitRequest(message: String?): Boolean {
         ?.trim()
         .orEmpty()
     if (normalized.isBlank()) return true
-    if (normalized.contains("cpf invalido")) return false
-    if (normalized.contains("nao encontrado")) return false
+    if (normalized.contains("cpf inválido")) return false
+    if (normalized.contains("não encontrado")) return false
     if (normalized.contains("não encontrado")) return false
     if (normalized.contains("forbidden") || normalized.contains("unauthorized")) return false
 
@@ -1951,7 +1951,7 @@ private fun extractDependenteCodes(response: JsonElement): List<Int> {
         )
     }
     val dados = root["data"]?.jsonObject?.get("dados")?.jsonObject
-        ?: throw IllegalStateException("Resposta invalida da API de inclusao de dependentes.")
+        ?: throw IllegalStateException("Resposta inválida da API de inclusão de dependentes.")
     return dados["dependentes"]?.jsonArray?.mapNotNull { item ->
         item.jsonObject["codigo"]?.jsonPrimitive?.intOrNull
     } ?: emptyList()
@@ -2120,7 +2120,7 @@ private fun validateUpload(fileName: String, mimeType: String, size: Long) {
     val lower = fileName.lowercase()
     val acceptedName = lower.endsWith(".pdf") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png")
     val acceptedMime = mimeType in setOf("application/pdf", "image/jpeg", "image/png")
-    if (!acceptedName && !acceptedMime) throw IllegalStateException("Arquivo invalido. Use PDF, JPG ou PNG.")
+    if (!acceptedName && !acceptedMime) throw IllegalStateException("Arquivo inválido. Use PDF, JPG ou PNG.")
     if (size > MAX_UPLOAD_BYTES) throw IllegalStateException("Arquivo excede 10MB.")
 }
 
