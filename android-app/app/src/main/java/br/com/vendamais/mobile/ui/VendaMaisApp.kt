@@ -139,7 +139,7 @@ fun VendaMaisApp(
     state.appUpdateInfo?.let { update ->
         AlertDialog(
             onDismissRequest = viewModel::dismissAppUpdate,
-            title = { Text("Atualizacao disponivel") },
+            title = { Text("Atualização disponível") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Versao mais recente: ${update.versionName}")
@@ -149,7 +149,7 @@ fun VendaMaisApp(
             },
             dismissButton = {
                 TextButton(onClick = viewModel::dismissAppUpdate) {
-                    Text("Agora nao")
+                    Text("Agora não")
                 }
             },
             confirmButton = {
@@ -181,7 +181,7 @@ fun VendaMaisApp(
     state.appUpdateError?.let { message ->
         AlertDialog(
             onDismissRequest = viewModel::dismissAppUpdate,
-            title = { Text("Nao foi possivel atualizar") },
+            title = { Text("Não foi possível atualizar") },
             text = { Text(message) },
             confirmButton = {
                 TextButton(onClick = viewModel::dismissAppUpdate) {
@@ -441,7 +441,7 @@ fun VendaMaisApp(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         buildString {
-                            append("Ja existe um cadastro pendente para este CPF")
+                            append("Já existe um cadastro pendente para este CPF")
                             prompt.empresaNome?.takeIf { it.isNotBlank() }?.let { append(" em $it") }
                             append(".")
                         },
@@ -771,7 +771,7 @@ private fun resolveNavigationGroups(roleRaw: String?): List<AppNavGroupItem> {
         label = "Pessoas",
         icon = Icons.Rounded.Groups,
         modules = listOf(
-            AppNavModule("users", "Usuarios", Icons.Rounded.AccountCircle, MainTab.USERS),
+            AppNavModule("users", "Usuários", Icons.Rounded.AccountCircle, MainTab.USERS),
             AppNavModule("teams", "Equipes", Icons.Rounded.Groups, MainTab.TEAMS),
         ),
     )
