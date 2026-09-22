@@ -36,7 +36,7 @@ import kotlinx.serialization.json.buildJsonArray
 internal fun AdminLoadingCard() {
     VendaLoadingState(
         title = "Carregando dados",
-        message = "Atualizando as informacoes administrativas.",
+        message = "Atualizando as informações administrativas.",
     )
 }
 
