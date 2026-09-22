@@ -306,7 +306,7 @@ fun CadastrosScreen(
         item {
             ScreenHeading(
                 title = "Cadastros",
-                subtitle = "Inicie adesoes, resolva pendencias e acompanhe o que ja foi enviado.",
+                subtitle = "Inicie adesões, resolva pendências e acompanhe o que já foi enviado.",
             )
         }
 
@@ -371,17 +371,17 @@ fun CadastrosScreen(
                     WebCard {
                         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                             Text(
-                                text = "Inclusao de Dependente",
+                                text = "Inclusão de Dependente",
                                 style = MaterialTheme.typography.headlineSmall,
                                 fontWeight = FontWeight.Bold,
                             )
                             Text(
-                                text = "Clique no botao para buscar um responsavel financeiro e adicionar novos dependentes.",
+                                text = "Clique no botao para buscar um responsável financeiro e adicionar novos dependentes.",
                                 color = Slate500,
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                             VendaButton(
-                                label = "Iniciar inclusao de dependente",
+                                label = "Iniciar inclusão de dependente",
                                 onClick = { showInclusaoDialog = true },
                                 modifier = Modifier.fillMaxWidth(),
                                 size = VendaButtonSize.LARGE,
@@ -399,7 +399,7 @@ fun CadastrosScreen(
                         item {
                             VendaLoadingState(
                                 title = "Carregando lista",
-                                message = "Buscando os cadastros mais recentes para voce.",
+                                message = "Buscando os cadastros mais recentes para você.",
                             )
                         }
                     } else {
@@ -417,7 +417,7 @@ fun CadastrosScreen(
                         item {
                             VendaLoadingState(
                                 title = "Carregando lista",
-                                message = "Buscando os cadastros mais recentes para voce.",
+                                message = "Buscando os cadastros mais recentes para você.",
                             )
                         }
                     } else {
@@ -471,7 +471,7 @@ fun CadastrosScreen(
                         item {
                             VendaLoadingState(
                                 title = "Carregando lista",
-                                message = "Buscando os cadastros mais recentes para voce.",
+                                message = "Buscando os cadastros mais recentes para você.",
                             )
                         }
                     } else if (filteredCadastros.isEmpty()) {
@@ -483,7 +483,7 @@ fun CadastrosScreen(
                                     "Nenhum cadastro enviado"
                                 },
                                 message = if (state.cadastroTab == CadastroAreaTab.INCOMPLETOS) {
-                                    "Quando houver adesoes aguardando conclusao, elas aparecerao aqui."
+                                    "Quando houver adesões aguardando conclusão, elas aparecerao aqui."
                                 } else {
                                     "Os cadastros enviados para processamento aparecerao aqui."
                                 },
@@ -534,7 +534,7 @@ private fun CadastrosSupervisorGroupedSection(
     if (cadastros.isEmpty()) {
         WebCard {
             Text(
-                text = "Nenhuma adesao pendente encontrada.",
+                text = "Nenhuma adesão pendente encontrada.",
                 style = MaterialTheme.typography.bodyLarge,
             )
         }
@@ -672,7 +672,7 @@ private fun CadastrosGerenteGroupedSection(
     if (cadastros.isEmpty()) {
         WebCard {
             Text(
-                text = "Nenhuma adesao pendente encontrada.",
+                text = "Nenhuma adesão pendente encontrada.",
                 style = MaterialTheme.typography.bodyLarge,
             )
         }
@@ -855,7 +855,7 @@ private fun groupByVendedorEmpresa(cadastros: List<CadastroResumo>): List<Vended
     return groupedByVendedor.map { (vendedorKey, vendedorCadastros) ->
         val vendedorNome = vendedorCadastros.firstNotNullOfOrNull { cadastro ->
             cadastro.vendedorNome?.takeIf { it.isNotBlank() }
-        } ?: "Vendedor nao identificado"
+        } ?: "Vendedor não identificado"
 
         val empresas = vendedorCadastros
             .groupBy { cadastro ->
@@ -868,7 +868,7 @@ private fun groupByVendedorEmpresa(cadastros: List<CadastroResumo>): List<Vended
                 val first = empresaCadastros.first()
                 EmpresaCadastroGroup(
                     key = "$vendedorKey:$empresaKey",
-                    nome = first.empresaNome?.takeIf { it.isNotBlank() } ?: "Empresa nao informada",
+                    nome = first.empresaNome?.takeIf { it.isNotBlank() } ?: "Empresa não informada",
                     cnpj = first.empresaCnpj,
                     cadastros = empresaCadastros.sortedByDescending { it.updatedAt },
                 )
@@ -900,7 +900,7 @@ private fun groupByEquipeVendedorEmpresa(
     }
 
     return groupedByEquipe.map { (equipeKey, equipeCadastros) ->
-        val equipeNome = teamById[equipeKey]?.name ?: "Equipe nao informada"
+        val equipeNome = teamById[equipeKey]?.name ?: "Equipe não informada"
         EquipeCadastroGroup(
             key = equipeKey,
             nome = equipeNome,
@@ -961,7 +961,7 @@ private fun CadastrosFilterPanel(
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        text = "Mostrando $filteredCount de $totalCount adesoes",
+                        text = "Mostrando $filteredCount de $totalCount adesões",
                         style = MaterialTheme.typography.bodySmall,
                         color = Slate500,
                         maxLines = 2,
@@ -1044,7 +1044,7 @@ private fun CadastrosFilterPanel(
                         value = buscaCodigo,
                         onValueChange = onBuscaCodigoChange,
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                        label = { Text("Codigo da empresa") },
+                        label = { Text("Código da empresa") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
                     )
@@ -1054,19 +1054,19 @@ private fun CadastrosFilterPanel(
                     label = "Tipo",
                     value = when (tipoCadastroFiltro) {
                         "cadastro" -> "Cadastro"
-                        "inclusao_dependente" -> "Inclusao"
+                        "inclusao_dependente" -> "Inclusão"
                         else -> "Todos"
                     },
                     options = listOf(
                         "todos" to "Todos",
                         "cadastro" to "Cadastro",
-                        "inclusao_dependente" to "Inclusao",
+                        "inclusao_dependente" to "Inclusão",
                     ),
                     onSelected = onTipoCadastroFiltroChange,
                 )
 
                 SelectionField(
-                    label = "Status da Adesao",
+                    label = "Status da Adesão",
                     value = statusOptions.firstOrNull { it.first == statusAdesaoFiltro }?.second ?: "Todos os Status",
                     options = listOf("" to "Todos os Status") + statusOptions,
                     onSelected = onStatusAdesaoFiltroChange,
@@ -1082,7 +1082,7 @@ private fun CadastrosFilterPanel(
                 }
 
                 DateFilterField(
-                    label = "Data inicio",
+                    label = "Data início",
                     value = dataInicioFiltro,
                     onValueChange = onDataInicioFiltroChange,
                 )
@@ -1264,7 +1264,7 @@ fun CadastroDetailDialog(
                 DetailLine("Empresa", cadastro.empresaNome ?: "-")
                 DetailLine("Vendedor", cadastro.vendedorNome ?: "-")
                 DetailLine("Adesionista", cadastro.adesionistaNome ?: "-")
-                DetailLine("Matricula", cadastro.numeroMatricula ?: "-")
+                DetailLine("Matrícula", cadastro.numeroMatricula ?: "-")
                 DetailLine("Arquivo", cadastro.arquivoPath ?: "-")
                 DetailLine("Data de envio", cadastro.dataEnvio?.let(::formatDateTime) ?: "-")
                 DetailLine("Atualizado", formatDateTime(cadastro.updatedAt))
@@ -1341,7 +1341,7 @@ private fun CadastroCard(
             )
             if (isPendingCadastro) {
                 SelectionField(
-                    label = "Status da adesao",
+                    label = "Status da adesão",
                     value = statusNome,
                     options = listOf("" to "Selecione") + state.statusAdesoes.map { it.id to it.nome },
                     onSelected = { statusId ->
@@ -1360,7 +1360,7 @@ private fun CadastroCard(
                             }.onFailure { throwable ->
                                 statusError = CadastroApiErrorMapper.mapUserMessage(
                                     throwable.message,
-                                    "Falha ao atualizar status da adesao.",
+                                    "Falha ao atualizar status da adesão.",
                                 )
                             }
                             updatingStatus = false
@@ -1430,7 +1430,7 @@ private fun formatDateTime(value: String): String {
 
 private fun tipoCadastroLabel(value: String): String {
     return when (value) {
-        "inclusao_dependente" -> "Inclusao de Dependente"
+        "inclusao_dependente" -> "Inclusão de Dependente"
         else -> "Cadastro"
     }
 }
