@@ -30,7 +30,7 @@ fun CadastroOverlayDialogs(
         is CadastroOverlayIntent.ObservacoesEmpresa -> {
             AlertDialog(
                 onDismissRequest = viewModel::dismissCadastroOverlay,
-                title = { Text("Observacoes da empresa") },
+                title = { Text("Observações da empresa") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Empresa: ${overlay.empresaNome}")
@@ -52,7 +52,7 @@ fun CadastroOverlayDialogs(
                 text = {
                     VendaInlineFeedback(
                         title = "Cadastro indisponivel para esta empresa",
-                        message = "A empresa ${overlay.empresaNome} esta com situacao bloqueada para novos cadastros.",
+                        message = "A empresa ${overlay.empresaNome} esta com situação bloqueada para novos cadastros.",
                         tone = VendaFeedbackTone.WARNING,
                     )
                 },
@@ -67,13 +67,13 @@ fun CadastroOverlayDialogs(
         is CadastroOverlayIntent.EmpresaNaoIdentificada -> {
             AlertDialog(
                 onDismissRequest = viewModel::dismissCadastroOverlay,
-                title = { Text("Empresa nao identificada") },
+                title = { Text("Empresa não identificada") },
                 text = {
                     Text(
                         if (overlay.required) {
-                            "Para continuar inclusao de dependente, selecione uma empresa valida."
+                            "Para continuar inclusão de dependente, selecione uma empresa válida."
                         } else {
-                            "A empresa nao foi identificada. Revise os dados antes de continuar."
+                            "A empresa não foi identificada. Revise os dados antes de continuar."
                         },
                     )
                 },
@@ -91,7 +91,7 @@ fun CadastroOverlayDialogs(
                 title = { Text("Limite Lemmit") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("O limite de consultas Lemmit foi atingido para este usuario.")
+                        Text("O limite de consultas Lemmit foi atingido para este usuário.")
                         overlay.limiteFormatado?.let { Text("Limite: $it") }
                         overlay.consumoFormatado?.let { Text("Consumo: $it") }
                         overlay.saldoFormatado?.let { Text("Saldo: $it") }
@@ -111,8 +111,8 @@ fun CadastroOverlayDialogs(
                 title = { Text("Consulta indisponivel") },
                 text = {
                     VendaInlineFeedback(
-                        title = "Nao foi possivel preencher os dados automaticamente",
-                        message = "Voce pode continuar o cadastro e preencher as informacoes manualmente.",
+                        title = "Não foi possível preencher os dados automaticamente",
+                        message = "Você pode continuar o cadastro e preencher as informações manualmente.",
                         tone = VendaFeedbackTone.WARNING,
                     )
                 },
@@ -129,16 +129,16 @@ fun CadastroOverlayDialogs(
             var vendedorNome by remember { mutableStateOf("") }
             AlertDialog(
                 onDismissRequest = viewModel::dismissCadastroOverlay,
-                title = { Text("Parceiro invalido") },
+                title = { Text("Parceiro inválido") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(overlay.message)
-                        Text("Informe um vendedor valido para tentar novamente.")
+                        Text("Informe um vendedor válido para tentar novamente.")
                         OutlinedTextField(
                             value = vendedorCodigo,
                             onValueChange = { vendedorCodigo = it.filter(Char::isDigit) },
                             modifier = androidx.compose.ui.Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                            label = { Text("Codigo vendedor") },
+                            label = { Text("Código vendedor") },
                             singleLine = true,
                         )
                         OutlinedTextField(
@@ -202,7 +202,7 @@ fun CadastroOverlayDialogs(
                             value = motivo,
                             onValueChange = { motivo = it },
                             modifier = androidx.compose.ui.Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                            label = { Text("Motivo exclusao") },
+                            label = { Text("Motivo exclusão") },
                         )
                     }
                 },
@@ -216,7 +216,7 @@ fun CadastroOverlayDialogs(
                         onClick = {
                             viewModel.deleteCadastroByOverlay(
                                 cadastroId = overlay.cadastroId,
-                                motivoExclusao = motivo.ifBlank { "Exclusao via app mobile" },
+                                motivoExclusao = motivo.ifBlank { "Exclusão via app mobile" },
                             )
                         },
                     ) {
@@ -229,7 +229,7 @@ fun CadastroOverlayDialogs(
         is CadastroOverlayIntent.AlreadyExists -> {
             AlertDialog(
                 onDismissRequest = viewModel::dismissCadastroOverlay,
-                title = { Text("Cadastro ja existe") },
+                title = { Text("Cadastro já existe") },
                 text = { Text("CPF ${overlay.cpf}. ${overlay.summary}") },
                 confirmButton = {
                     TextButton(onClick = viewModel::dismissCadastroOverlay) {
@@ -277,7 +277,7 @@ fun CadastroOverlayDialogs(
             AlertDialog(
                 onDismissRequest = viewModel::dismissCadastroOverlay,
                 title = { Text("Documento selecionado") },
-                text = { Text("O documento esta pronto para visualizacao no fluxo atual.") },
+                text = { Text("O documento esta pronto para visualização no fluxo atual.") },
                 confirmButton = {
                     TextButton(onClick = viewModel::dismissCadastroOverlay) {
                         Text("Fechar")
@@ -289,8 +289,8 @@ fun CadastroOverlayDialogs(
         CadastroOverlayIntent.SelectStatus -> {
             AlertDialog(
                 onDismissRequest = viewModel::dismissCadastroOverlay,
-                title = { Text("Status obrigatorio") },
-                text = { Text("Selecione um status de adesao antes de fechar o fluxo.") },
+                title = { Text("Status obrigatório") },
+                text = { Text("Selecione um status de adesão antes de fechar o fluxo.") },
                 confirmButton = {
                     TextButton(onClick = viewModel::dismissCadastroOverlay) {
                         Text("OK")
