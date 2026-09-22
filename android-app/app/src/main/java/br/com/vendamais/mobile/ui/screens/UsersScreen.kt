@@ -90,8 +90,8 @@ fun UsersScreen(
     ) {
         item {
             ScreenHeading(
-                title = "Usuarios",
-                subtitle = "Gerencie acesso, funcao, equipe e identificacao operacional de cada pessoa.",
+                title = "Usuários",
+                subtitle = "Gerencie acesso, função, equipe e identificação operacional de cada pessoa.",
             )
         }
 
@@ -102,7 +102,7 @@ fun UsersScreen(
             ) {
                 UserMetric(
                     value = state.adminUsers.size.toString(),
-                    label = "Usuarios",
+                    label = "Usuários",
                     modifier = Modifier.weight(1f),
                 )
                 UserMetric(
@@ -125,13 +125,13 @@ fun UsersScreen(
                         value = searchTerm,
                         onValueChange = { searchTerm = it },
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                        label = { Text("Buscar usuario") },
+                        label = { Text("Buscar usuário") },
                         placeholder = { Text("Nome ou email") },
                         singleLine = true,
                     )
                     if (canCreate) {
                         VendaButton(
-                            label = "Adicionar usuario",
+                            label = "Adicionar usuário",
                             onClick = {
                                 userSubmitError = null
                                 userSubmitting = false
@@ -166,7 +166,7 @@ fun UsersScreen(
         if (state.adminLoading && state.adminUsers.isEmpty()) {
             item { AdminLoadingCard() }
         } else if (filteredUsers.isEmpty()) {
-            item { EmptyAdminCard("Nenhum usuario encontrado.") }
+            item { EmptyAdminCard("Nenhum usuário encontrado.") }
         } else {
             items(filteredUsers) { user ->
                 WebCard(modifier = Modifier.fillMaxWidth()) {
@@ -241,7 +241,7 @@ fun UsersScreen(
 
     if (creatingUser) {
         UserEditorSheet(
-            title = "Novo Usuario",
+            title = "Novo Usuário",
             teams = state.adminTeams,
             canEditRole = canEditRole,
             submitError = userSubmitError,
@@ -258,7 +258,7 @@ fun UsersScreen(
                     runCatching { viewModel.createUser(form.toCreatePayload()) }
                         .onSuccess { creatingUser = false }
                         .onFailure { throwable ->
-                            userSubmitError = throwable.message ?: "Falha ao salvar usuario."
+                            userSubmitError = throwable.message ?: "Falha ao salvar usuário."
                         }
                     userSubmitting = false
                 }
@@ -268,7 +268,7 @@ fun UsersScreen(
 
     editingUser?.let { user ->
         UserEditorSheet(
-            title = "Editar Usuario",
+            title = "Editar Usuário",
             teams = state.adminTeams,
             canEditRole = canEditRole,
             initialUser = user,
@@ -286,7 +286,7 @@ fun UsersScreen(
                     runCatching { viewModel.updateUser(user.id, form.toUpdatePayload(canEditRole, user)) }
                         .onSuccess { editingUser = null }
                         .onFailure { throwable ->
-                            userSubmitError = throwable.message ?: "Falha ao atualizar usuario."
+                            userSubmitError = throwable.message ?: "Falha ao atualizar usuário."
                         }
                     userSubmitting = false
                 }
@@ -341,7 +341,7 @@ private fun UserEditorSheet(
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = "Dados de acesso e vinculo operacional.",
+                    text = "Dados de acesso e vínculo operacional.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -418,7 +418,7 @@ private fun UserEditorSheet(
                             color = Amber100,
                         ) {
                             Text(
-                                text = "Esta funcao exige ID Externo e Equipe para manter o vinculo com o ERP.",
+                                text = "Esta função exige ID Externo e Equipe para manter o vínculo com o ERP.",
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Amber500,
@@ -457,7 +457,7 @@ private fun UserEditorSheet(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text("Acesso ativo", fontWeight = FontWeight.Medium)
                                 Text(
-                                    text = "Desative para impedir novos logins sem excluir o usuario.",
+                                    text = "Desative para impedir novos logins sem excluir o usuário.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
