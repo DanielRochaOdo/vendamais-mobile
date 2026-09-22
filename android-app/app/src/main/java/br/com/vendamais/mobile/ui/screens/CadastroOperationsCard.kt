@@ -121,7 +121,7 @@ fun CadastroOperationsCard(
         Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = "Nova adesao",
+                    text = "Nova adesão",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
@@ -152,7 +152,7 @@ fun CadastroOperationsCard(
                         label = {
                             Text(
                                 when (workspace.empresaSearchType) {
-                                    EmpresaSearchType.CODIGO -> "Codigo da empresa"
+                                    EmpresaSearchType.CODIGO -> "Código da empresa"
                                     EmpresaSearchType.CNPJ -> "CNPJ"
                                     EmpresaSearchType.NOME -> "Nome da empresa"
                                 },
@@ -161,7 +161,7 @@ fun CadastroOperationsCard(
                         placeholder = {
                             Text(
                                 when (workspace.empresaSearchType) {
-                                    EmpresaSearchType.CODIGO -> "Digite o codigo"
+                                    EmpresaSearchType.CODIGO -> "Digite o código"
                                     EmpresaSearchType.CNPJ -> "00.000.000/0000-00"
                                     EmpresaSearchType.NOME -> "Digite o nome da empresa"
                                 },
@@ -233,7 +233,7 @@ fun CadastroOperationsCard(
                                         }
                                         Text(
                                             text = buildString {
-                                                append("Codigo ${empresa.id}")
+                                                append("Código ${empresa.id}")
                                                 if (empresa.cnpj.isNotBlank()) append(" · ${empresa.cnpj}")
                                             },
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -260,7 +260,7 @@ fun CadastroOperationsCard(
 
                 OperationStepHeader(
                     number = "2",
-                    title = "Responsaveis e CPF",
+                    title = "Responsáveis e CPF",
                     completed = false,
                 )
 
@@ -276,7 +276,7 @@ fun CadastroOperationsCard(
                     )
                     if (vendedores.isEmpty()) {
                         Text(
-                            text = "Nenhum vendedor disponivel. Entre em contato com o administrador.",
+                            text = "Nenhum vendedor disponível. Entre em contato com o administrador.",
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall,
                         )
@@ -285,7 +285,7 @@ fun CadastroOperationsCard(
                     OutlinedTextField(
                         value = buildString {
                             append(profile?.name.orEmpty())
-                            append(" · Codigo ")
+                            append(" · Código ")
                             append(profile?.externalId?.takeIf { it.isNotBlank() } ?: "-")
                         },
                         onValueChange = {},
@@ -347,9 +347,9 @@ fun CadastroOperationsCard(
                 if (workspace.operationLoading) {
                     VendaLoadingState(
                         title = "Buscando dados da pessoa",
-                        message = "Estamos verificando as informacoes para adiantar seu cadastro.",
+                        message = "Estamos verificando as informações para adiantar seu cadastro.",
                         slowMessage = if (showSlowCpfLookup) {
-                            "Esta demorando um pouco mais que o normal. Voce pode aguardar sem repetir a consulta."
+                            "Esta demorando um pouco mais que o normal. Você pode aguardar sem repetir a consulta."
                         } else {
                             null
                         },
@@ -446,7 +446,7 @@ private fun SelectedEmpresaCard(
                     }
                     Text(
                         text = buildString {
-                            append("Codigo ${empresa.id}")
+                            append("Código ${empresa.id}")
                             if (empresa.cnpj.isNotBlank()) append(" · ${empresa.cnpj}")
                         },
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -490,7 +490,7 @@ private fun SearchTypeRow(
     ) {
         SearchTypePill(
             modifier = Modifier.weight(1f),
-            label = "Codigo",
+            label = "Código",
             selected = selected == EmpresaSearchType.CODIGO,
             onClick = { onSelected(EmpresaSearchType.CODIGO) },
         )
@@ -538,7 +538,7 @@ private fun SearchTypePill(
 
 private fun TeamMemberOption.toSelectionLabel(): String {
     val codigo = externalId?.takeIf { it.isNotBlank() } ?: "-"
-    return "$name · Codigo $codigo"
+    return "$name · Código $codigo"
 }
 
 private class CpfVisualTransformation : VisualTransformation {
