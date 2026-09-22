@@ -74,7 +74,7 @@ fun DashboardScreen(
         item {
             ScreenHeading(
                 title = "Visao geral",
-                subtitle = "Acompanhe a operacao do mes atual",
+                subtitle = "Acompanhe a operação do mes atual",
             )
         }
 
@@ -149,7 +149,7 @@ fun DashboardScreen(
 
         item {
             MetricSection(
-                title = "Inclusao de dependente",
+                title = "Inclusão de dependente",
                 total = state.cadastroStats.inclusao_total,
                 pendentes = state.cadastroStats.inclusao_incompletos,
                 enviados = state.cadastroStats.inclusao_enviados,
@@ -202,7 +202,7 @@ fun DashboardScreen(
                     ) {
                         SystemMetric(
                             modifier = Modifier.weight(1f),
-                            label = "Usuarios",
+                            label = "Usuários",
                             value = state.systemOverview.totalUsers,
                         )
                         SystemMetric(
@@ -493,7 +493,7 @@ private fun StatsByVendedorSheet(
             if (sortedStats.isEmpty()) {
                 WebCard {
                     Text(
-                        text = "Nenhum dado disponivel.",
+                        text = "Nenhum dado disponível.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -542,11 +542,11 @@ private fun StatsByVendedorSheet(
 private fun roleDescription(role: String): String {
     return when (role) {
         "ADMINISTRADOR", "ADMIN" -> "Acesso total ao sistema"
-        "GERENTE", "GESTOR" -> "Gerenciamento de equipes e usuarios"
+        "GERENTE", "GESTOR" -> "Gerenciamento de equipes e usuários"
         "SUPERVISOR" -> "Supervisao de equipe"
         "VENDEDOR" -> "Execucao de vendas"
-        "ADESIONISTA" -> "Processos de adesao"
-        "CADASTRO" -> "Operacao de cadastros"
+        "ADESIONISTA" -> "Processos de adesão"
+        "CADASTRO" -> "Operação de cadastros"
         else -> ""
     }
 }
