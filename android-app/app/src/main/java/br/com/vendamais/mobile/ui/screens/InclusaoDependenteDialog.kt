@@ -440,7 +440,7 @@ fun InclusaoDependenteDialog(
         if (dep.sexo !in setOf(0, 1)) return "Dependente ${index + 1}: sexo obrigatório."
         if (dep.parentesco == 0) return "Dependente ${index + 1}: parentesco obrigatório."
         if (dep.plano == 0) return "Dependente ${index + 1}: plano obrigatório."
-        if (dep.nomeMae.isBlank()) return "Dependente ${index + 1}: nome da mãé obrigatório."
+        if (dep.nomeMae.isBlank()) return "Dependente ${index + 1}: nome da mãe é obrigatório."
         if (state.cadastroWorkspace.config?.exigirArquivo == true && dep.arquivo == null) {
             return "Dependente ${index + 1}: arquivo obrigatório."
         }
@@ -1659,8 +1659,8 @@ private fun shouldRetryLemmitRequest(message: String?): Boolean {
         ?.trim()
         .orEmpty()
     if (normalized.isBlank()) return true
-    if (normalized.contains("cpf inválido")) return false
-    if (normalized.contains("não encontrado")) return false
+    if (normalized.contains("cpf invalido")) return false
+    if (normalized.contains("nao encontrado")) return false
     if (normalized.contains("não encontrado")) return false
     if (normalized.contains("forbidden") || normalized.contains("unauthorized")) return false
 
