@@ -192,7 +192,7 @@ fun PublicAdesaoParityScreen(
                     link = result.link
                 } else {
                     invalidConsultant = result.consultant
-                    error = result.error ?: "Link invalido ou inativo."
+                    error = result.error ?: "Link inválido ou inativo."
                 }
             }
             .onFailure {
@@ -320,7 +320,7 @@ fun PublicAdesaoParityScreen(
                 }
                 notice?.let {
                     VendaInlineFeedback(
-                        title = "Informacao",
+                        title = "Informação",
                         message = it,
                         tone = VendaFeedbackTone.SUCCESS,
                     )
@@ -331,12 +331,12 @@ fun PublicAdesaoParityScreen(
                         WebCard {
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text(
-                                    "Vamos comecar sua adesao",
+                                    "Vamos começar sua adesão",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold,
                                 )
                                 Text(
-                                    "Informe CPF e data de nascimento do responsavel financeiro para validar sua identidade.",
+                                    "Informe CPF e data de nascimento do responsável financeiro para validar sua identidade.",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -388,7 +388,7 @@ fun PublicAdesaoParityScreen(
                                                         val person = response.person
                                                         val sessionToken = response.attemptToken
                                                         if (person == null || sessionToken.isNullOrBlank()) {
-                                                            error = "Nao foi possivel iniciar a adesao."
+                                                            error = "Não foi possível iniciar a adesão."
                                                         } else {
                                                             attemptToken = sessionToken
                                                             cpf = person.cpf?.filter(Char::isDigit)?.take(11)
@@ -434,12 +434,12 @@ fun PublicAdesaoParityScreen(
                                                             setStage(PublicStage.DETAILS)
                                                         }
                                                     }
-                                                    else -> error = response.error ?: "Nao foi possivel validar seus dados."
+                                                    else -> error = response.error ?: "Não foi possível validar seus dados."
                                                 }
                                             }.onFailure {
                                                 error = CadastroApiErrorMapper.mapUserMessage(
                                                     it.message,
-                                                    "Nao foi possivel validar seus dados.",
+                                                    "Não foi possível validar seus dados.",
                                                 )
                                             }
                                             busy = false
@@ -484,7 +484,7 @@ fun PublicAdesaoParityScreen(
                                     nomeMae,
                                     { nomeMae = it },
                                     modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                                    label = { Text("Nome da mae") },
+                                    label = { Text("Nome da mãe") },
                                     enabled = !busy,
                                 )
                                 if (currentLink.empresaExigeMatricula == 1) {
@@ -492,7 +492,7 @@ fun PublicAdesaoParityScreen(
                                         numeroMatricula,
                                         { numeroMatricula = it },
                                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                                        label = { Text("Matricula") },
+                                        label = { Text("Matrícula") },
                                         enabled = !busy,
                                     )
                                 }
@@ -511,7 +511,7 @@ fun PublicAdesaoParityScreen(
                         WebCard {
                             Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                                 Text(
-                                    "Endereco",
+                                    "Endereço",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold,
                                 )
@@ -528,7 +528,7 @@ fun PublicAdesaoParityScreen(
                                         onClick = {
                                             val cepDigits = cep.filter(Char::isDigit)
                                             if (cepDigits.length != 8) {
-                                                error = "Informe um CEP valido."
+                                                error = "Informe um CEP válido."
                                             } else {
                                                 busy = true
                                                 error = null
@@ -541,7 +541,7 @@ fun PublicAdesaoParityScreen(
                                                     }.onSuccess { response ->
                                                         val address = response.dados
                                                         if (!response.ok || address == null) {
-                                                            error = response.error ?: "CEP nao localizado."
+                                                            error = response.error ?: "CEP não localizado."
                                                         } else {
                                                             cep = cepDigits
                                                             tipoLogradouro = address.tipoLogradouro.orEmpty()
@@ -557,7 +557,7 @@ fun PublicAdesaoParityScreen(
                                                     }.onFailure {
                                                         error = CadastroApiErrorMapper.mapUserMessage(
                                                             it.message,
-                                                            "Nao foi possivel consultar o CEP.",
+                                                            "Não foi possível consultar o CEP.",
                                                         )
                                                     }
                                                     busy = false
@@ -581,7 +581,7 @@ fun PublicAdesaoParityScreen(
                                         numero,
                                         { numero = it },
                                         modifier = Modifier.weight(1f).bringIntoViewOnFocus(),
-                                        label = { Text("Numero") },
+                                        label = { Text("Número") },
                                         enabled = !busy,
                                     )
                                     OutlinedTextField(
@@ -629,11 +629,11 @@ fun PublicAdesaoParityScreen(
                                 val depCpf = dep.cpf.filter(Char::isDigit)
                                 val holderCpf = cpf.filter(Char::isDigit)
                                 if (!CadastroPayloadBuilder.validateCpf(depCpf)) {
-                                    error = "Informe um CPF valido para o dependente."
+                                    error = "Informe um CPF válido para o dependente."
                                     return@DependentsCard
                                 }
                                 if (depCpf == holderCpf) {
-                                    error = "O CPF do dependente nao pode ser o mesmo do responsavel financeiro."
+                                    error = "O CPF do dependente não pode ser o mesmo do responsável financeiro."
                                     return@DependentsCard
                                 }
                                 dependentLookupKey = dep.key
@@ -647,7 +647,7 @@ fun PublicAdesaoParityScreen(
                                             if (response.canContinue) {
                                                 notice = response.error?.let { "$it. Preencha os dados manualmente." }
                                             } else {
-                                                error = response.error ?: "Nao foi possivel consultar o dependente."
+                                                error = response.error ?: "Não foi possível consultar o dependente."
                                             }
                                         } else {
                                             dependentes[index] = dep.copy(
@@ -664,7 +664,7 @@ fun PublicAdesaoParityScreen(
                                     }.onFailure {
                                         error = CadastroApiErrorMapper.mapUserMessage(
                                             it.message,
-                                            "Nao foi possivel consultar o dependente.",
+                                            "Não foi possível consultar o dependente.",
                                         )
                                     }
                                     dependentLookupKey = null
@@ -683,11 +683,11 @@ fun PublicAdesaoParityScreen(
                         WebCard {
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text(
-                                    "Revise sua adesao",
+                                    "Revise sua adesão",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold,
                                 )
-                                ReviewLine("Responsavel financeiro", nome)
+                                ReviewLine("Responsável financeiro", nome)
                                 ReviewLine("CPF", formatCpf(cpf))
                                 ReviewLine(
                                     "Plano do titular",
@@ -722,7 +722,7 @@ fun PublicAdesaoParityScreen(
                         WebCard {
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text(
-                                    "Contrato de adesao",
+                                    "Contrato de adesão",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold,
                                 )
@@ -967,7 +967,7 @@ fun PublicAdesaoParityScreen(
                                         )
                                     }.onSuccess { response ->
                                         if (!response.ok) {
-                                            error = response.error ?: "Nao foi possivel concluir a adesao."
+                                            error = response.error ?: "Não foi possível concluir a adesão."
                                         } else {
                                             successMessage = if (response.message?.contains("processada", ignoreCase = true) == true) {
                                                 "Recebemos sua adesão e ela está sendo processada. Não é necessário preencher novamente."
@@ -979,7 +979,7 @@ fun PublicAdesaoParityScreen(
                                     }.onFailure {
                                         error = CadastroApiErrorMapper.mapUserMessage(
                                             it.message,
-                                            "Nao foi possivel concluir a adesao.",
+                                            "Não foi possível concluir a adesão.",
                                         )
                                     }
                                     busy = false
@@ -1007,7 +1007,7 @@ fun PublicAdesaoParityScreen(
             title = { Text("Confirme seu e-mail") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("O contrato sera enviado para este endereco. Voce pode corrigi-lo antes de continuar.")
+                    Text("O contrato será enviado para este endereço. Você pode corrigi-lo antes de continuar.")
                     OutlinedTextField(
                         value = emailToConfirm,
                         onValueChange = { emailToConfirm = it },
@@ -1028,7 +1028,7 @@ fun PublicAdesaoParityScreen(
                 TextButton(
                     onClick = prepare@{
                         if (!isValidEmail(emailToConfirm)) {
-                            error = "Confirme um e-mail valido."
+                            error = "Confirme um e-mail válido."
                             return@prepare
                         }
                         val payload = buildContractPayload(
@@ -1069,9 +1069,9 @@ fun PublicAdesaoParityScreen(
                                         response.code == "CONTRACT_NOT_CONFIGURED" &&
                                         response.missingPlans.isNotEmpty()
                                     ) {
-                                        "Contrato ainda nao configurado para o(s) plano(s): ${response.missingPlans.joinToString(", ")}."
+                                        "Contrato ainda não configurado para o(s) plano(s): ${response.missingPlans.joinToString(", ")}."
                                     } else {
-                                        response.error ?: "Nao foi possivel preparar o contrato."
+                                        response.error ?: "Não foi possível preparar o contrato."
                                     }
                                 } else {
                                     contractToken = response.contractToken
@@ -1087,7 +1087,7 @@ fun PublicAdesaoParityScreen(
                             }.onFailure {
                                 error = CadastroApiErrorMapper.mapUserMessage(
                                     it.message,
-                                    "Nao foi possivel preparar o contrato.",
+                                    "Não foi possível preparar o contrato.",
                                 )
                             }
                             busy = false
@@ -1111,7 +1111,7 @@ private fun PublicLoadingScreen() {
         ) {
             OdontoartBrandMark(modifier = Modifier.fillMaxWidth())
             VendaLoadingState(
-                title = "Preparando sua adesao",
+                title = "Preparando sua adesão",
                 message = "Estamos carregando os dados necessarios para iniciar.",
             )
         }
@@ -1348,7 +1348,7 @@ private fun DependentsCard(
                         dep.nomeMae,
                         { items[index] = dep.copy(nomeMae = it) },
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                        label = { Text("Nome da mae") },
+                        label = { Text("Nome da mãe") },
                         enabled = !disabled,
                     )
                     PublicChoiceField(
@@ -1443,20 +1443,20 @@ private fun validateDetails(
     cidade: String,
     uf: String,
 ): String? {
-    if (nome.trim().isBlank()) return "Campo obrigatorio: Nome Completo."
-    if (!isIsoDate(dataNascimento)) return "Campo obrigatorio: Data de Nascimento valida."
-    if (sexo !in setOf(0, 1)) return "Campo obrigatorio: Sexo."
-    if (nomeMae.trim().isBlank()) return "Campo obrigatorio: Nome da Mae."
+    if (nome.trim().isBlank()) return "Campo obrigatório: Nome Completo."
+    if (!isIsoDate(dataNascimento)) return "Campo obrigatório: Data de Nascimento válida."
+    if (sexo !in setOf(0, 1)) return "Campo obrigatório: Sexo."
+    if (nomeMae.trim().isBlank()) return "Campo obrigatório: Nome da Mãe."
     if (titularPlano <= 0) return "Selecione um plano para o titular."
-    if (exigeMatricula == 1 && matricula.trim().isBlank()) return "Campo obrigatorio: Matricula."
+    if (exigeMatricula == 1 && matricula.trim().isBlank()) return "Campo obrigatório: Matrícula."
 
     val phone = contatos.firstOrNull {
         it.tipo in setOf("celular", "fixo", "whatsapp") && it.valor.filter(Char::isDigit).length >= 10
     }
-    if (phone == null) return "Informe um telefone valido."
+    if (phone == null) return "Informe um telefone válido."
 
     val email = contatos.firstOrNull { it.tipo == "email" && isValidEmail(it.valor) }
-    if (email == null) return "Informe um e-mail valido."
+    if (email == null) return "Informe um e-mail válido."
 
     if (
         cep.filter(Char::isDigit).length != 8 ||
@@ -1466,7 +1466,7 @@ private fun validateDetails(
         cidade.isBlank() ||
         uf.length != 2
     ) {
-        return "Complete o endereco antes de continuar."
+        return "Complete o endereço antes de continuar."
     }
     return null
 }
@@ -1479,14 +1479,14 @@ private fun validateDependents(
     dependentes.forEachIndexed { index, dep ->
         val depCpf = dep.cpf.filter(Char::isDigit)
         if (!CadastroPayloadBuilder.validateCpf(depCpf)) {
-            return "Dependente ${index + 1}: informe um CPF valido."
+            return "Dependente ${index + 1}: informe um CPF válido."
         }
         if (!seenCpfs.add(depCpf)) return "Existem CPFs duplicados no cadastro."
         if (dep.tipo <= 1) return "Dependente ${index + 1}: selecione o grau de parentesco."
-        if (dep.nome.isBlank()) return "Dependente ${index + 1}: nome e obrigatorio."
-        if (!isIsoDate(dep.dataNascimento)) return "Dependente ${index + 1}: data de nascimento invalida."
-        if (dep.sexo !in setOf(0, 1)) return "Dependente ${index + 1}: sexo e obrigatorio."
-        if (dep.nomeMae.isBlank()) return "Dependente ${index + 1}: nome da mae e obrigatorio."
+        if (dep.nome.isBlank()) return "Dependente ${index + 1}: nome é obrigatório."
+        if (!isIsoDate(dep.dataNascimento)) return "Dependente ${index + 1}: data de nascimento inválida."
+        if (dep.sexo !in setOf(0, 1)) return "Dependente ${index + 1}: sexo é obrigatório."
+        if (dep.nomeMae.isBlank()) return "Dependente ${index + 1}: nome da mãe é obrigatório."
         if (dep.plano <= 0) return "Dependente ${index + 1}: selecione um plano."
     }
     return null
