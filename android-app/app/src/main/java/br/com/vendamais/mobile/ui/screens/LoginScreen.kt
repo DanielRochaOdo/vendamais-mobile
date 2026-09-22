@@ -112,7 +112,7 @@ fun LoginScreen(
                         onValueChange = onEmailChange,
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("E-mail") },
-                        placeholder = { Text("seu.usuario@odontoart.com.br") },
+                        placeholder = { Text("seu.usuário@odontoart.com.br") },
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Email,
                             imeAction = ImeAction.Next,
@@ -156,7 +156,7 @@ fun LoginScreen(
 
                     state.errorMessage?.let { message ->
                         VendaInlineFeedback(
-                            title = "Nao foi possivel entrar",
+                            title = "Não foi possível entrar",
                             message = message,
                             tone = VendaFeedbackTone.ERROR,
                         )
@@ -164,8 +164,8 @@ fun LoginScreen(
 
                     if (state.configurationMissing) {
                         VendaInlineFeedback(
-                            title = "Configuracao do aplicativo incompleta",
-                            message = "Contate o suporte responsavel pelo Venda+ para liberar o acesso.",
+                            title = "Configuração do aplicativo incompleta",
+                            message = "Contate o suporte responsável pelo Venda+ para liberar o acesso.",
                             tone = VendaFeedbackTone.WARNING,
                         )
                     }
@@ -190,7 +190,7 @@ fun LoginScreen(
             }
             Spacer(modifier = Modifier.height(VendaSpacing.x2))
             Text(
-                text = "Acesso restrito a usuarios autorizados",
+                text = "Acesso restrito a usuários autorizados",
                 style = MaterialTheme.typography.labelSmall,
                 color = White.copy(alpha = 0.82f),
             )
