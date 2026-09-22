@@ -107,7 +107,7 @@ fun ProfileScreen(
             }
         }
 
-        WebCard(title = "Informacoes pessoais") {
+        WebCard(title = "Informações pessoais") {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 if (editing) {
                     OutlinedTextField(
@@ -131,7 +131,7 @@ fun ProfileScreen(
                         value = externalId,
                         onValueChange = { externalId = it },
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                        label = { Text("Codigo do usuario (ID Externo)") },
+                        label = { Text("Código do usuário (ID Externo)") },
                         singleLine = true,
                     )
                     InfoRow("Equipe", state.team?.name ?: "-")
@@ -139,7 +139,7 @@ fun ProfileScreen(
 
                     error?.let { message ->
                         VendaInlineFeedback(
-                            title = "Nao foi possivel salvar o perfil",
+                            title = "Não foi possível salvar o perfil",
                             message = message,
                             tone = VendaFeedbackTone.ERROR,
                         )
@@ -167,7 +167,7 @@ fun ProfileScreen(
                             onClick = {
                                 val digits = telefone.filter(Char::isDigit)
                                 when {
-                                    name.trim().isBlank() -> error = "Nome e obrigatorio."
+                                    name.trim().isBlank() -> error = "Nome é obrigatório."
                                     digits.isNotBlank() && digits.length != 11 -> {
                                         error = "Telefone deve estar no formato (XX) XXXXX XXXX."
                                     }
@@ -184,7 +184,7 @@ fun ProfileScreen(
                                             }.onSuccess {
                                                 editing = false
                                             }.onFailure { throwable ->
-                                                error = "Nao foi possivel atualizar o perfil agora. Tente novamente."
+                                                error = "Não foi possível atualizar o perfil agora. Tente novamente."
                                             }
                                             saving = false
                                         }
@@ -201,7 +201,7 @@ fun ProfileScreen(
                     InfoRow("Email", profile.email)
                     InfoRow("Telefone", formatProfilePhone(profile.telefone.orEmpty()).ifBlank { "-" })
                     InfoRow("Funcao", roleLabel(profile.role))
-                    InfoRow("Codigo do usuario (ID Externo)", profile.externalId ?: "-")
+                    InfoRow("Código do usuário (ID Externo)", profile.externalId ?: "-")
                     InfoRow("Equipe", state.team?.name ?: "-")
                     InfoRow("Membro desde", profile.createdAt?.let(::formatProfileDate) ?: "-")
                     VendaButton(
@@ -244,7 +244,7 @@ fun ProfileScreen(
         WebCard(title = "Privacidade e dados") {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    text = "Consulte como a Odontoart trata dados pessoais e como solicitar exclusao de conta ou dados.",
+                    text = "Consulte como a Odontoart trata dados pessoais e como solicitar exclusão de conta ou dados.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -255,7 +255,7 @@ fun ProfileScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 VendaButton(
-                    label = "Solicitar exclusao de conta e dados",
+                    label = "Solicitar exclusão de conta e dados",
                     onClick = {
                         uriHandler.openUri(
                             "mailto:odontoart@odontoart.com?subject=Venda%2B%20-%20Solicitacao%20de%20exclusao%20de%20conta%20e%20dados"
@@ -273,7 +273,7 @@ fun ProfileScreen(
 
                 if (AppConfig.directUpdateEnabled) {
                     VendaButton(
-                        label = "Verificar atualizacao",
+                        label = "Verificar atualização",
                         onClick = onCheckAndInstallUpdate,
                         leadingIcon = Icons.Rounded.SystemUpdate,
                         modifier = Modifier.fillMaxWidth(),
