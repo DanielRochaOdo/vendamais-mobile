@@ -265,7 +265,7 @@ export function PublicCadastroLink() {
         ...(dados.UfSigla && { ufSigla: dados.UfSigla }),
       };
     } catch (cepError) {
-      console.error('Error enriching endereco by CEP:', cepError);
+      console.error('Error enriching endereço by CEP:', cepError);
       return enderecoAtual;
     }
   };
@@ -310,7 +310,7 @@ export function PublicCadastroLink() {
   useEffect(() => {
     const resolveLink = async () => {
       if (!token) {
-        setLinkError('Link nao informado');
+        setLinkError('Link não informado');
         setLoadingLink(false);
         return;
       }
@@ -338,14 +338,14 @@ export function PublicCadastroLink() {
         const result = await response.json();
 
         if (!response.ok || !result.ok) {
-          throw new Error(result.error || 'Nao foi possivel carregar o link');
+          throw new Error(result.error || 'Não foi possível carregar o link');
         }
 
         setLinkData(result.link);
         resolvedTokenRef.current = token;
       } catch (err) {
         console.error('Error resolving cadastro link:', err);
-        setLinkError(err instanceof Error ? err.message : 'Nao foi possivel carregar o link');
+        setLinkError(err instanceof Error ? err.message : 'Não foi possível carregar o link');
       } finally {
         setLoadingLink(false);
       }
@@ -562,7 +562,7 @@ export function PublicCadastroLink() {
     setLookupMessage('');
 
     if (!validateCPF(cpf)) {
-      setCpfError('CPF invalido. Verifique os digitos.');
+      setCpfError('CPF inválido. Verifique os digitos.');
       return;
     }
 
@@ -590,7 +590,7 @@ export function PublicCadastroLink() {
       const erpCheck = await checkERPAssociado(cpfLimpo);
 
       if (erpCheck.exists && erpCheck.shouldBlock) {
-        setCpfError(erpCheck.blockReason || 'Cliente ja cadastrado no sistema');
+        setCpfError(erpCheck.blockReason || 'Cliente já cadastrado no sistema');
         return;
       }
 
@@ -712,7 +712,7 @@ export function PublicCadastroLink() {
     if (novoContato.tipo !== 'email') {
       valorLimpo = valorLimpo.replace(/\D/g, '');
       if (!valorLimpo) {
-        setError('Contato invalido');
+        setError('Contato inválido');
         return;
       }
     }
@@ -796,7 +796,7 @@ export function PublicCadastroLink() {
           },
         }));
       } else {
-        setError('CEP nao encontrado');
+        setError('CEP não encontrado');
       }
     } catch (err) {
       console.error('Error checking CEP:', err);
@@ -818,7 +818,7 @@ export function PublicCadastroLink() {
 
     try {
       if (!selectedEmpresa) {
-        setError('Empresa nao identificada no link');
+        setError('Empresa não identificada no link');
         return;
       }
 
@@ -828,22 +828,22 @@ export function PublicCadastroLink() {
       }
 
       if (!formData.nome) {
-        setError('Campo obrigatorio: Nome Completo');
+        setError('Campo obrigatório: Nome Completo');
         return;
       }
 
       if (!formData.nomeMae) {
-        setError('Campo obrigatorio: Nome da Mae');
+        setError('Campo obrigatório: Nome da Mãe');
         return;
       }
 
       if (!formData.dataNascimento) {
-        setError('Campo obrigatorio: Data de Nascimento');
+        setError('Campo obrigatório: Data de Nascimento');
         return;
       }
 
       if (formData.sexo !== 0 && formData.sexo !== 1) {
-        setError('Campo obrigatorio: Sexo');
+        setError('Campo obrigatório: Sexo');
         return;
       }
 
@@ -857,12 +857,12 @@ export function PublicCadastroLink() {
       }
 
       if (selectedEmpresa.exigeMatricula === 1 && !formData.numeroMatricula) {
-        setError('Campo obrigatorio: Matricula');
+        setError('Campo obrigatório: Matrícula');
         return;
       }
 
       if (!formData.endereco.cep || !formData.endereco.logradouro || !formData.endereco.numero || !formData.endereco.bairro || !formData.endereco.cidade || !formData.endereco.uf) {
-        setError('Preencha todos os campos obrigatorios do endereco');
+        setError('Preencha todos os campos obrigatórios do endereço');
         return;
       }
 
@@ -928,7 +928,7 @@ export function PublicCadastroLink() {
           result.details?.details?.errors?.[0] ||
           result.details?.mensagem ||
           result.details?.message ||
-          'Nao foi possivel concluir o cadastro';
+          'Não foi possível concluir o cadastro';
         throw new Error(detailedMessage);
       }
 
@@ -936,7 +936,7 @@ export function PublicCadastroLink() {
       clearDraft();
       setSuccess(
         result.message ||
-        'Cadastro concluido com sucesso. Este CPF nao podera reutilizar este link, mas o link continua disponivel para novos CPFs.'
+        'Cadastro concluido com sucesso. Este CPF não podera reutilizar este link, mas o link continua disponível para novos CPFs.'
       );
       setCpfLocked(false);
       setDependentes([]);
@@ -957,7 +957,7 @@ export function PublicCadastroLink() {
       <div className="min-h-screen bg-slate-100 flex items-center justify-center px-4">
         <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-8 text-center">
           <Loader2 className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-4" />
-          <p className="text-slate-700 font-medium">Carregando link de adesao...</p>
+          <p className="text-slate-700 font-medium">Carregando link de adesão...</p>
         </div>
       </div>
     );
@@ -969,7 +969,7 @@ export function PublicCadastroLink() {
         <div className="max-w-lg w-full bg-white rounded-2xl shadow-xl border border-slate-200 p-8">
           <h1 className="text-xl font-bold text-slate-800 mb-3">Link indisponivel</h1>
           <p className="text-sm text-slate-600">
-            {linkError || 'Nao foi possivel carregar os dados do link.'}
+            {linkError || 'Não foi possível carregar os dados do link.'}
           </p>
         </div>
       </div>
@@ -984,7 +984,7 @@ export function PublicCadastroLink() {
             <div className="flex items-start gap-4">
               <img src="/logo-odontoart.png" alt="Odontoart Planos Odontológicos" className="w-32 shrink-0 object-contain sm:w-40" />
               <div>
-                <h1 className="text-2xl font-bold">Nova Adesao</h1>
+                <h1 className="text-2xl font-bold">Nova Adesão</h1>
                 <p className="text-sm text-slate-200 mt-1">
                   Empresa vinculada ao link: {selectedEmpresa.nomeFantasia}
                 </p>
@@ -1147,7 +1147,7 @@ export function PublicCadastroLink() {
 
                       <div className="md:col-span-2">
                         <Input
-                          label="Nome da Mae"
+                          label="Nome da Mãe"
                           value={formData.nomeMae}
                           onChange={(e) => setFormData((prev) => ({ ...prev, nomeMae: e.target.value }))}
                           required
@@ -1157,7 +1157,7 @@ export function PublicCadastroLink() {
                       {selectedEmpresa.exigeMatricula === 1 && (
                         <div className="md:col-span-2">
                           <Input
-                            label="Matricula"
+                            label="Matrícula"
                             value={formData.numeroMatricula}
                             onChange={(e) => setFormData((prev) => ({ ...prev, numeroMatricula: e.target.value }))}
                             required
@@ -1243,7 +1243,7 @@ export function PublicCadastroLink() {
                     </div>
 
                     <div className="border-t border-slate-200 pt-6">
-                      <h3 className="font-semibold text-slate-800 mb-4">Endereco</h3>
+                      <h3 className="font-semibold text-slate-800 mb-4">Endereço</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="relative">
                           <label className="block text-sm font-medium text-slate-700 mb-1">
