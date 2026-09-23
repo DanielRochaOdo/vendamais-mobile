@@ -138,6 +138,7 @@ fun CadastrosScreen(
     onLinkSearchEmpresa: () -> Unit,
     onLinkSelectEmpresa: (EmpresaResumo) -> Unit,
     onLinkClearEmpresa: () -> Unit,
+    onLinkAdesionistaChange: (String) -> Unit,
     onGenerateLink: () -> Unit,
     onRegenerateLink: (String) -> Unit,
     onDeleteLink: (String) -> Unit,
@@ -351,6 +352,8 @@ fun CadastrosScreen(
                 item {
                     CadastroLinksCard(
                         workspace = state.linkWorkspace,
+                        adesionistas = state.adesionistas,
+                        onSelectedAdesionistaChange = onLinkAdesionistaChange,
                         invalidCompanyCodes = state.cadastroWorkspace.config?.codigosEmpresaInvalidos.orEmpty(),
                         onSearchTypeChange = onLinkSearchTypeChange,
                         onSearchValueChange = onLinkSearchValueChange,
