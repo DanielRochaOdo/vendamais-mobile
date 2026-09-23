@@ -830,8 +830,16 @@ private fun LinkListItem(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    if (!link.adesionistaId.isNullOrBlank()) {
+                        Text(
+                            text = "Adesionista: ${link.adesionistaNome?.takeIf { it.isNotBlank() } ?: "Não identificado"}" +
+                                link.adesionistaCodigo?.takeIf { it.isNotBlank() }?.let { " (Código $it)" }.orEmpty(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                     Text(
-                        text = "Codigo ${link.vendedorCodigo ?: "-"} · ${link.clickCount ?: 0} cliques · ${formatDateTime(link.createdAt)}",
+                        text = "Código ${link.vendedorCodigo ?: "-"} · ${link.clickCount ?: 0} cliques · ${formatDateTime(link.createdAt)}",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -1060,10 +1068,18 @@ private fun LinkHistoryDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = "Vendedor: ${link.vendedorNome ?: "-"} (Codigo ${link.vendedorCodigo ?: "-"})",
+                            text = "Vendedor: ${link.vendedorNome ?: "-"} (Código ${link.vendedorCodigo ?: "-"})",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        if (!link.adesionistaId.isNullOrBlank()) {
+                            Text(
+                                text = "Adesionista: ${link.adesionistaNome?.takeIf { it.isNotBlank() } ?: "Não identificado"}" +
+                                    link.adesionistaCodigo?.takeIf { it.isNotBlank() }?.let { " (Código $it)" }.orEmpty(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                     IconButton(onClick = onDismiss) {
                         Icon(Icons.Rounded.Close, contentDescription = "Fechar historico")
