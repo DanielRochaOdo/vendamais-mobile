@@ -253,6 +253,7 @@ class CadastroWorkflowRepository(
         session: SavedSession,
         profile: MobileProfile,
         empresa: EmpresaResumo,
+        adesionista: TeamMemberOption? = null,
     ): CadastroLinkItem {
         val rawToken = CadastroLinkCrypto.generateCadastroLinkToken()
         val tokenHash = CadastroLinkCrypto.hashCadastroLinkToken(rawToken)
@@ -273,6 +274,8 @@ class CadastroWorkflowRepository(
             put("vendedor_id", profile.id)
             put("vendedor_codigo", vendedorCodigo)
             put("vendedor_nome", profile.name.ifBlank { profile.email })
+            // Código e nome do adesionista são verificados e preenchidos pelo banco.
+            adesionista?.id?.let { put("adesionista_id", it) }
         }
 
         return client.safePost<List<CadastroLinkItem>>(
