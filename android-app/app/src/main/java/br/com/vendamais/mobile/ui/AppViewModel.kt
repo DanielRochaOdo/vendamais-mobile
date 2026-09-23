@@ -152,6 +152,7 @@ data class CadastroWorkspaceState(
 )
 
 data class LinkWorkspaceState(
+    val selectedAdesionistaId: String = "",
     val empresaSearchType: EmpresaSearchType = EmpresaSearchType.CODIGO,
     val empresaSearchValue: String = "",
     val empresaSearchResults: List<EmpresaResumo> = emptyList(),
@@ -374,10 +375,17 @@ class AppViewModel(
             it.copy(
                 linkWorkspace = it.linkWorkspace.copy(
                     selectedEmpresa = empresa,
+                    selectedAdesionistaId = "",
                     empresaSearchResults = emptyList(),
                     empresaSearchValue = "",
                 ),
             )
+        }
+    }
+
+    fun updateLinkAdesionista(value: String) {
+        _uiState.update {
+            it.copy(linkWorkspace = it.linkWorkspace.copy(selectedAdesionistaId = value))
         }
     }
 
@@ -386,6 +394,7 @@ class AppViewModel(
             it.copy(
                 linkWorkspace = it.linkWorkspace.copy(
                     selectedEmpresa = null,
+                    selectedAdesionistaId = "",
                     empresaSearchResults = emptyList(),
                     empresaSearchValue = "",
                 ),
@@ -760,6 +769,13 @@ class AppViewModel(
         val session = currentSession ?: return
         val profile = _uiState.value.profile ?: return
         val empresa = _uiState.value.linkWorkspace.selectedEmpresa
+        val selectedAdesionistaId = _uiState.value.linkWorkspace.selectedAdesionistaId
+        val adesionista = if (selectedAdesionistaId.isBlank()) null
+            else _uiState.value.adesionistas.firstOrNull { it.id == selectedAdesionistaId }
+        if (selectedAdesionistaId.isNotBlank() && adesionista == null) {
+            _uiState.update { it.copy(errorMessage = "Adesionista indisponível. Atualize a lista e selecione novamente.") }
+            return
+        }
         if (empresa == null) {
             _uiState.update { it.copy(errorMessage = "Selecione uma empresa antes de gerar o link.") }
             return
@@ -775,7 +791,7 @@ class AppViewModel(
 
             runCatching {
                 val activeSession = ensureFreshSession(session)
-                workflowRepository.createCadastroLink(activeSession, profile, empresa)
+                workflowRepository.createCadastroLink(activeSession, profile, empresa, adesionista)
                 loadLinkWorkspaceData(activeSession)
             }.onSuccess { linkData ->
                 _uiState.update {
@@ -785,6 +801,7 @@ class AppViewModel(
                             links = linkData.links,
                             metricsByLinkId = linkData.metricsByLinkId,
                             selectedEmpresa = null,
+                            selectedAdesionistaId = "",
                             empresaSearchResults = emptyList(),
                         ),
                         errorMessage = "Link gerado com sucesso.",
