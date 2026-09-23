@@ -77,6 +77,7 @@ import br.com.vendamais.mobile.data.models.CadastroLinkHistoryRow
 import br.com.vendamais.mobile.data.models.CadastroLinkHistorySummary
 import br.com.vendamais.mobile.data.models.CadastroLinkItem
 import br.com.vendamais.mobile.data.models.CadastroLinkMetrics
+import br.com.vendamais.mobile.data.models.TeamMemberOption
 import br.com.vendamais.mobile.data.models.EmpresaResumo
 import br.com.vendamais.mobile.data.models.EmpresaSearchType
 import br.com.vendamais.mobile.ui.LinkWorkspaceState
@@ -116,6 +117,8 @@ private data class AssociadosDialogState(
 @Composable
 fun CadastroLinksCard(
     workspace: LinkWorkspaceState,
+    adesionistas: List<TeamMemberOption> = emptyList(),
+    onSelectedAdesionistaChange: (String) -> Unit = {},
     invalidCompanyCodes: List<String> = emptyList(),
     onSearchTypeChange: (EmpresaSearchType) -> Unit,
     onSearchValueChange: (String) -> Unit,
@@ -305,6 +308,18 @@ fun CadastroLinksCard(
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
+
+                        SelectionField(
+                            label = "Adesionista (Opcional)",
+                            value = adesionistas.firstOrNull { it.id == workspace.selectedAdesionistaId }
+                                ?.let { "${it.name} · Código ${it.externalId.orEmpty()}" }
+                                ?: "Selecione um adesionista (opcional)",
+                            options = listOf("" to "Nenhum adesionista") +
+                                adesionistas.filter { !it.externalId.isNullOrBlank() }
+                                    .map { it.id to "${it.name} · Código ${it.externalId}" },
+                            enabled = !workspace.operationLoading,
+                            onSelected = onSelectedAdesionistaChange,
+                        )
 
                         VendaButton(
                             label = "Gerar link publico",
