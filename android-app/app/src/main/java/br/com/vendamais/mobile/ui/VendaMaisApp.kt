@@ -267,6 +267,7 @@ fun VendaMaisApp(
                         onLinkSearchEmpresa = viewModel::searchEmpresasForLink,
                         onLinkSelectEmpresa = viewModel::selectLinkEmpresa,
                         onLinkClearEmpresa = viewModel::clearLinkEmpresa,
+                        onLinkAdesionistaChange = viewModel::updateLinkAdesionista,
                         onGenerateLink = viewModel::createCadastroLink,
                         onRegenerateLink = viewModel::regenerateCadastroLink,
                         onDeleteLink = viewModel::deleteCadastroLink,
