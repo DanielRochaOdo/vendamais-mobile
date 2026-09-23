@@ -383,6 +383,12 @@ data class CadastroLinkItem(
     val vendedorNome: String? = null,
     @SerialName("vendedor_codigo")
     val vendedorCodigo: String? = null,
+    @SerialName("adesionista_id")
+    val adesionistaId: String? = null,
+    @SerialName("adesionista_nome")
+    val adesionistaNome: String? = null,
+    @SerialName("adesionista_codigo")
+    val adesionistaCodigo: String? = null,
     @SerialName("link_url")
     val linkUrl: String? = null,
     @SerialName("is_active")

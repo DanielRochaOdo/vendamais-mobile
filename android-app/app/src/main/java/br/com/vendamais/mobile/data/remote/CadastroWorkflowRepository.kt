@@ -168,7 +168,7 @@ class CadastroWorkflowRepository(
             query = {
                 parameter(
                     "select",
-                    "id,empresa_codigo,empresa_nome,empresa_cnpj,vendedor_nome,vendedor_codigo,link_url,is_active,click_count,last_clicked_at,used_at,used_cpf,created_at,updated_at"
+                    "id,empresa_codigo,empresa_nome,empresa_cnpj,vendedor_nome,vendedor_codigo,adesionista_id,adesionista_nome,adesionista_codigo,link_url,is_active,click_count,last_clicked_at,used_at,used_cpf,created_at,updated_at"
                 )
                 parameter("is_active", "eq.true")
                 parameter("order", "empresa_nome.asc,updated_at.desc")
