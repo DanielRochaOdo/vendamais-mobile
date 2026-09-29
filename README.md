@@ -1,3 +1,11 @@
+# ⚠️ Repositório legado — não usar para novas regras
+
+O desenvolvimento canônico do **Adesart Web + Android** foi consolidado em `Tecnologia-odonto/Adesart`.
+
+Este repositório passa a ser apenas histórico. **Não crie novas regras de negócio, migrations, Edge Functions ou correções funcionais aqui.** O aplicativo Android oficial agora vive em `android-app/` dentro do repositório canônico, usando o mesmo backend e as mesmas regras do Web.
+
+---
+
 # Adesão+ - Sistema Completo de Gestão ERP
 
 Sistema ERP completo para gestão de planos de saúde, incluindo autenticação, controle de acesso baseado em roles (RBAC), cadastro de clientes com consulta de CPF, integração com APIs externas e gestão de equipes.
