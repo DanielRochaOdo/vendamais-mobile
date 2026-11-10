@@ -453,10 +453,10 @@ export function GeralConfigCard() {
       <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
         <div>
           <h3 className="text-sm font-semibold text-slate-800 mb-1">
-            Planos Ocultos na Seleção de Dependentes
+            Planos Ocultos
           </h3>
           <p className="text-xs text-slate-600 mb-3">
-            Códigos de planos que não devem aparecer no dropdown de seleção de planos dos dependentes.
+            Códigos de planos que não devem aparecer para titulares nem dependentes, em qualquer módulo.
           </p>
 
           {editingPlanosOcultos ? (
@@ -506,7 +506,7 @@ export function GeralConfigCard() {
       <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
         <div>
           <h3 className="text-sm font-semibold text-slate-800 mb-1">
-            Códigos de Empresa Inválidos
+            Códigos de Situação Inválida da Empresa
           </h3>
           <p className="text-xs text-slate-600 mb-3">
             Códigos de situação de empresas canceladas que não devem permitir cadastros. Quando detectado, o sistema bloqueará e permitirá buscar outra empresa.

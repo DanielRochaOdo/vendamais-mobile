@@ -122,22 +122,9 @@ export function DependentesSection({
     })
     .filter((plano): plano is NormalizedPlano => Boolean(plano));
 
-  const planosFiltrados = planosNormalizados.filter((plano) => {
-    const planoId = plano.id.toString();
-    const isOculto = planosOcultos.includes(planoId);
-
-    if (editingIndex !== null && dependentes[editingIndex]) {
-      const planoDepEditando = dependentes[editingIndex].plano;
-      if (planoDepEditando !== null && planoDepEditando !== undefined) {
-        const planoDoDepEditando = planoDepEditando.toString();
-        if (planoId === planoDoDepEditando) {
-          return true;
-        }
-      }
-    }
-
-    return !isOculto;
-  });
+  const planosFiltrados = planosNormalizados.filter(
+    (plano) => !planosOcultos.some((codigo) => Number(codigo) === plano.id),
+  );
 
   const [formData, setFormData] = useState<{
     tipo: number;
@@ -353,7 +340,7 @@ export function DependentesSection({
     }
 
     const planoId = parseInt(formData.plano, 10);
-    const planoSelecionado = planosNormalizados.find((p) => p.id === planoId);
+    const planoSelecionado = planosFiltrados.find((p) => p.id === planoId);
     if (!planoSelecionado) {
       alert('Plano não encontrado');
       return;

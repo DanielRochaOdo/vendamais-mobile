@@ -1,3 +1,4 @@
+import { loadCadastroRules, isBlockedAssociation, isHiddenPlan, isInvalidCompanySituation, isCurrentCompanyInvalid } from "../_shared/cadastro-config-rules.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {
   corsHeaders,
@@ -92,7 +93,7 @@ const fetchCurrentPlans = async (link: any) => {
   const plans = Array.isArray(empresa?.PrecoPlano) ? empresa.PrecoPlano : Array.isArray(empresa?.precoPlano) ? empresa.precoPlano : [];
   const vigenciaMeses = Number(empresa.Vigencia);
   if (!Number.isInteger(vigenciaMeses) || vigenciaMeses <= 0) throw new Error("ERP_INVALID_VIGENCIA");
-  return { plans: plans.map(sanitizePlan).filter((item: any) => item.Plano > 0), vigenciaMeses };
+  return { plans: plans.map(sanitizePlan).filter((item: any) => item.Plano > 0), vigenciaMeses, codigoSituacao: empresa.CodigoSituacao ?? empresa.codigoSituacao };
 };
 
 const renderTemplate = (body: string, values: Record<string, string>) => {
@@ -114,6 +115,7 @@ Deno.serve(async (req: Request) => {
     if (!emailRegex.test(confirmedEmail)) return jsonResponse({ error: "E-mail invalido" }, 400);
 
     const supabase = createServiceClient();
+    const rules = await loadCadastroRules(supabase);
     const attempt = await resolveAttempt(supabase, attemptToken);
     if (!attempt || attempt.status !== "authenticated" || !attempt.profile_snapshot) return jsonResponse({ error: "Sessao expirada. Inicie novamente.", code: "SESSION_EXPIRED" }, 401);
 
@@ -132,10 +134,16 @@ Deno.serve(async (req: Request) => {
     const linkPlans = (Array.isArray(link.planos_raw) ? link.planos_raw : []).map(sanitizePlan);
     const allowedCodes = new Set(linkPlans.map((item: any) => Number(item.Plano)));
     const selectedCodes = [Number(cadastro.titularPlano), ...cadastro.dependentes.map((item) => Number(item.plano))];
+    if (selectedCodes.some((code) => isHiddenPlan(code, rules))) {
+      return jsonResponse({ error: "Plano oculto nas configurações. Selecione outro plano.", code: "PLAN_HIDDEN" }, 409);
+    }
 
     if (selectedCodes.some((code) => !allowedCodes.has(code))) return jsonResponse({ error: "Plano nao permitido para este link", code: "PLAN_NOT_ALLOWED" }, 400);
 
-    const { plans: currentPlans, vigenciaMeses } = await fetchCurrentPlans(link);
+    const { plans: currentPlans, vigenciaMeses, codigoSituacao } = await fetchCurrentPlans(link);
+    if (isInvalidCompanySituation(codigoSituacao, rules)) {
+      return jsonResponse({ error: "Empresa com situação bloqueada para cadastro", code: "COMPANY_BLOCKED" }, 409);
+    }
     const currentMap = new Map<number, any>(currentPlans.map((item: any): [number, any] => [Number(item.Plano), item]));
     if (selectedCodes.some((code) => !currentMap.has(code))) return jsonResponse({ error: "Um dos planos selecionados nao esta mais disponivel para esta empresa", code: "PLAN_CHANGED" }, 409);
 

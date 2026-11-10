@@ -1,3 +1,4 @@
+import { loadCadastroRules, isBlockedAssociation, isHiddenPlan, isInvalidCompanySituation, isCurrentCompanyInvalid } from "../_shared/cadastro-config-rules.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { PDFDocument, StandardFonts } from "npm:pdf-lib@1.17.1";
 import {
@@ -215,7 +216,7 @@ function isActiveErpStatus(dep: any) {
   return statusCode === 1 || statusName === "ATIVO";
 }
 
-async function checkErpEligibility(cpfValue: string) {
+async function checkErpEligibility(cpfValue: string, rules: Awaited<ReturnType<typeof loadCadastroRules>>) {
   const token = Deno.env.get("ERP_TOKEN");
   if (!token) throw new Error("ERP_TOKEN not configured");
 
@@ -249,7 +250,7 @@ async function checkErpEligibility(cpfValue: string) {
     }
 
     for (const dep of candidates) {
-      if (isActiveErpStatus(dep)) {
+      if (isBlockedAssociation(dep?.codigoSituacao, dep?.codigoPlano, rules)) {
         return {
           eligible: false,
           activeRecord: {
@@ -623,7 +624,7 @@ Deno.serve(async (req: Request) => {
       stage = "erp_eligibility";
       let erpEligibility: { eligible: boolean; activeRecord: any };
       try {
-        erpEligibility = await checkErpEligibility(c.cpf);
+        erpEligibility = await checkErpEligibility(c.cpf, await loadCadastroRules(supabase));
       } catch (eligibilityError) {
         await supabase.from("public_contract_sessions").update({
           status: previousStatus,

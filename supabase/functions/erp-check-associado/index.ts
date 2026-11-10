@@ -1,3 +1,4 @@
+import { loadCadastroRules, isBlockedAssociation, isHiddenPlan, isInvalidCompanySituation, isCurrentCompanyInvalid } from "../_shared/cadastro-config-rules.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { corsHeaders, resolveRequestUser, saveLog } from "../_shared/api-utils.ts";
@@ -184,14 +185,9 @@ Deno.serve(async (req: Request) => {
     let blockReason = '';
 
     if (exists && responseData.dados && responseData.dados.length > 0) {
-      const { data: config } = await supabase
-        .from('cadastro_config')
-        .select('situacoes_que_barram, planos_validos')
-        .eq('id', 1)
-        .maybeSingle();
-
-      const situacoesQueBarram = config?.situacoes_que_barram || [1, 4, 6];
-      const planosValidos = config?.planos_validos || [4, 11, 3, 26];
+      const config = await loadCadastroRules(supabase);
+      const situacoesQueBarram = config.situacoes_que_barram;
+      const planosValidos = config.planos_validos;
 
       for (const associado of responseData.dados) {
         if (!associado.dependentes || associado.dependentes.length === 0) {

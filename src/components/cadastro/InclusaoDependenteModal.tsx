@@ -341,6 +341,11 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
         return;
       }
 
+      if (resultado.shouldBlock) {
+        setError(resultado.blockReason || 'Situação e plano do associado impedem o cadastro conforme Configurações > Geral.');
+        return;
+      }
+
       const responsaveisFormatados: ResponsavelFinanceiro[] = resultado.dados.map((associado: any) => ({
         codigo: associado.codigo,
         codigoEmpresa: associado.codigoDaEmpresa,
@@ -375,6 +380,10 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
 
         if (result.ok && result.empresas && result.empresas.length > 0) {
           const empresa = result.empresas[0];
+          if (config?.codigos_empresa_invalidos?.includes(String(empresa.codigoSituacao))) {
+            setError('Empresa com situação bloqueada em Configurações > Geral.');
+            return;
+          }
           setEmpresaCompleta(empresa);
           setPlanosEmpresa(empresa.precoPlano || []);
           setEmpresaCodigo(empresa.codigo || responsavel.codigoEmpresa);

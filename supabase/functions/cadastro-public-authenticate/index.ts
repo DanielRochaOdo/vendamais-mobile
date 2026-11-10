@@ -1,3 +1,4 @@
+import { loadCadastroRules, isBlockedAssociation, isHiddenPlan, isInvalidCompanySituation, isCurrentCompanyInvalid } from "../_shared/cadastro-config-rules.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {
   corsHeaders,
@@ -96,7 +97,7 @@ const isActiveErpStatus = (dep: any) => {
   return statusCode === 1 || statusName === "ATIVO";
 };
 
-const checkErpEligibility = async (cpf: string) => {
+const checkErpEligibility = async (cpf: string, rules: Awaited<ReturnType<typeof loadCadastroRules>>) => {
   const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
   let ERP_BASE_URL = Deno.env.get("ERP_BASE_URL") || "https://odontoart.s4e.com.br";
   if (!ERP_TOKEN) throw new Error("ERP_TOKEN not configured");
@@ -122,7 +123,7 @@ const checkErpEligibility = async (cpf: string) => {
     }
 
     for (const dep of candidates) {
-      if (isActiveErpStatus(dep)) {
+      if (isBlockedAssociation(dep?.codigoSituacao, dep?.codigoPlano, rules)) {
         return {
           eligible: false,
           activeRecord: {
@@ -176,7 +177,11 @@ Deno.serve(async (req: Request) => {
       .select("id", { count: "exact", head: true }).eq("link_id", link.id).eq("ip_hash", ipHash).gte("created_at", oneHourAgo);
     if ((ipAttempts || 0) >= 25) return jsonResponse({ error: "Muitas tentativas neste dispositivo/rede. Tente novamente mais tarde.", code: "RATE_LIMITED" }, 429);
 
-    const erpEligibility = await checkErpEligibility(cpf);
+    const rules = await loadCadastroRules(supabase);
+    if (await isCurrentCompanyInvalid(Number(link.empresa_codigo), rules)) {
+      return jsonResponse({ error: "Empresa com situação bloqueada para cadastro", code: "COMPANY_BLOCKED" }, 409);
+    }
+    const erpEligibility = await checkErpEligibility(cpf, rules);
     if (!erpEligibility.eligible) {
       await safeInsertLog(supabase, {
         endpoint: "cadastro-public-authenticate:erp-eligibility",
@@ -187,7 +192,7 @@ Deno.serve(async (req: Request) => {
         success: true,
         duration_ms: 0,
       });
-      return jsonResponse({ ok: true, state: "not_eligible", reason: "ACTIVE_IN_ERP" });
+      return jsonResponse({ ok: true, state: "not_eligible", reason: "BLOCKED_BY_CONFIG" });
     }
 
     const { data: cachedAttempt } = await supabase.from("public_adesao_attempts")
